@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SESSION=""
+if [[ -f .swarm/runtime/session_name ]]; then
+  SESSION="$(cat .swarm/runtime/session_name)"
+else
+  source .swarm/agents.env 2>/dev/null || true
+  SESSION="${SWARM_SESSION:-}"
+fi
+
+if [[ -z "$SESSION" ]]; then
+  PROJECT_NAME="$(basename "$PWD" | tr -cd '[:alnum:]_-' | tr '[:upper:]' '[:lower:]')"
+  SESSION="swarm-${PROJECT_NAME:-project}"
+fi
+
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  tmux kill-session -t "$SESSION"
+  echo "Stopped session: $SESSION"
+else
+  echo "No active session found: $SESSION"
+fi

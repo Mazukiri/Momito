@@ -1,0 +1,228 @@
+'use client';
+
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import { sessionsApi, topicsApi, companiesApi } from '../../../lib/api-client';
+import type { TopicSummary, CompanySummary } from '@momito/shared';
+import { Spinner } from '../../../components/ui';
+
+const SESSION_TYPE_LABELS: Record<string, string> = {
+  quick_practice: 'Quick Practice',
+  topic_practice: 'Topic Practice',
+  company_practice: 'Company Practice',
+  mixed_mock: 'Mixed Mock',
+};
+
+const SESSION_TYPE_DESCRIPTIONS: Record<string, string> = {
+  quick_practice: 'Random questions across all topics',
+  topic_practice: 'Focus on a specific topic',
+  company_practice: 'Practice questions asked by a specific company',
+  mixed_mock: 'Mix of question types and difficulties',
+};
+
+export default function NewPracticePage() {
+  const router = useRouter();
+
+  const [title, setTitle] = useState('');
+  const [sessionType, setSessionType] = useState('quick_practice');
+  const [topicId, setTopicId] = useState('');
+  const [companyId, setCompanyId] = useState('');
+  const [difficulty, setDifficulty] = useState('');
+  const [questionCount, setQuestionCount] = useState(5);
+
+  const [topics, setTopics] = useState<TopicSummary[]>([]);
+  const [companies, setCompanies] = useState<CompanySummary[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [fetchingOptions, setFetchingOptions] = useState(true);
+  const [error, setError] = useState('');
+
+  const fetchOptions = useCallback(async () => {
+    try {
+      const [t, c] = await Promise.all([topicsApi.list(), companiesApi.list()]);
+      setTopics(t);
+      setCompanies(c);
+    } catch {
+      // non-critical
+    } finally {
+      setFetchingOptions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard data-fetching on mount
+    fetchOptions();
+  }, [fetchOptions]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await sessionsApi.create({
+        title: title || undefined,
+        sessionType,
+        topicId: topicId || undefined,
+        companyId: companyId || undefined,
+        difficulty: difficulty || undefined,
+        questionCount,
+      });
+      router.push(`/practice/session/${res.session.id}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create session';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (fetchingOptions) {
+    return (
+      <div className="flex justify-center py-20">
+        <Spinner className="h-8 w-8" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-lg">
+      <button
+        onClick={() => router.push('/questions')}
+        className="mb-4 text-sm text-indigo-600 hover:text-indigo-500"
+      >
+        ← Back
+      </button>
+
+      <h1 className="mb-6 text-2xl font-bold text-zinc-800">New Practice Session</h1>
+
+      {error && (
+        <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Session Type */}
+        <div>
+          <label htmlFor="sessionType" className="block text-sm font-medium text-zinc-700">
+            Session Type
+          </label>
+          <select
+            id="sessionType"
+            value={sessionType}
+            onChange={(e) => { setSessionType(e.target.value); setTopicId(''); setCompanyId(''); }}
+            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
+            {Object.entries(SESSION_TYPE_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-zinc-400">
+            {SESSION_TYPE_DESCRIPTIONS[sessionType]}
+          </p>
+        </div>
+
+        {/* Title */}
+        <div>
+          <label htmlFor="title" className="block text-sm font-medium text-zinc-700">
+            Title <span className="text-zinc-400">(optional)</span>
+          </label>
+          <input
+            id="title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            placeholder="e.g. DSA warmup"
+            maxLength={200}
+          />
+        </div>
+
+        {/* Topic (for topic_practice) */}
+        {sessionType === 'topic_practice' && (
+          <div>
+            <label htmlFor="topicId" className="block text-sm font-medium text-zinc-700">
+              Topic
+            </label>
+            <select
+              id="topicId"
+              value={topicId}
+              onChange={(e) => setTopicId(e.target.value)}
+              required
+              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="">Select a topic</option>
+              {topics.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Company (for company_practice) */}
+        {sessionType === 'company_practice' && (
+          <div>
+            <label htmlFor="companyId" className="block text-sm font-medium text-zinc-700">
+              Company
+            </label>
+            <select
+              id="companyId"
+              value={companyId}
+              onChange={(e) => setCompanyId(e.target.value)}
+              required
+              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="">Select a company</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Difficulty (optional for all types) */}
+        <div>
+          <label htmlFor="difficulty" className="block text-sm font-medium text-zinc-700">
+            Difficulty <span className="text-zinc-400">(optional)</span>
+          </label>
+          <select
+            id="difficulty"
+            value={difficulty}
+            onChange={(e) => setDifficulty(e.target.value)}
+            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
+            <option value="">Any difficulty</option>
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+
+        {/* Question Count */}
+        <div>
+          <label htmlFor="questionCount" className="block text-sm font-medium text-zinc-700">
+            Number of Questions
+          </label>
+          <input
+            id="questionCount"
+            type="number"
+            min={1}
+            max={100}
+            value={questionCount}
+            onChange={(e) => setQuestionCount(Math.max(1, Math.min(100, Number(e.target.value))))}
+            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          <p className="mt-1 text-xs text-zinc-400">Choose between 1 and 100 questions</p>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {loading && <Spinner className="mr-2 h-4 w-4" />}
+          Start Session
+        </button>
+      </form>
+    </div>
+  );
+}

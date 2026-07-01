@@ -1,0 +1,233 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { sessionsApi, type SessionDetailResponse } from '../../../../../lib/api-client';
+import { Card, Badge, Spinner, ErrorBanner, EmptyState } from '../../../../../components/ui';
+
+const TYPE_LABELS: Record<string, string> = {
+  dsa: 'DSA',
+  backend: 'Backend',
+  javascript: 'JavaScript',
+  typescript: 'TypeScript',
+  nodejs: 'Node.js',
+  database: 'Database',
+  os: 'OS',
+  networking: 'Networking',
+  oop: 'OOP',
+  system_design: 'System Design',
+  behavioral: 'Behavioral',
+};
+
+const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  completed: { label: 'Completed', color: 'bg-green-100 text-green-700' },
+  abandoned: { label: 'Abandoned', color: 'bg-yellow-100 text-yellow-700' },
+  active: { label: 'Active', color: 'bg-blue-100 text-blue-700' },
+};
+
+function formatDuration(startedAt: string, endedAt: string | null): string {
+  if (!endedAt) return 'In progress';
+  const start = new Date(startedAt).getTime();
+  const end = new Date(endedAt).getTime();
+  const minutes = Math.floor((end - start) / 60000);
+  const seconds = Math.floor(((end - start) % 60000) / 1000);
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+export default function SessionSummaryPage() {
+  const params = useParams();
+  const router = useRouter();
+  const id = params.id as string;
+
+  const [session, setSession] = useState<SessionDetailResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const fetchSession = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const s = await sessionsApi.get(id);
+      setSession(s);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load session');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard data-fetching on mount
+    fetchSession();
+  }, [fetchSession]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-20">
+        <Spinner className="h-8 w-8" />
+      </div>
+    );
+  }
+
+  if (error && !session) {
+    return (
+      <div>
+        <button
+          onClick={() => router.push('/questions')}
+          className="mb-4 text-sm text-indigo-600 hover:text-indigo-500"
+        >
+          ← Back to questions
+        </button>
+        <ErrorBanner message={error} onRetry={fetchSession} />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <EmptyState icon="🔍" title="Session not found" />
+    );
+  }
+
+  const questions = session.sessionQuestions ?? [];
+  const attempts = session.answerAttempts ?? [];
+  const attemptMap = new Map(attempts.map((a) => [a.questionId, a]));
+  const answeredCount = attemptMap.size;
+  const totalCount = questions.length;
+  const statusInfo = STATUS_LABELS[session.status] ?? { label: session.status, color: 'bg-zinc-100 text-zinc-700' };
+
+  return (
+    <div className="mx-auto max-w-3xl">
+      <button
+        onClick={() => router.push('/questions')}
+        className="mb-4 text-sm text-indigo-600 hover:text-indigo-500"
+      >
+        ← Back to questions
+      </button>
+
+      <h1 className="text-2xl font-bold text-zinc-800">
+        {session.title || 'Session Summary'}
+      </h1>
+
+      {/* Session stats */}
+      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Card>
+          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Status</p>
+          <p className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${statusInfo.color}`}>
+            {statusInfo.label}
+          </p>
+        </Card>
+        <Card>
+          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Questions</p>
+          <p className="mt-1 text-xl font-bold text-zinc-800">{answeredCount}/{totalCount}</p>
+        </Card>
+        <Card>
+          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Duration</p>
+          <p className="mt-1 text-xl font-bold text-zinc-800">
+            {formatDuration(session.startedAt, session.endedAt)}
+          </p>
+        </Card>
+        <Card>
+          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Type</p>
+          <p className="mt-1 text-sm font-medium text-zinc-700 capitalize">
+            {session.sessionType.replace(/_/g, ' ')}
+          </p>
+        </Card>
+      </div>
+
+      {/* Questions and answers */}
+      <h2 className="mt-8 mb-4 text-lg font-semibold text-zinc-800">Questions &amp; Answers</h2>
+
+      <div className="space-y-4">
+        {questions.map((q, i) => {
+          const attempt = attemptMap.get(q.questionId);
+          return (
+            <Card key={q.id}>
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-xs font-medium text-zinc-500">
+                      {i + 1}
+                    </span>
+                    <h3 className="font-medium text-zinc-800 truncate">{q.question.title}</h3>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Badge label={q.question.difficulty} variant={q.question.difficulty} />
+                    {q.question.type && (
+                      <Badge label={TYPE_LABELS[q.question.type] ?? q.question.type} variant={q.question.type} />
+                    )}
+                    {q.question.topic && <Badge label={q.question.topic.name} />}
+                  </div>
+                </div>
+                {attempt ? (
+                  <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                    Answered
+                  </span>
+                ) : (
+                  <span className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-500">
+                    Skipped
+                  </span>
+                )}
+              </div>
+
+              {attempt && (
+                <div className="border-t border-zinc-100 pt-3">
+                  <div className="mb-2">
+                    <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Your Answer</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">
+                      {attempt.answerText.length > 300
+                        ? `${attempt.answerText.slice(0, 300)}...`
+                        : attempt.answerText}
+                    </p>
+                  </div>
+                  {attempt.selfRating && (
+                    <div>
+                      <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Self Rating</p>
+                      <div className="mt-1 flex gap-0.5">
+                        {[1, 2, 3, 4, 5].map((r) => (
+                          <span
+                            key={r}
+                            className={`text-lg ${
+                              r <= attempt.selfRating! ? 'text-indigo-500' : 'text-zinc-200'
+                            }`}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="mt-2">
+                    <button
+                      onClick={() => router.push(`/questions/${q.questionId}`)}
+                      className="text-xs text-indigo-600 hover:text-indigo-500"
+                    >
+                      View question →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Action buttons */}
+      <div className="mt-8 flex justify-center gap-4">
+        <button
+          onClick={() => router.push('/questions')}
+          className="rounded-lg border border-zinc-300 px-5 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+        >
+          Back to Questions
+        </button>
+        <button
+          onClick={() => router.push('/practice/new')}
+          className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+        >
+          New Session
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "tmux is required but not installed." >&2
+  exit 1
+fi
+
+if [[ ! -f .swarm/agents.env ]]; then
+  echo "Run this from a project that has .swarm/agents.env" >&2
+  exit 1
+fi
+
+source .swarm/agents.env
+
+PROJECT_ROOT="$(pwd)"
+PROJECT_NAME="$(basename "$PROJECT_ROOT" | tr -cd '[:alnum:]_-' | tr '[:upper:]' '[:lower:]')"
+SESSION="${SWARM_SESSION:-}"
+if [[ -z "$SESSION" ]]; then
+  SESSION="swarm-${PROJECT_NAME:-project}"
+fi
+
+mkdir -p .swarm/runtime
+touch .swarm/chat.log .swarm/messages.jsonl
+
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "Session already exists: $SESSION"
+  echo "Attach with: tmux attach -t $SESSION"
+  exit 0
+fi
+
+# Layout:
+# ┌──────────────┬──────────────┐
+# │ AGY          │ Claude       │
+# ├──────────────┼──────────────┤
+# │ DeepSeek     │ Codex        │
+# ├──────────────┴──────────────┤
+# │ live chat (full width)      │
+# └─────────────────────────────┘
+
+CHAT_HEIGHT=6
+
+# Build layout in this order so chat ends up full-width at the bottom
+# and the 4 agent panes share the remaining space equally:
+#
+# Step 1: create session → one full pane (will become chat)
+# Step 2: split upward → top block (agents) + bottom strip (chat)
+# Step 3: split top block left/right → left column + right column
+# Step 4: split left column → AGY (top) + DeepSeek (bottom)
+# Step 5: split right column → Claude (top) + Codex (bottom)
+
+# Step 1 — session, seed pane = top agents area (big)
+tmux new-session -d -s "$SESSION" -n agents -c "$PROJECT_ROOT"
+P_TOP="$(tmux display-message -p -t "$SESSION:agents.0" '#{pane_id}')"
+
+# Step 2 — chat strip at bottom (split seed downward, new pane = chat)
+tmux split-window -v -t "$P_TOP" -c "$PROJECT_ROOT" -l "$CHAT_HEIGHT"
+P_CHAT="$(tmux display-message -p -t "$SESSION:agents" '#{pane_id}')"
+tmux send-keys -t "$P_CHAT" ".swarm/bin/watch-chat" C-m
+
+# Step 3 — left / right columns inside P_TOP
+tmux split-window -h -t "$P_TOP" -c "$PROJECT_ROOT"
+P_RIGHT="$(tmux display-message -p -t "$SESSION:agents" '#{pane_id}')"
+P_LEFT="$P_TOP"
+
+# Step 4 — left column: AGY (top) + DeepSeek (bottom)
+P_AGY="$P_LEFT"
+tmux send-keys -t "$P_AGY" "SWARM_PROJECT_ROOT='$PROJECT_ROOT' .swarm/bin/run-agent agy" C-m
+tmux split-window -v -t "$P_AGY" -c "$PROJECT_ROOT"
+P_DEEPSEEK="$(tmux display-message -p -t "$SESSION:agents" '#{pane_id}')"
+tmux send-keys -t "$P_DEEPSEEK" "SWARM_PROJECT_ROOT='$PROJECT_ROOT' .swarm/bin/run-agent deepseek" C-m
+
+# Step 5 — right column: Claude (top) + Codex (bottom)
+P_CLAUDE="$P_RIGHT"
+tmux send-keys -t "$P_CLAUDE" "SWARM_PROJECT_ROOT='$PROJECT_ROOT' .swarm/bin/run-agent claude" C-m
+tmux split-window -v -t "$P_CLAUDE" -c "$PROJECT_ROOT"
+P_CODEX="$(tmux display-message -p -t "$SESSION:agents" '#{pane_id}')"
+tmux send-keys -t "$P_CODEX" "SWARM_PROJECT_ROOT='$PROJECT_ROOT' .swarm/bin/run-agent codex" C-m
+
+# Pin chat to CHAT_HEIGHT, then equalize the 4 agent panes
+WIN_H="$(tmux display-message -p -t "$SESSION:agents" '#{window_height}')"
+AGENT_H=$(( (WIN_H - CHAT_HEIGHT - 1) / 2 ))
+# Set top row first, bottom row follows
+tmux resize-pane -t "$P_AGY"    -y "$AGENT_H"
+tmux resize-pane -t "$P_CLAUDE" -y "$AGENT_H"
+# Lock chat to exactly CHAT_HEIGHT (do this last so agent resizes don't push it)
+tmux resize-pane -t "$P_CHAT"   -y "$CHAT_HEIGHT"
+
+# Second window for router.
+tmux new-window -t "$SESSION" -n router -c "$PROJECT_ROOT"
+P_ROUTER="$(tmux display-message -p -t "$SESSION:router.0" '#{pane_id}')"
+tmux send-keys -t "$P_ROUTER" ".swarm/bin/swarm-router" C-m
+
+cat > .swarm/runtime/panes.json <<JSON
+{
+  "agy": "$P_AGY",
+  "claude": "$P_CLAUDE",
+  "codex": "$P_CODEX",
+  "deepseek": "$P_DEEPSEEK",
+  "chat": "$P_CHAT",
+  "router": "$P_ROUTER"
+}
+JSON
+
+echo "$SESSION" > .swarm/runtime/session_name
+
+tmux select-window -t "$SESSION:agents"
+tmux select-pane -t "$P_AGY"
+
+# Give CLIs a moment to open, then optionally paste boot prompts.
+if [[ "${SWARM_AUTO_BOOT:-1}" == "1" ]]; then
+  (
+    sleep 3
+    "$PROJECT_ROOT/.swarm/bin/swarm-boot" >/dev/null 2>&1 || true
+  ) &
+fi
+
+cat <<INFO
+Started AI Swarm Cockpit.
+
+Session: $SESSION
+Attach:  tmux attach -t $SESSION
+Stop:    .swarm/bin/swarm-stop
+Chat:    .swarm/bin/watch-chat
+
+Tip: If the boot prompt did not paste correctly because a CLI was still loading, run:
+  .swarm/bin/swarm-boot
+INFO
+
+tmux attach -t "$SESSION"

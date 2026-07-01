@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+.venv/
+
+# Generated output
+dist/
+.next/
+build/
+coverage/
+*.tsbuildinfo
+__pycache__/
+*.py[oc]
+.expo/
+
+# Local environment configuration (keep documented templates)
+.env
+.env.*
+!.env.example
+!.env.local.example
+!**/.env.example
+!**/.env.local.example
+

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AGENT="${1:-}"
+if [[ -z "$AGENT" ]]; then
+  echo "Usage: run-agent <agy|claude|codex|deepseek>" >&2
+  exit 2
+fi
+
+cd "${SWARM_PROJECT_ROOT:-$PWD}"
+source .swarm/agents.env
+
+export SWARM_AGENT_NAME="$AGENT"
+export PATH="$PWD/.swarm/bin:$PATH"
+
+upper="$(printf '%s' "$AGENT" | tr '[:lower:]' '[:upper:]')"
+cmd_var="${upper}_CMD"
+cmd="${!cmd_var:-}"
+
+if [[ -z "$cmd" ]]; then
+  echo "Missing command for $AGENT in .swarm/agents.env ($cmd_var)." >&2
+  exit 1
+fi
+
+# Agents whose CLI starts with "codex" or "cm" use exec-loop mode — the interactive TUI
+# doesn't work reliably with tmux paste delivery, so we run codex exec per message.
+if [[ "$cmd" == codex* ]]; then
+  exec "$PWD/.swarm/bin/agent-exec-loop" "$AGENT"
+fi
+
+clear
+printf 'AI Swarm Agent: %s\n' "$upper"
+printf 'Project: %s\n' "$PWD"
+printf 'Command: %s\n' "$cmd"
+printf '\nUseful commands inside this repo:\n'
+printf '  say agy "message"\n'
+printf '  say claude "message"\n'
+printf '  say codex "message"\n'
+printf '  say deepseek "message"\n'
+printf '  broadcast "message"\n'
+printf '\nPrompt file: .swarm/prompts/%s.md\n' "$AGENT"
+printf '\nStarting CLI...\n\n'
+
+exec bash -lc "$cmd"

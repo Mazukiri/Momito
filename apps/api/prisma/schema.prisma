@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String             @id @default(uuid()) @db.Uuid
+  email          String             @unique
+  passwordHash   String             @map("password_hash")
+  name           String
+  role           String             @default("user")
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  questions      Question[]
+  sessions       InterviewSession[]
+  answerAttempts AnswerAttempt[]
+  studyPlanItems StudyPlanItem[]
+
+  @@map("users")
+}
+
+model Topic {
+  id             String          @id @default(uuid()) @db.Uuid
+  name           String
+  parentTopicId  String?         @map("parent_topic_id") @db.Uuid
+  description    String?
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  parentTopic    Topic?          @relation("TopicHierarchy", fields: [parentTopicId], references: [id], onDelete: SetNull)
+  childTopics    Topic[]         @relation("TopicHierarchy")
+  questions      Question[]
+  studyPlanItems StudyPlanItem[]
+
+  @@index([parentTopicId])
+  @@map("topics")
+}
+
+model Company {
+  id        String            @id @default(uuid()) @db.Uuid
+  name      String
+  region    String?
+  notes     String?
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  questions QuestionCompany[]
+
+  @@map("companies")
+}
+
+model Question {
+  id               String            @id @default(uuid()) @db.Uuid
+  title            String
+  prompt           String
+  type             String
+  difficulty       String
+  topicId          String            @map("topic_id") @db.Uuid
+  subtopic         String?
+  referenceAnswer  String?           @map("reference_answer")
+  notes            String?
+  sourceUrl        String?           @map("source_url")
+  createdByUserId  String            @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  topic            Topic             @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  createdBy        User              @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  companies        QuestionCompany[]
+  sessionQuestions SessionQuestion[]
+  answerAttempts   AnswerAttempt[]
+
+  @@index([topicId])
+  @@index([createdByUserId])
+  @@index([type])
+  @@index([difficulty])
+  @@map("questions")
+}
+
+model QuestionCompany {
+  questionId String   @map("question_id") @db.Uuid
+  companyId  String   @map("company_id") @db.Uuid
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, companyId])
+  @@index([companyId])
+  @@map("question_companies")
+}
+
+model InterviewSession {
+  id               String            @id @default(uuid()) @db.Uuid
+  userId           String            @map("user_id") @db.Uuid
+  title            String?
+  sessionType      String            @map("session_type")
+  status           String            @default("active")
+  startedAt        DateTime          @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt          DateTime?         @map("ended_at") @db.Timestamptz(6)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionQuestions SessionQuestion[]
+  answerAttempts   AnswerAttempt[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("interview_sessions")
+}
+
+model SessionQuestion {
+  id         String           @id @default(uuid()) @db.Uuid
+  sessionId  String           @map("session_id") @db.Uuid
+  questionId String           @map("question_id") @db.Uuid
+  order      Int
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  session    InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question   Question         @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, order])
+  @@index([questionId])
+  @@map("session_questions")
+}
+
+model AnswerAttempt {
+  id         String            @id @default(uuid()) @db.Uuid
+  userId     String            @map("user_id") @db.Uuid
+  sessionId  String?           @map("session_id") @db.Uuid
+  questionId String            @map("question_id") @db.Uuid
+  answerText String            @map("answer_text")
+  selfRating Int?              @map("self_rating")
+  aiScore    Float?            @map("ai_score")
+  aiFeedback String?           @map("ai_feedback")
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session    InterviewSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  question   Question          @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([questionId])
+  @@map("answer_attempts")
+}
+
+model StudyPlanItem {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  topicId    String?   @map("topic_id") @db.Uuid
+  title      String
+  notes      String?
+  targetDate DateTime? @map("target_date") @db.Date
+  status     String    @default("todo")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic      Topic?    @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([topicId])
+  @@index([status])
+  @@map("study_plan_items")
+}

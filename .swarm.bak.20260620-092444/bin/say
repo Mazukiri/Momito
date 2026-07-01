@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+import json
+import os
+import sys
+import time
+import uuid
+from datetime import datetime
+from pathlib import Path
+
+ROOT = Path.cwd()
+SWARM = ROOT / ".swarm"
+
+ALIASES = {
+    "agy": "agy",
+    "gemini": "agy",
+    "claude": "claude",
+    "codex": "codex",
+    "deepseek": "deepseek",
+    "cm": "deepseek",
+    "all": "all",
+    "everyone": "all",
+    "broadcast": "all",
+}
+
+
+def usage() -> None:
+    print("Usage: say <agy|claude|codex|deepseek|all> \"message\"", file=sys.stderr)
+
+
+def main() -> int:
+    if len(sys.argv) < 3:
+        usage()
+        return 2
+
+    target_raw = sys.argv[1].strip().lower()
+    target = ALIASES.get(target_raw)
+    if not target:
+        print(f"Unknown target: {target_raw}", file=sys.stderr)
+        usage()
+        return 2
+
+    message = " ".join(sys.argv[2:]).strip()
+    if not message:
+        print("Message cannot be empty", file=sys.stderr)
+        return 2
+
+    sender = os.environ.get("SWARM_AGENT_NAME", "human").strip().lower() or "human"
+
+    SWARM.mkdir(exist_ok=True)
+    (SWARM / "runtime").mkdir(exist_ok=True)
+
+    msg = {
+        "id": f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}",
+        "ts": datetime.now().isoformat(timespec="seconds"),
+        "from": sender,
+        "to": target,
+        "message": message,
+    }
+
+    with (SWARM / "messages.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps(msg, ensure_ascii=False) + "\n")
+
+    pretty_to = "ALL" if target == "all" else target.upper()
+    pretty_from = sender.upper()
+    with (SWARM / "chat.log").open("a", encoding="utf-8") as f:
+        f.write(f"[{msg['ts']}] {pretty_from} -> {pretty_to}: {message}\n")
+
+    print(f"sent to {pretty_to}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

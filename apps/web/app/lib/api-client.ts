@@ -1,0 +1,278 @@
+'use client';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+
+interface ApiError {
+  statusCode: number;
+  error: string;
+  message: string;
+  details?: unknown[];
+}
+
+export class ApiClientError extends Error {
+  statusCode: number;
+  details?: unknown[];
+
+  constructor(err: ApiError) {
+    super(err.message);
+    this.name = 'ApiClientError';
+    this.statusCode = err.statusCode;
+    this.details = err.details;
+  }
+}
+
+function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('momito_token');
+}
+
+export function setToken(token: string) {
+  localStorage.setItem('momito_token', token);
+}
+
+export function clearToken() {
+  localStorage.removeItem('momito_token');
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) clearToken();
+    let body: ApiError;
+    try {
+      body = await res.json();
+    } catch {
+      body = { statusCode: res.status, error: res.statusText, message: res.statusText };
+    }
+    throw new ApiClientError(body);
+  }
+
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+// ── Auth ──────────────────────────────────────────
+import type { AuthResponse, AuthUser } from '@momito/shared';
+
+export const authApi = {
+  register: (body: { email: string; password: string; name: string }) =>
+    request<AuthResponse>('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+
+  login: (body: { email: string; password: string }) =>
+    request<AuthResponse>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+
+  logout: () =>
+    request<{ message: string }>('/auth/logout', { method: 'POST' }),
+
+  me: () =>
+    request<AuthUser>('/auth/me'),
+};
+
+// ── Questions ─────────────────────────────────────
+import type { QuestionResponse, PaginatedResponse, TopicSummary, CompanySummary } from '@momito/shared';
+
+export interface ListQuestionsParams {
+  topic?: string;
+  difficulty?: string;
+  type?: string;
+  company?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export const questionsApi = {
+  list: (params: ListQuestionsParams = {}) => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== '') qs.set(k, String(v));
+    });
+    const query = qs.toString();
+    return request<PaginatedResponse<QuestionResponse>>(`/questions${query ? `?${query}` : ''}`);
+  },
+
+  get: (id: string) =>
+    request<QuestionResponse>(`/questions/${id}`),
+
+  create: (body: {
+    title: string;
+    prompt: string;
+    type: string;
+    difficulty: string;
+    topicId: string;
+    subtopic?: string;
+    referenceAnswer?: string;
+    notes?: string;
+    sourceUrl?: string;
+    companyIds?: string[];
+  }) =>
+    request<QuestionResponse>('/questions', { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (id: string, body: Partial<{
+    title: string;
+    prompt: string;
+    type: string;
+    difficulty: string;
+    topicId: string;
+    subtopic: string;
+    referenceAnswer: string;
+    notes: string;
+    sourceUrl: string;
+    companyIds: string[];
+  }>) =>
+    request<QuestionResponse>(`/questions/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  delete: (id: string) =>
+    request<void>(`/questions/${id}`, { method: 'DELETE' }),
+};
+
+// ── Topics ────────────────────────────────────────
+export const topicsApi = {
+  list: () =>
+    request<TopicSummary[]>('/topics'),
+
+  create: (body: { name: string; parentTopicId?: string; description?: string }) =>
+    request<TopicSummary>('/topics', { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (id: string, body: { name?: string; parentTopicId?: string; description?: string }) =>
+    request<TopicSummary>(`/topics/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  delete: (id: string) =>
+    request<void>(`/topics/${id}`, { method: 'DELETE' }),
+};
+
+// ── Companies ─────────────────────────────────────
+export const companiesApi = {
+  list: () =>
+    request<CompanySummary[]>('/companies'),
+
+  create: (body: { name: string; region?: string; notes?: string }) =>
+    request<CompanySummary>('/companies', { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (id: string, body: { name?: string; region?: string; notes?: string }) =>
+    request<CompanySummary>(`/companies/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  delete: (id: string) =>
+    request<void>(`/companies/${id}`, { method: 'DELETE' }),
+};
+
+// ── Sessions ──────────────────────────────────────
+import type {
+  InterviewSessionResponse,
+  SessionQuestionResponse,
+  AnswerAttemptResponse,
+} from '@momito/shared';
+
+export interface CreateSessionResponse {
+  session: InterviewSessionResponse;
+  questions: SessionQuestionResponse[];
+}
+
+export interface SessionDetailResponse extends InterviewSessionResponse {
+  sessionQuestions: SessionQuestionResponse[];
+  answerAttempts: AnswerAttemptResponse[];
+}
+
+export interface CreateSessionParams {
+  title?: string;
+  sessionType: string;
+  topicId?: string;
+  companyId?: string;
+  difficulty?: string;
+  questionCount: number;
+  questionIds?: string[];
+}
+
+export const sessionsApi = {
+  create: (body: CreateSessionParams) =>
+    request<CreateSessionResponse>('/sessions', { method: 'POST', body: JSON.stringify(body) }),
+
+  list: (params: { status?: string; page?: number; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set('status', params.status);
+    if (params.page) qs.set('page', String(params.page));
+    if (params.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString();
+    return request<PaginatedResponse<InterviewSessionResponse>>(`/sessions${query ? `?${query}` : ''}`);
+  },
+
+  get: (id: string) =>
+    request<SessionDetailResponse>(`/sessions/${id}`),
+
+  answer: (id: string, body: { questionId: string; answerText: string; selfRating?: number }) =>
+    request<AnswerAttemptResponse>(`/sessions/${id}/answer`, { method: 'POST', body: JSON.stringify(body) }),
+
+  complete: (id: string) =>
+    request<InterviewSessionResponse>(`/sessions/${id}/complete`, { method: 'POST' }),
+
+  abandon: (id: string) =>
+    request<InterviewSessionResponse>(`/sessions/${id}/abandon`, { method: 'POST' }),
+};
+
+// ── Attempts ──────────────────────────────────────
+export const attemptsApi = {
+  list: (params: { questionId?: string; sessionId?: string; page?: number; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.questionId) qs.set('questionId', params.questionId);
+    if (params.sessionId) qs.set('sessionId', params.sessionId);
+    if (params.page) qs.set('page', String(params.page));
+    if (params.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString();
+    return request<PaginatedResponse<AnswerAttemptResponse>>(`/attempts${query ? `?${query}` : ''}`);
+  },
+
+  get: (id: string) =>
+    request<AnswerAttemptResponse>(`/attempts/${id}`),
+
+  forQuestion: (questionId: string, params: { page?: number; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.page) qs.set('page', String(params.page));
+    if (params.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString();
+    return request<PaginatedResponse<AnswerAttemptResponse>>(`/questions/${questionId}/attempts${query ? `?${query}` : ''}`);
+  },
+};
+
+
+// ── Dashboard ─────────────────────────────────────
+import type { DashboardSummaryResponse } from '@momito/shared';
+
+export const dashboardApi = {
+  summary: () =>
+    request<DashboardSummaryResponse>('/dashboard/summary'),
+};
+
+// ── Study Plan ────────────────────────────────────
+import type { StudyPlanItemResponse } from '@momito/shared';
+
+export const studyPlanApi = {
+  list: (params: { status?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set('status', params.status);
+    const query = qs.toString();
+    return request<StudyPlanItemResponse[]>(`/study-plan${query ? `?${query}` : ''}`);
+  },
+
+  create: (body: { title: string; topicId?: string; notes?: string | null; targetDate?: string | null }) =>
+    request<StudyPlanItemResponse>('/study-plan', { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (id: string, body: { title?: string; topicId?: string; notes?: string | null; targetDate?: string | null; status?: string }) =>
+    request<StudyPlanItemResponse>(`/study-plan/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  delete: (id: string) =>
+    request<void>(`/study-plan/${id}`, { method: 'DELETE' }),
+};

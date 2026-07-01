@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Agent exec loop: delivers swarm messages to codex-based agents via `codex exec`
+# instead of the interactive TUI (which doesn't work well with tmux paste delivery).
+set -euo pipefail
+
+AGENT="${1:-}"
+if [[ -z "$AGENT" ]]; then
+  echo "Usage: agent-exec-loop <codex|deepseek>" >&2
+  exit 2
+fi
+
+cd "${SWARM_PROJECT_ROOT:-$PWD}"
+source .swarm/agents.env
+export SWARM_AGENT_NAME="$AGENT"
+export PATH="$PWD/.swarm/bin:$PATH"
+
+upper="$(printf '%s' "$AGENT" | tr '[:lower:]' '[:upper:]')"
+cmd_var="${upper}_CMD"
+FULL_CMD="${!cmd_var:-}"
+
+# Build codex exec flags from the original command
+# Original: "codex --yolo" or "codex --profile minimax --dangerously-bypass-approvals-and-sandbox"
+EXEC_FLAGS="--skip-git-repo-check --dangerously-bypass-approvals-and-sandbox"
+if echo "$FULL_CMD" | grep -q -- "--model"; then
+  MODEL=$(echo "$FULL_CMD" | grep -oE -- "--model [^ ]+" | head -1)
+  EXEC_FLAGS="$EXEC_FLAGS $MODEL"
+fi
+if echo "$FULL_CMD" | grep -q -- "--profile"; then
+  PROFILE=$(echo "$FULL_CMD" | grep -oE -- "--profile [^ ]+" | head -1)
+  EXEC_FLAGS="$EXEC_FLAGS $PROFILE"
+fi
+
+QUEUE_DIR=".swarm/queue"
+PROMPT_FILE=".swarm/prompts/$AGENT.md"
+mkdir -p "$QUEUE_DIR"
+
+clear
+printf 'AI Swarm Agent: %s\n' "$upper"
+printf 'Project: %s\n' "$PWD"
+printf 'Command: codex exec %s\n' "$EXEC_FLAGS"
+printf 'Mode: exec-loop (waiting for messages from router)\n\n'
+printf 'Queue dir: %s\n\n' "$QUEUE_DIR"
+
+# Auto-boot: announce to AGY that this agent is online and ready
+BOOT_MSG=$(cat "$PROMPT_FILE" 2>/dev/null || echo "")
+BOOT_PROMPT="${BOOT_MSG}
+
+Read AI_COLLAB.md, .swarm/BOARD.md, .swarm/LOCKS.md, and .swarm/DECISIONS.md.
+You are running inside AI Swarm Cockpit (exec-loop mode).
+Send a SHORT acknowledgment to AGY with your current status using: say agy \"message\".
+Do not start editing files until AGY assigns or confirms a task."
+
+printf '[%s] Booting: sending startup message to AGY...\n' "$(date +%H:%M:%S)"
+# shellcheck disable=SC2086
+codex exec $EXEC_FLAGS "$BOOT_PROMPT" 2>&1 | tail -5 || true
+printf '[%s] Boot complete. Entering message loop.\n\n' "$(date +%H:%M:%S)"
+
+while true; do
+  # Find oldest message file for this agent (sorted by name = timestamp order)
+  MSG_FILE=$(find "$QUEUE_DIR" -maxdepth 1 -name "${AGENT}_*.msg" 2>/dev/null | sort | head -1 || true)
+
+  # Purge messages older than 2 hours to avoid processing stale backlog on restart
+  find "$QUEUE_DIR" -maxdepth 1 -name "${AGENT}_*.msg" -mmin +120 -delete 2>/dev/null || true
+
+  if [[ -n "$MSG_FILE" ]] && [[ -f "$MSG_FILE" ]]; then
+    MSG_CONTENT=$(cat "$MSG_FILE")
+    rm -f "$MSG_FILE"
+
+    printf '\n══════════════════════════════════════════════\n'
+    printf '[%s] New message received\n' "$(date +%H:%M:%S)"
+    printf '══════════════════════════════════════════════\n'
+
+    # Build full prompt: system prompt + recent chat context + message
+    SYSTEM_PROMPT=$(cat "$PROMPT_FILE" 2>/dev/null || echo "")
+    RECENT_CHAT=$(tail -30 .swarm/chat.log 2>/dev/null | grep -v "^$" || echo "(no recent activity)")
+
+    FULL_PROMPT="${SYSTEM_PROMPT}
+
+---
+Recent swarm chat (last 30 lines for context):
+${RECENT_CHAT}
+---
+
+${MSG_CONTENT}
+
+IMPORTANT: Act on this message now. Use shell commands to do the work.
+- To reply: say agy \"your reply\"
+- To update the board: edit .swarm/BOARD.md
+- To claim files before editing: edit .swarm/LOCKS.md
+- Run checks before reporting done."
+
+    # Execute via codex exec
+    # shellcheck disable=SC2086
+    codex exec $EXEC_FLAGS "$FULL_PROMPT" 2>&1 || true
+
+    printf '\n[%s] Message processing complete\n' "$(date +%H:%M:%S)"
+  fi
+
+  sleep 1
+done

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf 'AI Swarm status\n'
+printf '===============\n\n'
+
+if [[ -f .swarm/runtime/session_name ]]; then
+  SESSION="$(cat .swarm/runtime/session_name)"
+else
+  SESSION=""
+fi
+
+if [[ -n "$SESSION" ]] && tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "tmux session: $SESSION (running)"
+  tmux list-panes -t "$SESSION:agents" -F '#{pane_id} #{pane_current_command} #{pane_title}' || true
+else
+  echo "tmux session: not running"
+fi
+
+printf '\nRecent chat:\n'
+tail -n 30 .swarm/chat.log 2>/dev/null || true

@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "tmux is required but not installed." >&2
+  exit 1
+fi
+
+if [[ ! -f .swarm/agents.env ]]; then
+  echo "Run this from a project that has .swarm/agents.env" >&2
+  exit 1
+fi
+
+source .swarm/agents.env
+
+PROJECT_ROOT="$(pwd)"
+PROJECT_NAME="$(basename "$PROJECT_ROOT" | tr -cd '[:alnum:]_-' | tr '[:upper:]' '[:lower:]')"
+SESSION="${SWARM_SESSION:-}"
+if [[ -z "$SESSION" ]]; then
+  SESSION="swarm-${PROJECT_NAME:-project}"
+fi
+
+mkdir -p .swarm/runtime
+touch .swarm/chat.log .swarm/messages.jsonl
+
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "Session already exists: $SESSION"
+  echo "Attach with: tmux attach -t $SESSION"
+  exit 0
+fi
+
+# Layout:
+# ┌──────────────┬──────────────┐
+# │ AGY          │ Claude       │
+# ├──────────────┼──────────────┤
+# │ DeepSeek     │ Codex        │
+# ├──────────────┴──────────────┤
+# │ live chat (full width)      │
+# └─────────────────────────────┘
+
+# Get terminal height to reserve space for live chat
+TERM_HEIGHT="$(tmux display-message -p '#{window_height}')"
+CHAT_HEIGHT=10
+AGENT_HEIGHT=$(( TERM_HEIGHT - CHAT_HEIGHT - 1 ))
+
+# Create session with AGY (top-left).
+tmux new-session -d -s "$SESSION" -n agents -c "$PROJECT_ROOT"
+P_AGY="$(tmux display-message -p -t "$SESSION:agents.0" '#{pane_id}')"
+tmux send-keys -t "$P_AGY" "SWARM_PROJECT_ROOT='$PROJECT_ROOT' .swarm/bin/run-agent agy" C-m
+
+# Top-right: Claude (split AGY horizontally).
+tmux split-window -h -t "$P_AGY" -c "$PROJECT_ROOT"
+P_CLAUDE="$(tmux display-message -p -t "$SESSION:agents" '#{pane_id}')"
+tmux send-keys -t "$P_CLAUDE" "SWARM_PROJECT_ROOT='$PROJECT_ROOT' .swarm/bin/run-agent claude" C-m
+
+# Bottom-right: Codex (split Claude vertically).
+tmux split-window -v -t "$P_CLAUDE" -c "$PROJECT_ROOT"
+P_CODEX="$(tmux display-message -p -t "$SESSION:agents" '#{pane_id}')"
+tmux send-keys -t "$P_CODEX" "SWARM_PROJECT_ROOT='$PROJECT_ROOT' .swarm/bin/run-agent codex" C-m
+
+# Bottom-left: DeepSeek (split AGY vertically).
+tmux split-window -v -t "$P_AGY" -c "$PROJECT_ROOT"
+P_DEEPSEEK="$(tmux display-message -p -t "$SESSION:agents" '#{pane_id}')"
+tmux send-keys -t "$P_DEEPSEEK" "SWARM_PROJECT_ROOT='$PROJECT_ROOT' .swarm/bin/run-agent deepseek" C-m
+
+# Live chat: full-width strip at the bottom (split the whole window).
+tmux select-pane -t "$P_AGY"
+tmux split-window -v -t "$SESSION:agents" -c "$PROJECT_ROOT" -l "$CHAT_HEIGHT" -f
+P_CHAT="$(tmux display-message -p -t "$SESSION:agents" '#{pane_id}')"
+tmux send-keys -t "$P_CHAT" ".swarm/bin/watch-chat" C-m
+
+# Second window for router.
+tmux new-window -t "$SESSION" -n router -c "$PROJECT_ROOT"
+P_ROUTER="$(tmux display-message -p -t "$SESSION:router.0" '#{pane_id}')"
+tmux send-keys -t "$P_ROUTER" ".swarm/bin/swarm-router" C-m
+
+cat > .swarm/runtime/panes.json <<JSON
+{
+  "agy": "$P_AGY",
+  "claude": "$P_CLAUDE",
+  "codex": "$P_CODEX",
+  "deepseek": "$P_DEEPSEEK",
+  "chat": "$P_CHAT",
+  "router": "$P_ROUTER"
+}
+JSON
+
+echo "$SESSION" > .swarm/runtime/session_name
+
+tmux select-window -t "$SESSION:agents"
+tmux select-pane -t "$P_AGY"
+
+# Give CLIs a moment to open, then optionally paste boot prompts.
+if [[ "${SWARM_AUTO_BOOT:-1}" == "1" ]]; then
+  (
+    sleep 3
+    "$PROJECT_ROOT/.swarm/bin/swarm-boot" >/dev/null 2>&1 || true
+  ) &
+fi
+
+cat <<INFO
+Started AI Swarm Cockpit.
+
+Session: $SESSION
+Attach:  tmux attach -t $SESSION
+Stop:    .swarm/bin/swarm-stop
+Chat:    .swarm/bin/watch-chat
+
+Tip: If the boot prompt did not paste correctly because a CLI was still loading, run:
+  .swarm/bin/swarm-boot
+INFO
+
+tmux attach -t "$SESSION"

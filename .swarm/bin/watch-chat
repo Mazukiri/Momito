@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p .swarm
+touch .swarm/chat.log
+clear
+printf 'AI Swarm Live Chat\n'
+printf '==================\n\n'
+tail -n 200 -f .swarm/chat.log
