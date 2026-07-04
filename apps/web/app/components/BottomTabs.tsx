@@ -1,0 +1,43 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { PRIMARY_NAV_ITEMS, isNavItemActive } from '../lib/navigation';
+import { cn } from '../lib/cn';
+
+// MOM-009: fixed bottom tab bar for phone-width viewports. Hidden at `sm` and up,
+// where the sidebar (MOM-010) takes over. `pb-[env(safe-area-inset-bottom)]` keeps
+// tabs clear of iOS home-indicator gestures; the layout adds matching bottom padding
+// to page content so the bar never covers it (UX invariant §2.3.6).
+export function BottomTabs() {
+  const pathname = usePathname();
+
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white pb-[env(safe-area-inset-bottom)] sm:hidden"
+      aria-label="Primary"
+    >
+      <div className="grid grid-cols-5">
+        {PRIMARY_NAV_ITEMS.map((item) => {
+          const active = isNavItemActive(pathname, item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium',
+                active ? 'text-indigo-600' : 'text-zinc-500',
+              )}
+              aria-current={active ? 'page' : undefined}
+            >
+              <span className="text-lg leading-none" aria-hidden="true">
+                {item.icon}
+              </span>
+              {item.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}

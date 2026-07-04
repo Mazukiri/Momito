@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
 import { LoadingPage } from '../components/ui';
+import { Sidebar } from '../components/Sidebar';
+import { BottomTabs } from '../components/BottomTabs';
 import Link from 'next/link';
 
 export default function AuthenticatedLayout({
@@ -12,7 +14,6 @@ export default function AuthenticatedLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const { user, loading, logout } = useAuth();
 
   useEffect(() => {
@@ -24,59 +25,33 @@ export default function AuthenticatedLayout({
   if (loading) return <LoadingPage />;
   if (!user) return null;
 
-  const navLinks = [
-    { href: '/dashboard', label: 'Dashboard' },
-    { href: '/missions', label: 'Mission' },
-    { href: '/career', label: 'Career' },
-    { href: '/jobs', label: 'Jobs' },
-    { href: '/profile', label: 'Profile' },
-    { href: '/learning', label: 'Learning' },
-    { href: '/calendar', label: 'Calendar' },
-    { href: '/questions', label: 'Questions' },
-    { href: '/practice/new', label: 'Practice' },
-    { href: '/attempts', label: 'History' },
-    { href: '/study-plan', label: 'Study Plan' },
-    { href: '/settings', label: 'Settings' },
-  ];
-
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex min-h-14 max-w-6xl items-center justify-between gap-4 px-4 py-2">
-          <div className="flex items-center gap-6">
-            <Link href="/questions" className="text-lg font-bold text-indigo-600">
+    <div className="flex min-h-screen bg-zinc-50">
+      <Sidebar />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="border-b border-zinc-200 bg-white">
+          <div className="flex min-h-14 items-center justify-between gap-4 px-4 py-2">
+            <Link href="/today" className="text-lg font-bold text-indigo-600 sm:hidden">
               Momito
             </Link>
-            <nav className="hidden sm:flex flex-wrap items-center gap-3">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`text-sm font-medium ${
-                    pathname.startsWith(link.href)
-                      ? 'text-indigo-600'
-                      : 'text-zinc-600 hover:text-zinc-900'
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
+            <div className="flex flex-1 items-center justify-end gap-4">
+              <span className="text-sm text-zinc-500">{user.name}</span>
+              <button
+                onClick={async () => {
+                  await logout();
+                  router.push('/login');
+                }}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
+              >
+                Sign out
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-zinc-500">{user.name}</span>
-            <button
-              onClick={async () => { await logout(); router.push('/login'); }}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        {children}
-      </main>
+        </header>
+        {/* pb-20 keeps content clear of the fixed BottomTabs on phone widths (UX invariant §2.3.6) */}
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20 pt-6 sm:pb-8">{children}</main>
+      </div>
+      <BottomTabs />
     </div>
   );
 }
