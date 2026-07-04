@@ -5,6 +5,118 @@
 
 ---
 
+## 2026-07-05 — Bulk implementer pass (CLAUDE, ~24 tasks across Tracks A-K)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** User asked to work through all remaining BACKLOG.MD tasks. Agreed approach:
+take over from Codex (commit MOM-003, drive NEXT.MD), skip anything schema-migration /
+deploy-credential / AI-API-key gated, and implement everything else that's genuinely
+unblocked. Full history is in `git log` (12 commits, `73eb5ae`..`bfcccba`); this entry
+summarizes what shipped, in dependency order.
+
+**Track A — Safety:** Committed MOM-003 (Codex's staged archive move).
+
+**Track B — Mobile Platform:** MOM-006 `cn()` util (clsx+tailwind-merge). MOM-007 added
+Button/Input primitives to the existing `components/ui.tsx` instead of the shadcn CLI
+(SPIKE-001: would've forked the design system in two). MOM-008 central `NAV_ITEMS`/
+`PRIMARY_NAV_ITEMS`. MOM-009/010 `BottomTabs`/`Sidebar`. MOM-011 rewrote the authenticated
+layout to compose them (mobile bottom tabs, desktop sidebar, content padding so tabs never
+cover it). MOM-012 real `/today` stub route; login/register/root now land there. MOM-013
+class-based dark mode (`@custom-variant dark`), `ThemeProvider` + toggle, applied to the
+shell + shared primitives (full page-by-page dark-mode adoption is NOT done — documented,
+not silently claimed). MOM-014 restyled auth pages (Input/Button primitives, `text-base`
+inputs to stop iOS auto-zoom). MOM-015 PWA manifest + generated icon/apple-icon/192/512
+via `next/og` (no real designed art yet). MOM-016 (SPIKE-002): evaluated service worker vs
+JWT-in-localStorage risk, **deferred** per D-007 (cross-user cache leak, update/versioning,
+stale-auth-shell risks) — not implemented.
+
+**Track C — API Foundation:** MOM-017 helmet + global `@nestjs/throttler` (100/min),
+layered on top of the existing prefix/CORS/ValidationPipe (not replacing it). MOM-018 auth
+routes throttled 5/min; registration locked after the first account exists (single-user
+personal tool, not SaaS) unless `ALLOW_MULTI_USER_REGISTRATION=true`. MOM-019 `GET /health`
+(no DB dep, skip-throttled). MOM-020 `directUrl` added to the Prisma datasource for Neon;
+required adding `DIRECT_URL` to `.env`/`.env.example`/CI or `prisma validate` breaks.
+
+**Track D — Knowledge Kernel:** MOM-022/023 `KnowledgeObject`/`Reviewable`/`Rubric` types
+added to `packages/shared` (type-layer only, no schema change, per D-003). MOM-025
+`questionToKnowledgeObject()` maps `Question` rows via a `QuestionType -> KnowledgeDomain`
+table. MOM-024 `pnpm content:validate/stats/sample` scripts read directly from
+`prisma/seed.ts`'s exported data (no DB connection needed); `seed.ts`'s `main()` is now
+guarded by `require.main` so importing its exports doesn't trigger a live seed.
+
+**Track E — Learning Engine:** MOM-028 (inspection only): documented in DECISIONS.md which
+`AnswerAttempt` reflection fields already exist vs. which need a migration (miss tags,
+reflection note, language, complexity) — **no migration attempted** (human-approval gated).
+MOM-033 standardized `RecommendationsService` reason strings into full sentences.
+
+**Track F — Practice UI:** MOM-034 `react-markdown` + `@tailwindcss/typography` renderer,
+wired into the question detail reference-answer view. MOM-036/037 split
+`practice/session/[id]/page.tsx` into `SessionHeader`/`AnswerForm`/`AllAnsweredPanel`/
+`ReviewQuestionCard`, and added a `useTimer` hook wired into `AnswerForm` so answer
+submission now actually sends `timeSpentSeconds` (the API already accepted it; the UI never
+sent it). MOM-040 (inspection): summary page was already solid; added per-question time-
+spent display now that it's captured.
+
+**Track G — Content Factory:** MOM-043/044 (inspection): `prisma/seed.ts` was **already**
+idempotent (stable UUIDs + `upsert`) — no restructure needed. MOM-045 added `DSA_PATTERNS`
+(20 patterns) + a 17-item original DSA starter batch (13 easy/medium classics + 2 hard),
+each linking to its real source via `sourceUrl` with an original practice note per D-008 —
+**not** the full 150-item Gate-3 target, explicitly documented as a starter batch. MOM-060
+expanded seed companies 6 → 20 (plan §8.2), encoding focus areas/linked tracks in
+`Company.notes` (no dedicated column). MOM-061 extended `CAREER_ROLE_TRACKS` 4 → 10 tracks
+so all 8 plan categories (backend, AI/NLP, infra, mobile, fullstack, quant/HPC, data,
+security) have one; new tracks default `profileRoleTemplate` to `google-l4-swe` pending
+dedicated RoleTemplate skill/tier data (separate scope, not authored here).
+
+**Track J — Career Engine:** MOM-081 (inspection): jobs page was already a mobile-first
+list (matches plan §10.3, no drag-and-drop); added a status filter chip row, removed a dead
+placeholder div. MOM-082 (inspection): career hub already renders role tracks/goals/
+readiness from the API, so it auto-picked up the 10 tracks from MOM-061 with zero page
+changes.
+
+**Track K — Operations:** MOM-084 `global-error.tsx`, `(authenticated)/error.tsx` +
+`loading.tsx`, `not-found.tsx`. MOM-085 `AllExceptionsFilter` (consistent JSON error shape,
+no stack-trace leakage, warn/error log split) + `RequestLoggingMiddleware`. MOM-086
+`GET /health/db` (DB ping on a separate route so a DB outage doesn't take down base
+liveness). MOM-004 README rewrite to match all of the above (routes, env vars, scripts,
+seed counts, role-track count, mobile/PWA section).
+
+**Side finding, fixed:** `apps/web` had no `typecheck` script — `pnpm typecheck` (and CI's
+dedicated step) silently skipped the frontend entirely; only `next build`'s internal tsc
+pass ever caught web type errors. Added `"typecheck": "tsc --noEmit"`.
+
+**Checks run (final full pass, all green):** `pnpm lint` (3/3 projects), `pnpm typecheck`
+(3/3 projects, web now included), `pnpm test` (48 API tests, 13 files), `pnpm build` (all 3
+packages, 28 web routes), `pnpm content:validate` (0 errors on 55 seed questions).
+
+**Deliberately NOT done — schema-migration-gated (per D-004, human approval required):**
+- MOM-026/027 `ReviewState` migration (design already captured in ADR-0002)
+- MOM-063 `Story` model/migration
+- MOM-069 `AiUsage` migration
+- MOM-075 `StudyPlanItem` → `Task` consolidation migration
+- The four missing `AnswerAttempt` reflection columns identified in MOM-028's inspection
+
+**Deliberately NOT done — needs real credentials/external services:**
+- MOM-021 first deploy (Vercel/Render/Neon)
+- MOM-068/070-074 AI Feedback Engine (Anthropic API key)
+- MOM-049 LeetCode GraphQL import service
+- MOM-087 backup workflow (Neon backup strategy)
+
+**Not attempted this pass — legitimately large remaining content/feature work (not gated,
+just sizeable; see BACKLOG.MD for full task list):** MOM-046-048 (DSA batches to 150),
+MOM-052-059 (CS/system-design/behavioral batches), MOM-029-032 (reviews module/FSRS
+service/Today API — blocked on the ReviewState migration above), MOM-038/039/041/042
+(answer-panel-by-type, reflection panel, practice hub, Today learning cards — blocked on
+028/032), MOM-035 CodeMirror editor, MOM-050/051 DSA progress API/UI, MOM-057 system-design
+editor, MOM-062 coverage dashboard, MOM-063-067 Story engine, MOM-076/077 task
+consolidation cleanup, MOM-078/080 reminder scheduler/UI, MOM-083 job-linked prep,
+MOM-088 Lighthouse/a11y pass, MOM-090 final golden-path verification.
+
+**Result:** 24 backlog tasks completed across 12 commits, full CI-equivalent pipeline
+green. `NEXT.MD` updated to the next real unblocked task.
+
+---
+
 ## 2026-07-05 - MOM-003 archive legacy Python backend and Expo mobile
 
 **Actor:** CODEX
