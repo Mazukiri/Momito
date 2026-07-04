@@ -1187,3 +1187,18 @@ export interface ContentCoverageResponse {
   companyCount: number;
   roleTrackCount: number;
 }
+
+// ── DSA Ladder Progress (MOM-050/051) ────────────────────────────────────────
+export interface DsaPatternProgress {
+  pattern: DsaPattern;
+  totalItems: number;
+  attemptedItems: number;
+  solvedItems: number;
+}
+
+export interface DsaProgressResponse {
+  patterns: DsaPatternProgress[];
+  totalDsaItems: number;
+  totalAttempted: number;
+  totalSolved: number;
+}

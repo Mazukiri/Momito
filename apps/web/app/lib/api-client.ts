@@ -539,8 +539,13 @@ export const missionsApi = {
 };
 
 // ── Content Coverage (MOM-062) ────────────────────
-import type { ContentCoverageResponse } from '@momito/shared';
+import type { ContentCoverageResponse, DsaProgressResponse } from '@momito/shared';
 
 export const contentApi = {
   coverage: () => request<ContentCoverageResponse>('/content/coverage'),
+};
+
+// ── DSA Ladder Progress (MOM-050) ─────────────────
+export const dsaApi = {
+  progress: () => request<DsaProgressResponse>('/dsa/progress'),
 };

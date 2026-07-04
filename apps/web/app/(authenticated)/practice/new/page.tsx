@@ -42,7 +42,7 @@ export default function NewPracticePage() {
   const [roleTrackId, setRoleTrackId] = useState(searchParams.get('roleTrackId') || '');
   const [area, setArea] = useState(searchParams.get('area') || '');
   const missionId = searchParams.get('missionId') || undefined;
-  const [pattern, setPattern] = useState('');
+  const [pattern, setPattern] = useState(searchParams.get('pattern') || '');
   const [questionCount, setQuestionCount] = useState(5);
 
   const [topics, setTopics] = useState<TopicSummary[]>([]);

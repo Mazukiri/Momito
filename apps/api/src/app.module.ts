@@ -20,6 +20,7 @@ import { MissionsModule } from './missions/missions.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { HealthModule } from './health/health.module';
 import { ContentModule } from './content/content.module';
+import { DsaModule } from './dsa/dsa.module';
 import { RequestLoggingMiddleware } from './common/request-logging.middleware';
 
 @Module({
@@ -32,6 +33,7 @@ import { RequestLoggingMiddleware } from './common/request-logging.middleware';
     AuthModule,
     HealthModule,
     ContentModule,
+    DsaModule,
     QuestionsModule,
     TopicsModule,
     CompaniesModule,
