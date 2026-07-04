@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth-context';
 import { LoadingPage } from '../components/ui';
 import { Sidebar } from '../components/Sidebar';
 import { BottomTabs } from '../components/BottomTabs';
+import { ThemeToggle } from '../components/ThemeToggle';
 import Link from 'next/link';
 
 export default function AuthenticatedLayout({
@@ -26,22 +27,23 @@ export default function AuthenticatedLayout({
   if (!user) return null;
 
   return (
-    <div className="flex min-h-screen bg-zinc-50">
+    <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-zinc-200 bg-white">
+        <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex min-h-14 items-center justify-between gap-4 px-4 py-2">
             <Link href="/today" className="text-lg font-bold text-indigo-600 sm:hidden">
               Momito
             </Link>
             <div className="flex flex-1 items-center justify-end gap-4">
-              <span className="text-sm text-zinc-500">{user.name}</span>
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">{user.name}</span>
+              <ThemeToggle />
               <button
                 onClick={async () => {
                   await logout();
                   router.push('/login');
                 }}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 Sign out
               </button>

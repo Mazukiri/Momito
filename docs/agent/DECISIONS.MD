@@ -68,6 +68,17 @@ if any, is deferred and gated — not part of Gate 1/2.
 offline) is **NEEDS_SPIKE** (SPIKE-002) and **DEFER**-eligible if it breaks auth.
 **Consequences:** App becomes installable safely without risking the auth flow.
 
+**SPIKE-002 outcome (2026-07-05, MOM-016):** `apps/web/app/lib/auth-context.tsx` stores the JWT
+in `localStorage` (`momito_token`), invisible to a service worker's execution context. A naive SW
+would not break auth directly, but three real risks remain: (1) caching authenticated API
+responses in the Cache API would leak one user's data to the next user on a shared device after
+logout/login, since the SW has no notion of "current user" to scope the cache by; (2) SW
+update/versioning (`skipWaiting`/`clients.claim`) is easy to get wrong and strands users on a
+stale JS bundle that no longer matches the API contract; (3) an SW scoped over `/login` risks
+serving a stale cached auth shell after logout, producing a confusing "logged out but see old UI"
+state. **MOM-016 is DEFERRED** — MOM-015 shipped without it. Revisit only with an explicit
+per-user cache-key strategy and a tested update flow.
+
 ### D-008 — No copyrighted problem statements in seed content
 **Context:** Data invariant §2.2.4/5.
 **Decision:** DSA/content seeds store metadata, source URLs, patterns, and **original** practice

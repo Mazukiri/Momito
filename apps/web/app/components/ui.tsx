@@ -11,10 +11,11 @@ import { cn } from '../lib/cn';
 // variables) rather than one source of truth. Decision: extend this existing module with
 // `cn()`-based primitives instead of introducing shadcn, preserving one design system.
 const BUTTON_VARIANTS = {
-  primary: 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-300',
-  secondary: 'border border-zinc-300 text-zinc-700 hover:bg-zinc-50 disabled:opacity-40',
-  ghost: 'text-zinc-600 hover:bg-zinc-100 disabled:opacity-40',
-  danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300',
+  primary: 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-300 dark:disabled:bg-indigo-900',
+  secondary:
+    'border border-zinc-300 text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800',
+  ghost: 'text-zinc-600 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800',
+  danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300 dark:disabled:bg-red-900',
 } as const;
 
 const BUTTON_SIZES = {
@@ -56,6 +57,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
           'w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400',
           'focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500',
           'disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-500',
+          'dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:disabled:bg-zinc-800',
           className,
         )}
         {...props}
@@ -101,7 +103,7 @@ export function ErrorBanner({
   onRetry?: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
       <div className="flex items-start gap-3">
         <span className="mt-0.5 shrink-0 text-red-500">⚠</span>
         <div className="flex-1">
@@ -111,7 +113,7 @@ export function ErrorBanner({
         {onRetry && (
           <button
             onClick={onRetry}
-            className="shrink-0 rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
+            className="shrink-0 rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-100 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900"
           >
             Retry
           </button>
@@ -136,9 +138,9 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <span className="text-4xl">{icon}</span>
-      <h3 className="mt-4 text-lg font-semibold text-zinc-800">{title}</h3>
+      <h3 className="mt-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{title}</h3>
       {description && (
-        <p className="mt-2 max-w-sm text-sm text-zinc-500">{description}</p>
+        <p className="mt-2 max-w-sm text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
       )}
       {action && <div className="mt-6">{action}</div>}
     </div>
@@ -191,8 +193,8 @@ export function Card({
   return (
     <div
       className={cn(
-        'rounded-lg border border-zinc-200 bg-white p-5 shadow-sm',
-        onClick && 'cursor-pointer hover:border-zinc-300 hover:shadow-md transition-shadow',
+        'rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900',
+        onClick && 'cursor-pointer hover:border-zinc-300 hover:shadow-md transition-shadow dark:hover:border-zinc-700',
         className,
       )}
       onClick={onClick}
