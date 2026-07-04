@@ -79,7 +79,7 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-This creates all tables and then idempotently seeds 9 topics, 20 companies, and 55 interview questions (including a starter DSA batch) with role/area metadata. It also creates a demo account:
+This creates all tables and then idempotently seeds 12 topics, 20 companies, and 382 interview questions with role/area metadata — 149 DSA (all 20 coding-interview patterns, 2-3 examples each), 149 CS Fundamentals (OS, networking, databases, concurrency, computer architecture, ML fundamentals, OOP, JS/TS, Node.js, backend, C++), 24 System Design cases (7-section reference outlines), and 60 Behavioral prompts (STAR-structuring guidance). Run `pnpm content:stats` for a live breakdown, or visit `/settings/content` in the app. It also creates a demo account:
 
 ```txt
 Email: demo@momito.local
@@ -142,11 +142,14 @@ All frontend pages are under `apps/web/app/`.
 | `/questions/new` | Create a new question |
 | `/questions/[id]` | Question detail with answer and "Start Practice" button |
 | `/questions/[id]/edit` | Edit an existing question |
-| `/practice/new` | Create a new practice session (type, topic, company, difficulty) |
-| `/practice/session/[id]` | Active question-by-question flow |
-| `/practice/session/[id]/summary` | Session results, answer review, duration |
+| `/practice` | Practice hub — resume an active session, or jump into a mode |
+| `/practice/new` | Create a new practice session (type, topic, company, difficulty, pattern) |
+| `/practice/dsa-ladder` | DSA pattern-by-pattern progress (attempted/solved per pattern) |
+| `/practice/session/[id]` | Active question-by-question flow (system design gets a 7-section template + markdown preview) |
+| `/practice/session/[id]/summary` | Session results, answer review, duration, time spent per question |
 | `/attempts` | Past answer history |
 | `/attempts/[id]` | Full attempt detail |
+| `/settings/content` | Content coverage dashboard — progress toward plan §8.2 data targets |
 | `/study-plan` | Todo / In Progress / Done study plan with CRUD |
 | `/settings` | Topic and company management |
 
@@ -269,6 +272,10 @@ All endpoints are under `http://localhost:3001/api/v1`. Protected routes require
 - `PATCH /study-plan/:id` — Update item (title, status, notes, targetDate)
 - `DELETE /study-plan/:id` — Delete item
 
+### Content & DSA Progress
+- `GET /content/coverage` — Question counts by type/difficulty plus progress toward plan §8.2 domain targets (DSA, CS Fundamentals, System Design, Behavioral, companies, role tracks)
+- `GET /dsa/progress` — Per-DSA-pattern totals/attempted/solved counts for the current user, cross-referencing `AnswerAttempt` history
+
 ### Career OS
 - `GET /career/role-tracks` — Available long-term role tracks
 - `GET /career/goals`, `POST /career/goals`, `PATCH /career/goals/:id` — Active career goals
@@ -322,17 +329,22 @@ can be added to a phone home screen; there is intentionally **no service worker 
 `docs/agent/DECISIONS.MD` (D-007, SPIKE-002) for why that's deferred rather than shipped half-safe.
 
 ### Question Bank
-- 11 question types: DSA, Backend, JavaScript, TypeScript, Node.js, Database, OS, Networking, OOP, System Design, Behavioral
+- 17 question types: DSA, Backend, JavaScript, TypeScript, Node.js, Database, OS, Networking, OOP, System Design, Behavioral, C++, Concurrency, Computer Architecture, Machine Learning, HPC, Quant
 - 3 difficulty levels: Easy, Medium, Hard
-- Search and multi-filter (topic, difficulty, type, company, keyword)
-- Reference answer toggle for self-study
+- Search and multi-filter (topic, difficulty, type, company, keyword) — deep-linkable via `?type=` query param
+- Reference answer toggle for self-study, rendered as markdown
+- 382 seeded questions: 149 DSA (all 20 coding patterns), 149 CS Fundamentals, 24 System Design, 60 Behavioral
 
 ### Mock Interview Sessions
 - Four session types: Quick Practice, Topic Practice, Company Practice, Mixed Mock
-- Configurable question count (1–100)
-- Question-by-question flow with text answer submission
+- Configurable question count (1–100), filterable by DSA pattern
+- Question-by-question flow with text answer submission and a per-question timer
+- System design questions get a 7-section template (Requirements/Estimation/API/Data
+  Model/High-level Design/Deep Dives/Tradeoffs) with a markdown Edit/Preview toggle
 - Self-rating (1–5 stars) per answer
-- Session summary with per-question review and duration
+- Session summary with per-question review, time spent, and duration
+- Practice hub (`/practice`) surfaces in-progress sessions and every practice mode;
+  a DSA ladder page (`/practice/dsa-ladder`) tracks attempted/solved counts per pattern
 
 ### Progress Tracking
 - Dashboard with total questions practiced and sessions completed

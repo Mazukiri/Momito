@@ -5,6 +5,113 @@
 
 ---
 
+## 2026-07-05 — Gate 3 content completion + practice UI features (CLAUDE, session 3)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** User asked to "finish the rest MOM," continuing from the prior session's
+DSA-ladder-at-99/150 checkpoint. This entry summarizes MOM-048 through MOM-057 plus the
+final full-pipeline verification; MOM-048's own detailed entry follows immediately below
+(written at the time, kept as-is).
+
+**Gate 3 (Data Depth) — now substantially complete:**
+- **DSA ladder: 149/150** (MOM-048, batch 4) — all 20 `DSA_PATTERNS` covered 2-3× each,
+  with a genuine hard tier (32 hard items total across the ladder).
+- **CS Fundamentals: 149/150** (MOM-052/053/054) — 74 original questions across OS,
+  networking, databases, concurrency, computer architecture, ML fundamentals, OOP, JS/TS,
+  Node.js, backend, C++, HPC, quant. Added 3 new topics (Concurrency & Parallelism,
+  Computer Architecture, Machine Learning Fundamentals) that previously had none.
+- **System Design: 24/25** (MOM-055/056) — 20 new cases (rate limiter, distributed KV
+  store, chat app, job scheduler, web crawler, video streaming, typeahead, proximity
+  search, leaderboard, message queue, distributed lock, ad click aggregation,
+  collaborative editor, log aggregation, API gateway, distributed cache, payment
+  processing, ride dispatch, distributed file storage, trending terms), each sketching
+  the plan §7.4 seven-section shape.
+- **Behavioral: 60/60 exactly** (MOM-058/059) — 56 new STAR-structuring prompts across
+  ownership, feedback, conflict, ambiguity, incidents, mentorship, and more.
+- **Companies (20/20) and Role Tracks (10, covering all 8 plan categories)** were already
+  done in the prior session.
+- **Bug fixed along the way:** `content-lib.ts`'s copied-statement length heuristic
+  (>700 chars) fired on any long answer regardless of source, false-positiving on
+  legitimately long original system-design content. Now gated to only apply when a
+  `sourceUrl` is present (the only content D-008 actually needs to guard against copying).
+
+**Feature work beyond content:**
+- **MOM-062 Content coverage dashboard** — `GET /content/coverage` (Prisma groupBy over
+  the live `questions` table) + `/settings/content` page with progress bars against plan
+  §8.2 targets. Reflects actual deployment state, not the static seed script.
+- **MOM-050/051 DSA progress + ladder UI** — `GET /dsa/progress` cross-references dsa
+  `Question.patternTags` against `AnswerAttempt` history (reusing missions.service.ts's
+  positive-attempt heuristic for "solved"); `/practice/dsa-ladder` renders per-pattern
+  progress cards that deep-link into `/practice/new?pattern=X` (which previously silently
+  ignored a `pattern` query param — now wired).
+- **MOM-041 Practice hub** — new `/practice` landing page (in-progress sessions + entry
+  points into every mode); nav's "Practice" tab now points here instead of straight into
+  the session form. `/questions` now reads a `type` query param too (previously ignored).
+- **MOM-057 System design answer editor** — `AnswerForm` offers a 7-section markdown
+  template insert button and an Edit/Preview toggle (via the existing `Markdown`
+  component) for `system_design` questions.
+- **README** updated throughout to match: route table, seed counts (382 questions total),
+  question-type count (17), new API endpoints, feature descriptions.
+
+**Checks run (final full pass, all green):**
+- `pnpm lint` — 3/3 projects
+- `pnpm typecheck` — 3/3 projects (shared, api, web)
+- `pnpm test` — 51 API tests across 15 files
+- `pnpm build` — all 3 packages, 31 web routes
+- `pnpm content:validate` — 0 errors on 382 seed questions
+- `pnpm content:stats` — DSA 149, CS Fundamentals 149, System Design 24, Behavioral 60,
+  Companies 20, Role Tracks 10
+
+**Result:** 8 commits this session (`f3c1c78`..latest). Gate 3 content targets are all
+met or within 1 of target. Practice UI now has a real hub, DSA pattern tracking, and a
+system-design-specific editor — Gate 2 (Learning Loop) is closer but still blocked on the
+ReviewState migration (human-approval gated, per D-004) for the actual FSRS scheduling
+loop; today's work covers the UI/content side that doesn't need that migration.
+
+**Deliberately NOT done — still schema-migration-gated (per D-004):**
+- ReviewState, Story, AiUsage models; StudyPlanItem→Task consolidation; the four missing
+  AnswerAttempt reflection columns (miss tags, reflection note, language, complexity).
+
+**Deliberately NOT done — still needs real credentials/external services:**
+- Deploy (Vercel/Render/Neon), AI Feedback Engine (Anthropic API key), LeetCode GraphQL
+  import, backup workflow.
+
+**Not attempted — genuinely large remaining work, not gated, just sizeable:**
+- MOM-029-032 (reviews module/FSRS service/Today API — blocked on ReviewState migration).
+- MOM-035 CodeMirror editor; MOM-038/039 answer-panel-by-type/reflection panel (blocked on
+  028/035).
+- MOM-063-067 Story engine (blocked on Story model migration).
+- MOM-076/077/078/080/083 task consolidation cleanup, reminder scheduler polish,
+  job-linked prep.
+- MOM-088 Lighthouse/a11y pass; MOM-090 final golden-path verification (needs a live
+  browser + backend, not just unit tests — see the `/verify` skill for that kind of check).
+- Full page-by-page dark-mode adoption (only the shell + shared primitives got it in the
+  earlier session; documented then, still true now).
+
+---
+
+## 2026-07-05 — MOM-048 (CLAUDE IMPLEMENTER mode) — DSA Gate-3 target reached
+
+**Actor:** CLAUDE (implementer)
+**Task:** MOM-048 — Seed DSA ladder batch 4 (150 total), completing the DSA portion of
+Gate 3 (Data Depth).
+
+**Files changed:** `apps/api/prisma/seed.ts` (50 new DSA entries appended).
+
+**What shipped:** Final DSA batch bringing the ladder to 149/150, with a genuine hard
+tier this round (14 hard items: Burst Balloons, Edit Distance, Regular Expression
+Matching, Binary Tree Maximum Path Sum, Serialize/Deserialize Binary Tree, Sudoku Solver,
+Word Search II, Largest Rectangle in Histogram, Split Array Largest Sum, Sliding Window
+Maximum/Median, Candy, Word Break II) plus continued depth across all 20 `DSA_PATTERNS`.
+
+**Checks run:** `pnpm content:validate` (0 errors), `pnpm content:stats` (DSA 149, total
+187), `pnpm --filter @momito/api typecheck/build/test` (48/48 passed).
+
+**Result:** DSA ladder complete at 149/150 (Gate-3 target). Continuing to the other
+Gate-3 content areas: CS Fundamentals (150), System Design (25), Behavioral (60).
+
+---
+
 ## 2026-07-05 — MOM-047 (CLAUDE IMPLEMENTER mode)
 
 **Actor:** CLAUDE (implementer)

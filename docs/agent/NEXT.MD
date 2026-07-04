@@ -2,76 +2,82 @@
 
 > The single active PR-sized task. Only one at a time (Engineering Invariant 2.4.1).
 > Implementers touch only what "Allowed files" permits. Full backlog: `BACKLOG.md`.
-> See `LOG.MD` for full history. As of this update: mobile shell, dark mode, PWA manifest,
-> API security/health/logging, Knowledge Kernel types, content validation framework, a
-> 99-item DSA ladder, 20 company packs, 10 role tracks, session UI split + timer, error
-> boundaries, and the README are all done. DSA ladder is at 99/150.
+> See `LOG.MD` for full history. As of this update: Gate 3 (Data Depth) content is
+> substantially complete — DSA 149/150, CS Fundamentals 149/150, System Design 24/25,
+> Behavioral 60/60, Companies 20/20, Role Tracks 10 (covers all 8 plan categories). The
+> practice hub, DSA ladder UI, content coverage dashboard, and system design editor are
+> all shipped. Gate 2 (Learning Loop)'s FSRS scheduling remains blocked on the
+> ReviewState migration (human-approval gated, D-004).
 
 ---
 
-## MOM-048 — Seed DSA ladder batch 4 (150 total)
+## MOM-035 — CodeMirror editor (SPIKE + implementation)
 
-**Status:** READY
+**Status:** NEEDS_SPIKE → READY after spike
 **Owner:** CLAUDE or CODEX
-**Depends on:** MOM-047 (done — DSA ladder at 99/150, validated cleanly with 0 errors)
+**Depends on:** none directly, but unblocks MOM-038 (answer panel by question type)
 
 ### Goal
-Finish the DSA ladder to the plan's Gate-3 target of 150 items. Batches 1-3 (MOM-045/046/
-047) covered all 20 `DSA_PATTERNS` with 2-3 examples each at ~99 total items. This task
-adds ~50 more to reach 150, rounding out remaining gaps and adding a few more advanced/hard
-problems so the ladder has a genuine top tier, not just easy/medium depth.
+DSA/coding questions currently use the same plain `<textarea>` as every other question
+type in `AnswerForm` — no syntax highlighting, no language selection, no monospace-by-
+default editing. Add a CodeMirror-based code editor for `dsa` (and optionally `cpp`)
+question types, matching plan §7.2's practice engine UI expectations.
+
+### Spike questions (answer before writing the real component)
+1. Does `@codemirror/lang-javascript` / `@uiw/react-codemirror` (or similar) SSR cleanly
+   under Next 16.2.9 + React 19 + Turbopack, or does it need `next/dynamic` with
+   `ssr: false`? Verify with a throwaway page before wiring it into `AnswerForm`.
+2. Bundle size impact — CodeMirror language packs can be large; check what a minimal
+   multi-language setup (JS/TS/Python/C++/Java, the common DSA-interview languages) adds
+   to the `/practice/session/[id]` route's JS payload.
+3. Does the dark/light theme (MOM-013's `ThemeProvider`) need a matching CodeMirror theme
+   switch, or is one dark-friendly theme acceptable initially?
 
 ### User-visible outcome
-DSA content reaches its full planned depth; ready for the DSA ladder UI (MOM-051) and
-progress API (MOM-050) once those are built.
+Answering a DSA question shows a real code editor (line numbers, syntax highlighting, a
+language picker) instead of a plain textarea; answering everything else is unchanged.
 
 ### Allowed files
-- `apps/api/prisma/seed.ts` (append to the `questions` array only — do not reorder or
-  renumber existing entries). If the file has become unwieldy, consider (as a separate,
-  clearly-labeled commit) extracting DSA content into its own module imported by
-  `seed.ts` — do not mix a refactor and new content into one commit.
+- `apps/web/package.json` (add the CodeMirror dependency/dependencies), `pnpm-lock.yaml`.
+- New `apps/web/app/components/CodeEditor.tsx` (or similar).
+- `apps/web/app/components/session/AnswerForm.tsx` — swap the textarea for the code
+  editor only when `currentQuestion.question.type === 'dsa'` (and optionally `cpp`);
+  every other type keeps the existing textarea/system-design-preview behavior untouched.
 
 ### Forbidden changes
-- **No copied problem statements** (D-008 / ADR-0004). Original notes only; `sourceUrl`
-  links to the real source — only use LeetCode slugs you're highly confident are correct
-  and stable. Before treating this as production-ready, a live spot-check of a sample of
-  `sourceUrl`s against the real site is recommended (not done in MOM-045/046/047 — no
-  network access in that sandbox).
-- No schema/migration changes. No changes to non-DSA seed content.
-- Do not renumber/reorder existing `companies` or `questions` array entries.
+- Do not change the plain-textarea behavior for non-DSA question types.
+- Do not touch the API/DTOs — `answerText` is still just a string; the editor only
+  changes how it's authored client-side.
 
 ### Acceptance criteria
-- `pnpm content:validate` passes with 0 errors on the full seed set.
-- `pnpm content:stats` shows DSA count at roughly 150 (±5).
-- Difficulty distribution includes a meaningful hard tier (batches 1-3 skew
-  easy/medium-heavy — aim for hards to be a genuine third of new items this round).
+- `pnpm --filter @momito/web build` succeeds with no SSR errors from the new dependency.
+- A DSA question in a practice session shows a syntax-highlighted code editor.
+- Bundle size increase is documented in the PR description (run `next build` before/after
+  and compare the route's First Load JS).
+- Existing session flow (submit, timer, self-rating) is unaffected for every question type.
 
 ### Verification
 ```bash
-pnpm content:validate
-pnpm content:stats
-pnpm --filter @momito/api typecheck
-pnpm --filter @momito/api test
+pnpm --filter @momito/web build
+pnpm --filter @momito/web lint
+pnpm --filter @momito/web typecheck
 ```
 
 ### Manual test
-`pnpm content:sample 8` (from `apps/api`, or via the root `content:sample` script) —
-confirm no entry reads like a restated problem body.
+Start a practice session with a DSA question; confirm the editor renders, accepts input,
+and submitting still works end-to-end (check the summary page shows the submitted code).
 
 ### Rollback
-`git checkout -- apps/api/prisma/seed.ts`
+`git checkout -- apps/web/package.json apps/web/app/components` and revert the lockfile.
 
 ### Commit message
 ```text
-feat(content): seed DSA ladder batch 4 (150 total)
+feat(web): add CodeMirror editor for DSA/coding answers
 ```
 
 ### After completing
 1. Append an entry to `LOG.MD`.
-2. Gate 3 (Data Depth) also needs CS Fundamentals (150), System Design (25), Behavioral
-   (60), Company Packs (20 — done), Role Tracks (8 — done) before it's complete. Once the
-   DSA ladder hits 150, a reasonable next task is **MOM-052 — Seed CS Fundamentals batch 1
-   (50 items)**, following the same original-notes-only pattern (D-008 applies less
-   strictly here since these aren't sourced from a single external site, but original
-   authorship is still required).
+2. Set `NEXT.MD` to **MOM-038 — Answer panel by question type**, which can now
+   distinguish DSA (code editor) / system_design (markdown template, already done in
+   MOM-057) / everything else (plain textarea) more explicitly as its own component.
 3. Release any locks in `LOCKS.MD`.
