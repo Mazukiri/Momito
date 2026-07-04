@@ -5,6 +5,41 @@
 
 ---
 
+## 2026-07-05 — MOM-047 (CLAUDE IMPLEMENTER mode)
+
+**Actor:** CLAUDE (implementer)
+**Task:** MOM-047 — Seed DSA ladder batch 3 (100 total), continuing from MOM-046.
+
+**Files changed:** `apps/api/prisma/seed.ts` (49 new DSA entries appended to the
+`questions` array; no reordering of existing entries).
+
+**What shipped:** 49 original DSA items giving every one of the 20 `DSA_PATTERNS` a
+second or third example at varying difficulty — linked-list reversal/fast-slow depth,
+interval/tree-BFS/topological depth, monotonic stack, binary-search-on-the-answer,
+weighted and plain union-find, prefix-sum-mod-k, trie, cyclic sort (including First
+Missing Positive), two-pointer variants, sliding window, five more DP problems, two-heap
+median tracking, BFS grid/graph problems, backtracking, greedy, and bit tricks. Same
+D-008 rule: `prompt`/`answer` are original approach notes, not restated problem text;
+`sourceUrl` links to the real LeetCode page for each.
+
+**Checks run:** `pnpm content:validate` (0 errors), `pnpm content:stats` (DSA count 99,
+total 137 seed questions), `pnpm --filter @momito/api typecheck` (clean),
+`pnpm --filter @momito/api build` (clean), `pnpm --filter @momito/api test` (48/48
+passed), manual `content:sample 3` read-through.
+
+**Result:** DSA ladder now at 99/150 (Gate-3 target). Batch validated cleanly, so per the
+kill/defer rule batch 4 is not deferred.
+
+**Risks / follow-ups:**
+- Same sourceUrl-verification caveat as MOM-046 — slugs chosen from well-known, stable
+  LeetCode problems but not verified via live network access in this sandbox.
+- The seed file is now quite large (`prisma/seed.ts`); if a future session finds it
+  unwieldy, splitting DSA content into its own file (e.g. `prisma/seed-data/dsa.ts`) and
+  importing it would be a reasonable, low-risk restructure — not done here to avoid
+  touching working code without a concrete need.
+
+---
+
 ## 2026-07-05 — MOM-046 (CLAUDE IMPLEMENTER mode)
 
 **Actor:** CLAUDE (implementer)
