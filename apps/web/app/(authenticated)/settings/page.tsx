@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { topicsApi, companiesApi } from '../../lib/api-client';
 import type { TopicSummary, CompanySummary } from '@momito/shared';
 import { Card, Spinner, ErrorBanner, EmptyState } from '../../components/ui';
@@ -371,6 +372,18 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-8">
+        <Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-zinc-800">Content Coverage</h2>
+              <p className="mt-1 text-sm text-zinc-500">See seed/published question progress toward plan targets.</p>
+            </div>
+            <Link href="/settings/content" className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
+              View →
+            </Link>
+          </div>
+        </Card>
+
         <Card>
           <TopicsManager />
         </Card>

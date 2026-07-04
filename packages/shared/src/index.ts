@@ -1142,3 +1142,48 @@ export function isRubric(value: unknown): value is Rubric {
     )
   );
 }
+
+// ── Content Coverage (MOM-062) ──────────────────────────────────────────────
+// Plan §8.2 full-product data targets, by question type where the plan maps
+// cleanly onto one. DSA/CS Fundamentals/System Design/Behavioral are the plan's
+// named domains; the remaining CS Fundamentals sub-types don't have individual
+// targets in the plan, so only the four domain-level targets are tracked here.
+export const CONTENT_COVERAGE_TARGETS: Partial<Record<QuestionType, number>> = {
+  dsa: 150,
+  system_design: 25,
+  behavioral: 60,
+};
+
+export const CS_FUNDAMENTALS_TARGET = 150;
+export const CS_FUNDAMENTALS_TYPES: QuestionType[] = [
+  'backend',
+  'javascript',
+  'typescript',
+  'nodejs',
+  'database',
+  'os',
+  'networking',
+  'oop',
+  'cpp',
+  'concurrency',
+  'computer_architecture',
+  'machine_learning',
+  'hpc',
+  'quant',
+];
+
+export interface ContentCoverageDomain {
+  label: string;
+  count: number;
+  target: number;
+  percentage: number;
+}
+
+export interface ContentCoverageResponse {
+  totalQuestions: number;
+  byType: Record<string, number>;
+  byDifficulty: Record<string, number>;
+  domains: ContentCoverageDomain[];
+  companyCount: number;
+  roleTrackCount: number;
+}

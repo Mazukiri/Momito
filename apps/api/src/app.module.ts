@@ -19,6 +19,7 @@ import { LearningModule } from './learning/learning.module';
 import { MissionsModule } from './missions/missions.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { HealthModule } from './health/health.module';
+import { ContentModule } from './content/content.module';
 import { RequestLoggingMiddleware } from './common/request-logging.middleware';
 
 @Module({
@@ -30,6 +31,7 @@ import { RequestLoggingMiddleware } from './common/request-logging.middleware';
     PrismaModule,
     AuthModule,
     HealthModule,
+    ContentModule,
     QuestionsModule,
     TopicsModule,
     CompaniesModule,

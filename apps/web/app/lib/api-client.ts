@@ -537,3 +537,10 @@ export const missionsApi = {
   reviewPlan: (id: string, body: { summary?: string; wins?: string | null; blockers?: string | null; adjustments?: string | null } = {}) =>
     request<WeeklyPlanResponse>(`/plans/${id}/review`, { method: 'POST', body: JSON.stringify(body) }),
 };
+
+// ── Content Coverage (MOM-062) ────────────────────
+import type { ContentCoverageResponse } from '@momito/shared';
+
+export const contentApi = {
+  coverage: () => request<ContentCoverageResponse>('/content/coverage'),
+};
