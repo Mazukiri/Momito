@@ -5,6 +5,55 @@
 
 ---
 
+## 2026-07-05 - MOM-003 archive legacy Python backend and Expo mobile
+
+**Actor:** CODEX
+**Action:** Moved legacy `backend/` and `mobile/` trees under `archive/` using `git mv`; added `archive/README.md` documenting inactive legacy status. No active `apps/*` source, schema, migration, or dependency files were edited for this task.
+
+**Files changed:**
+- `backend/**` -> `archive/backend/**`
+- `mobile/**` -> `archive/mobile/**`
+- `archive/README.md`
+- `docs/agent/LOCKS.MD` and `docs/agent/LOG.MD` bookkeeping
+
+**Checks run:**
+- `rg "mobile/|backend/" justfile docker-compose.yml` - no matches
+- root/archive path existence checks - root paths absent, archive paths present
+- `pnpm build` - passed outside sandbox after sandbox `spawn EPERM`
+- `git log --oneline -5 --follow -- archive/backend/pyproject.toml` - no output before commit; expected until staged rename is committed
+
+**Result:** Implementation is staged but not committed because `AGENTS.MD` says not to commit unless explicitly asked. `NEXT.MD` remains on **MOM-003** until commit/final verification completes.
+
+**Risks / follow-ups:**
+- Commit with `chore(repo): archive legacy python backend and expo mobile`, then rerun `git log --follow archive/backend/pyproject.toml` after commit.
+
+---
+
+## 2026-07-05 - MOM-001 snapshot current repo state
+
+**Actor:** CODEX
+**Action:** Captured the dirty repository state as the pre-redesign-v2 safety baseline.
+
+**Files changed:** One snapshot commit containing the existing dirty app/API/web/shared changes, agent docs, plan docs, ADR replacement, prompt files, and dependency/schema/migration changes already present before implementation work.
+
+**Checks run:**
+- `git status --short --ignored`
+- `git diff --cached --name-only`
+- `git diff --cached --stat`
+- staged generated/local file scan for `node_modules/`, `dist/`, `.next/`, coverage, and `.env*`
+- `git tag --list pre-redesign-v2`
+- `git branch --list "safety/*"`
+- `git log --oneline -3`
+- `git stash list`
+- `git show pre-redesign-v2 --stat --oneline`
+
+**Result:** Complete. Snapshot commit `680934b` created with annotated tag `pre-redesign-v2` and branch `safety/pre-redesign-v2` pointing to the same commit. Tracked working tree was clean after commit; ignored local artifacts remain ignored.
+
+**Risks / follow-ups:**
+- Plain Git read commands on this Windows sandbox sometimes leave a stale `.git/index.lock`; read-only checks should use `GIT_OPTIONAL_LOCKS=0` here.
+
+---
+
 ## 2026-07-05 — MOM-005 (CLAUDE IMPLEMENTER mode)
 
 **Actor:** CLAUDE (implementer)
