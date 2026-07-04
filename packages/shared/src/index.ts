@@ -20,6 +20,32 @@ export const QUESTION_TYPES = [
 
 export const QUESTION_DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
 
+// MOM-045: DSA pattern taxonomy (plan §8.2 targets 25 patterns at full coverage).
+// Used to tag seeded DSA items and, later, to drive the DSA ladder UI (MOM-051).
+export const DSA_PATTERNS = [
+  'two_pointers',
+  'sliding_window',
+  'fast_slow_pointers',
+  'merge_intervals',
+  'cyclic_sort',
+  'binary_search',
+  'tree_bfs',
+  'tree_dfs',
+  'graph_traversal',
+  'topological_sort',
+  'union_find',
+  'backtracking',
+  'dynamic_programming',
+  'greedy',
+  'heap_priority_queue',
+  'monotonic_stack',
+  'prefix_sum',
+  'bit_manipulation',
+  'trie',
+  'linked_list_reversal',
+] as const;
+export type DsaPattern = (typeof DSA_PATTERNS)[number];
+
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 export type QuestionDifficulty = (typeof QUESTION_DIFFICULTIES)[number];
 
