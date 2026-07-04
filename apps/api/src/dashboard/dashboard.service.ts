@@ -1,12 +1,26 @@
 import { Injectable } from '@nestjs/common';
+import { Reminder, Task } from '@prisma/client';
+import { ReminderResponse, TaskResponse } from '@momito/shared';
+import { CareerService } from '../career/career.service';
+import { MissionsService } from '../missions/missions.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RecommendationsService } from '../recommendations/recommendations.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly career?: CareerService,
+    private readonly missions?: MissionsService,
+    private readonly recommendations?: RecommendationsService,
+  ) {}
 
   async summary(userId: string) {
-    const [topics, attempts, totalSessions, recentSessions] = await Promise.all([
+    const now = new Date();
+    const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const taskClient = (this.prisma as PrismaService & { task?: { findMany: (args: unknown) => Promise<Task[]> } }).task;
+    const reminderClient = (this.prisma as PrismaService & { reminder?: { findMany: (args: unknown) => Promise<Reminder[]> } }).reminder;
+    const [topics, attempts, totalSessions, recentSessions, activeGoals, activeMissions, roleReadiness, dueTasks, reminders, recommendations] = await Promise.all([
       this.prisma.topic.findMany({
         include: { _count: { select: { questions: true } } },
         orderBy: { name: 'asc' },
@@ -21,6 +35,24 @@ export class DashboardService {
         orderBy: { startedAt: 'desc' },
         take: 5,
       }),
+      this.career ? this.career.listGoals(userId).then((goals) => goals.filter((goal) => goal.status === 'active')) : Promise.resolve([]),
+      this.missions ? this.missions.list(userId).then((missions) => missions.filter((mission) => mission.stage !== 'archived').slice(0, 4)) : Promise.resolve([]),
+      this.career ? this.career.listActiveReadiness(userId) : Promise.resolve([]),
+      taskClient ? taskClient.findMany({
+        where: {
+          userId,
+          status: { not: 'done' },
+          OR: [{ dueDate: { lte: weekAhead } }, { plannedFor: { lte: weekAhead } }],
+        },
+        orderBy: [{ dueDate: 'asc' }, { plannedFor: 'asc' }],
+        take: 8,
+      }) : Promise.resolve([]),
+      reminderClient ? reminderClient.findMany({
+        where: { userId, status: 'pending', dueAt: { lte: weekAhead } },
+        orderBy: { dueAt: 'asc' },
+        take: 8,
+      }) : Promise.resolve([]),
+      this.recommendations ? this.recommendations.list(userId) : Promise.resolve([]),
     ]);
 
     const attemptedQuestions = new Set(attempts.map(({ questionId }) => questionId));
@@ -68,6 +100,10 @@ export class DashboardService {
       })
       .slice(0, 3)
       .map(({ id, name }) => ({ id, name }));
+    const focusMission = activeMissions[0] ?? null;
+    const todayPlan = focusMission && this.missions
+      ? await this.missions.today(focusMission.id, userId)
+      : null;
 
     return {
       totalQuestionsPracticed: attemptedQuestions.size,
@@ -76,6 +112,56 @@ export class DashboardService {
       recentSessions,
       weakTopics,
       suggestedNextTopics,
+      activeGoals,
+      activeMissions,
+      focusMission,
+      todayPlanItems: todayPlan?.activePlan?.items ?? [],
+      roleReadiness,
+      dueTasks: dueTasks.map((task) => this.serializeTask(task)),
+      reminders: reminders.map((reminder) => this.serializeReminder(reminder)),
+      recommendations,
+    };
+  }
+
+  private serializeTask(task: Task): TaskResponse {
+    return {
+      id: task.id,
+      userId: task.userId,
+      title: task.title,
+      notes: task.notes,
+      type: task.type as TaskResponse['type'],
+      status: task.status as TaskResponse['status'],
+      priority: task.priority as TaskResponse['priority'],
+      roleTrackId: task.roleTrackId as TaskResponse['roleTrackId'],
+      area: task.area as TaskResponse['area'],
+      topicId: task.topicId,
+      jobApplicationId: task.jobApplicationId,
+      missionId: task.missionId,
+      plannedFor: task.plannedFor?.toISOString() ?? null,
+      dueDate: task.dueDate?.toISOString() ?? null,
+      recurrence: task.recurrence,
+      reminderOffsetMinutes: task.reminderOffsetMinutes,
+      completedAt: task.completedAt?.toISOString() ?? null,
+      snoozedUntil: task.snoozedUntil?.toISOString() ?? null,
+      createdAt: task.createdAt.toISOString(),
+      updatedAt: task.updatedAt.toISOString(),
+    };
+  }
+
+  private serializeReminder(reminder: Reminder): ReminderResponse {
+    return {
+      id: reminder.id,
+      userId: reminder.userId,
+      taskId: reminder.taskId,
+      jobApplicationId: reminder.jobApplicationId,
+      type: reminder.type,
+      title: reminder.title,
+      dueAt: reminder.dueAt.toISOString(),
+      status: reminder.status as ReminderResponse['status'],
+      lastTriggeredAt: reminder.lastTriggeredAt?.toISOString() ?? null,
+      dismissedAt: reminder.dismissedAt?.toISOString() ?? null,
+      createdAt: reminder.createdAt.toISOString(),
+      updatedAt: reminder.updatedAt.toISOString(),
     };
   }
 }

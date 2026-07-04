@@ -33,6 +33,9 @@ type SeedQuestion = {
   topic: number;
   answer: string;
   companies?: number[];
+  roleTags?: string[];
+  areaTags?: string[];
+  patternTags?: string[];
 };
 
 const questions: SeedQuestion[] = [
@@ -75,7 +78,59 @@ const questions: SeedQuestion[] = [
   { title: 'Disagreement with a teammate', prompt: 'Tell me about a technical disagreement and how you resolved it.', type: 'behavioral', difficulty: 'medium', topic: 7, answer: 'Explain the legitimate competing goals, how you clarified assumptions and gathered evidence, how the team chose a decision rule or experiment, and the outcome. Show respect, willingness to change your view, and commitment after the decision.' },
   { title: 'A project that failed', prompt: 'Describe a project or decision that did not work and what you learned.', type: 'behavioral', difficulty: 'hard', topic: 7, answer: 'Own your contribution without blaming others, identify the mistaken assumption or missed signal, describe the corrective action, and demonstrate a specific later behavior changed by the lesson.' },
   { title: 'Prioritize under a deadline', prompt: 'How have you handled several important tasks with an immovable deadline?', type: 'behavioral', difficulty: 'medium', topic: 7, answer: 'Describe how you identified the critical outcome, surfaced dependencies and risks, negotiated scope using impact and effort, communicated tradeoffs early, and preserved a minimum quality bar. End with the measurable outcome and retrospective improvement.' },
+
+  { title: 'CUDA memory coalescing', prompt: 'Explain memory coalescing in CUDA and how poor access patterns affect kernel throughput.', type: 'hpc', difficulty: 'hard', topic: 3, answer: 'Coalescing lets adjacent threads access adjacent global memory so the hardware can combine requests into fewer memory transactions. Strided or divergent access patterns increase transactions, reduce bandwidth utilization, and can dominate kernel time. Improve layout, tiling, shared memory usage, and thread/block mapping.', roleTags: ['hpc-gpu-engineer'], areaTags: ['domain_knowledge'], patternTags: ['cuda', 'memory hierarchy', 'performance'] },
+  { title: 'MPI versus shared-memory parallelism', prompt: 'Compare MPI and OpenMP. When would you choose each in a high-performance application?', type: 'hpc', difficulty: 'medium', topic: 3, answer: 'MPI is explicit distributed-memory message passing and fits multi-node workloads. OpenMP is shared-memory threading and fits one-node parallel loops or task parallelism. Real HPC codes often combine MPI across nodes and OpenMP or CUDA inside a node.', roleTags: ['hpc-gpu-engineer'], areaTags: ['domain_knowledge'], patternTags: ['mpi', 'openmp', 'parallel computing'] },
+  { title: 'C++ RAII and exception safety', prompt: 'How does RAII improve resource safety in C++? Explain basic, strong, and no-throw exception guarantees.', type: 'cpp', difficulty: 'medium', topic: 5, answer: 'RAII ties resource lifetime to object lifetime so destructors release memory, locks, files, and handles on all exits. Basic guarantee preserves invariants, strong guarantee commits atomically or rolls back, and no-throw guarantee promises an operation will not throw.', roleTags: ['hpc-gpu-engineer', 'quant-swe'], areaTags: ['language_runtime'], patternTags: ['c++', 'raii', 'exception safety'] },
+  { title: 'Expected value with stopping', prompt: 'A game pays based on repeated coin flips until a stopping condition. How would you derive the expected payout?', type: 'quant', difficulty: 'hard', topic: 2, answer: 'Define states, write recurrence equations for expected value from each state, apply boundary conditions at stopping states, then solve the system. Check convergence and whether optional stopping assumptions apply.', roleTags: ['quant-swe'], areaTags: ['domain_knowledge'], patternTags: ['probability', 'expected value', 'recurrence'] },
+  { title: 'Design a backtesting engine', prompt: 'Design a backtesting engine for trading strategies, including data ingestion, execution simulation, risk metrics, and reproducibility.', type: 'quant', difficulty: 'hard', topic: 6, answer: 'Separate data ingestion, strategy interface, execution simulator, portfolio accounting, and metric generation. Handle corporate actions, latency/slippage assumptions, transaction costs, deterministic replay, and experiment metadata.', roleTags: ['quant-swe'], areaTags: ['projects'], patternTags: ['backtesting', 'trading', 'system design'] },
+  { title: 'Low-latency order book updates', prompt: 'How would you represent and update a limit order book for low-latency market data processing?', type: 'quant', difficulty: 'hard', topic: 0, answer: 'Use cache-friendly structures keyed by price levels, maintain best bid/ask pointers, apply incremental updates in sequence, detect gaps, and avoid allocation on the hot path. Measure latency percentiles and correctness under replay.', roleTags: ['quant-swe'], areaTags: ['system_design'], patternTags: ['latency', 'market data', 'data structures'] },
 ];
+
+function inferQuestionMetadata(question: SeedQuestion) {
+  const roleTags = question.roleTags ?? inferRoleTags(question.type);
+  const areaTags = question.areaTags ?? inferAreaTags(question.type);
+  const patternTags = question.patternTags ?? inferPatternTags(question);
+  const estimatedMinutes = question.difficulty === 'easy' ? 10 : question.difficulty === 'medium' ? 25 : 45;
+  const importance = question.difficulty === 'hard' ? 3 : question.difficulty === 'medium' ? 2 : 1;
+  return {
+    roleTags,
+    areaTags,
+    patternTags,
+    estimatedMinutes,
+    importance,
+    rubric: {
+      strong: ['Correct core concept', 'Explains tradeoffs', 'Mentions failure modes or edge cases'],
+      weak: ['Vague definitions only', 'No concrete example', 'Ignores constraints'],
+    },
+  };
+}
+
+function inferRoleTags(type: string): string[] {
+  if (type === 'hpc' || type === 'cpp' || type === 'concurrency' || type === 'computer_architecture') return ['hpc-gpu-engineer'];
+  if (type === 'quant') return ['quant-swe'];
+  if (type === 'dsa') return ['big-tech-swe', 'google-l4-swe', 'quant-swe', 'hpc-gpu-engineer'];
+  if (type === 'system_design' || type === 'backend') return ['big-tech-swe', 'google-l4-swe', 'quant-swe'];
+  return ['big-tech-swe', 'google-l4-swe'];
+}
+
+function inferAreaTags(type: string): string[] {
+  if (type === 'dsa') return ['dsa'];
+  if (type === 'system_design' || type === 'backend') return ['system_design'];
+  if (type === 'oop') return ['lld_oop'];
+  if (['database', 'os', 'networking', 'concurrency', 'computer_architecture'].includes(type)) return ['cs_fundamentals'];
+  if (['javascript', 'typescript', 'nodejs', 'cpp'].includes(type)) return ['language_runtime'];
+  if (type === 'hpc' || type === 'quant' || type === 'machine_learning') return ['domain_knowledge'];
+  if (type === 'behavioral') return ['behavioral'];
+  return ['cs_fundamentals'];
+}
+
+function inferPatternTags(question: SeedQuestion): string[] {
+  const text = `${question.title} ${question.prompt}`.toLowerCase();
+  const tags = ['cache', 'queue', 'transaction', 'index', 'thread', 'memory', 'tcp', 'http', 'design', 'latency', 'probability', 'cuda', 'mpi', 'oop', 'dp', 'graph']
+    .filter((tag) => text.includes(tag));
+  return tags.length ? tags : [question.type];
+}
 
 async function main() {
   const passwordHash = await bcrypt.hash('MomitoDemo123!', 12);
@@ -102,6 +157,7 @@ async function main() {
       topicId: topics[question.topic][0],
       referenceAnswer: question.answer,
       createdByUserId: DEMO_USER_ID,
+      ...inferQuestionMetadata(question),
     };
     await prisma.question.upsert({ where: { id }, update: data, create: { id, ...data } });
     await prisma.questionCompany.deleteMany({ where: { questionId: id } });

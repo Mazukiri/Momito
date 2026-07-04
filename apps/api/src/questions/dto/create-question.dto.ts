@@ -1,12 +1,17 @@
-import { QUESTION_DIFFICULTIES, QUESTION_TYPES } from '@momito/shared';
+import { Type } from 'class-transformer';
+import { CAREER_ROLE_AREA_IDS, CAREER_ROLE_TRACK_IDS, QUESTION_DIFFICULTIES, QUESTION_TYPES } from '@momito/shared';
 import {
   IsArray,
+  IsInt,
   IsIn,
+  IsObject,
   IsOptional,
   IsString,
   IsUrl,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -20,5 +25,11 @@ export class CreateQuestionDto {
   @IsOptional() @IsString() referenceAnswer?: string;
   @IsOptional() @IsString() notes?: string;
   @IsOptional() @IsUrl({ require_protocol: true }) @MaxLength(2048) sourceUrl?: string;
+  @IsOptional() @IsArray() @IsIn(CAREER_ROLE_TRACK_IDS, { each: true }) roleTags?: string[];
+  @IsOptional() @IsArray() @IsIn(CAREER_ROLE_AREA_IDS, { each: true }) areaTags?: string[];
+  @IsOptional() @IsArray() @IsString({ each: true }) @MaxLength(120, { each: true }) patternTags?: string[];
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(24 * 60) estimatedMinutes?: number;
+  @IsOptional() @IsObject() rubric?: Record<string, unknown>;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(10) importance?: number;
   @IsOptional() @IsArray() @IsUUID('4', { each: true }) companyIds?: string[];
 }

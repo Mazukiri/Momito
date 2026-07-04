@@ -19,7 +19,7 @@ A serious interview preparation tool for Software Engineer, Backend Engineer, an
 
 ## Prerequisites
 
-- **Node.js** >= 18
+- **Node.js** >= 20.16
 - **pnpm** >= 9
 - **Docker** with Docker Compose (recommended), or PostgreSQL 16+ running locally or remotely
 
@@ -78,7 +78,7 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-This creates all tables and then idempotently seeds 8 topics, 6 companies, and 32 interview questions. It also creates a demo account:
+This creates all tables and then idempotently seeds 8 topics, 6 companies, and 38 interview questions with role/area metadata. It also creates a demo account:
 
 ```txt
 Email: demo@momito.local
@@ -124,6 +124,16 @@ All frontend pages are under `apps/web/app/`.
 | `/login` | Login |
 | `/register` | Register |
 | `/dashboard` | Progress overview, topic progress, weak areas, recent sessions |
+| `/career` | Role tracks, active career goals, readiness gaps |
+| `/jobs` | Job application pipeline |
+| `/jobs/[id]` | Job detail, prep generation, profile scoring, timeline |
+| `/profile` | Editable profile parsed from a CV |
+| `/profile/upload` | Upload and parse a PDF CV |
+| `/profile/scores` | Create and review role-template / JD profile scores |
+| `/profile/scores/[id]` | Profile score detail with category gaps and suggestions |
+| `/learning` | Career learning ledger and Readwise connection |
+| `/learning/inbox` | Review and map synced Readwise highlights |
+| `/calendar` | Scheduled prep tasks and reminders |
 | `/questions` | Browse, search, and filter questions |
 | `/questions/new` | Create a new question |
 | `/questions/[id]` | Question detail with answer and "Start Practice" button |
@@ -172,8 +182,8 @@ Momito/
 | `pnpm dev` | Run both API and Web concurrently |
 | `pnpm build` | Build all packages and apps |
 | `pnpm lint` | Lint all workspace packages that define linting |
-| `pnpm typecheck` | Type-check all workspace packages |
-| `pnpm test` | Run all workspace test suites |
+| `pnpm typecheck` | Build shared types, regenerate Prisma client, then type-check all workspace packages |
+| `pnpm test` | Build shared types, regenerate Prisma client, then run all workspace test suites |
 | `pnpm db:generate` | Regenerate the Prisma client |
 | `pnpm db:migrate` | Apply development database migrations |
 | `pnpm db:seed` | Idempotently load demo content and the demo user |
@@ -239,6 +249,27 @@ All endpoints are under `http://localhost:3001/api/v1`. Protected routes require
 - `PATCH /study-plan/:id` — Update item (title, status, notes, targetDate)
 - `DELETE /study-plan/:id` — Delete item
 
+### Career OS
+- `GET /career/role-tracks` — Available long-term role tracks
+- `GET /career/goals`, `POST /career/goals`, `PATCH /career/goals/:id` — Active career goals
+- `GET /career/readiness`, `GET /career/role-tracks/:id/readiness` — Deterministic readiness by checklist area
+- `GET /jobs`, `POST /jobs`, `GET /jobs/:id`, `PATCH /jobs/:id` — Job pipeline
+- `POST /jobs/:id/generate-prep` — Create prep tasks for a job
+- `POST /jobs/:id/score-profile` — Score profile against a saved JD
+- `GET /tasks`, `POST /tasks`, `PATCH /tasks/:id`, `POST /tasks/:id/complete`, `POST /tasks/:id/snooze` — Scheduled tasks
+- `GET /reminders`, `POST /reminders/:id/dismiss` — In-app reminders
+- `GET /learning/ledger`, `POST /learning/evidence`, `GET /learning/inbox`, `PATCH /learning/highlights/:id` — Learning ledger
+- `POST /integrations/readwise/connect`, `POST /integrations/readwise/sync` — Readwise highlight sync
+- `GET /practice/recommendations` — Next best actions
+
+### Profile & CV Scoring
+- `POST /profile/upload` — Upload a PDF CV and create/update the structured profile
+- `GET /profile` — Current structured profile
+- `PATCH /profile` — Edit profile contact, skills, experience, education, and projects
+- `POST /profile-scores` — Score profile against a role template and optional JD text
+- `GET /profile-scores` — List saved profile scores
+- `GET /profile-scores/:id` — Score detail with category gaps and suggestions
+
 Full API contract details: `.swarm/DECISIONS.md` (DEC-004)
 
 ---
@@ -275,6 +306,21 @@ restrictive Content Security Policy at the hosting layer.
 - Weak areas identified by average self-rating
 - Recent session history
 - Suggested next topics to practice
+
+### Career OS
+- Active role tracks for Big Tech SWE, Google L4 SWE, HPC/GPU Engineer, and Quant SWE
+- Deterministic readiness by DSA, system design, LLD/OOP, CS fundamentals, language/runtime, projects, behavioral, and profile evidence
+- Job pipeline with JD text, deadline reminders, prep-task generation, and profile scoring
+- Learning ledger for long-term career evidence, including manual notes and reviewed Readwise highlights
+- Calendar-style scheduled tasks with in-app reminders, snooze, and completion evidence
+- Practice recommendations based on role gaps, overdue tasks, active jobs, and unmapped reading evidence
+
+### Profile & CV Scoring
+- PDF CV upload with text extraction and editable structured profile fields
+- Deterministic four-category scoring: Skills Match, Project Quality, Experience Depth, Presentation
+- Role templates for Google L4 SWE, HPC Engineer, and Quant Hedge Fund SWE
+- Optional JD text adds concrete skill requirements to the target
+- Gap lists and suggestions avoid claiming interview or visa probability predictions
 
 ### Study Plan
 - Three status tabs: Todo, In Progress, Done
@@ -322,7 +368,7 @@ All integration review findings are recorded in `.swarm/QA.md`. Key non-blocking
 - Authentication still uses a bearer JWT in `localStorage`; see the documented tradeoff above
 - No debounce on question search input (acceptable for MVP)
 - Dashboard summary loads all attempts in memory — could optimize with DB-side aggregates later
-- Backend API test coverage is comprehensive (32/32 tests), but frontend e2e tests are not yet implemented
+- Backend API test coverage is comprehensive, but frontend e2e tests are not yet implemented
 
 ---
 

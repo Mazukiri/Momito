@@ -1,3 +1,0 @@
-# Role checklists are hardcoded, not crawled or LLM-synthesized
-
-Each target role (Google L4 SWE, Jane Street SWE, HPC Engineer, etc.) has a manually authored checklist defining what "interview-ready" looks like: number of LeetCode problems by difficulty, system design topics, projects required, etc. These are researched once from public sources (Blind, Levels.fyi, interview reports) and updated manually when the bar visibly shifts. Automated synthesis was rejected because the bar for a given role changes slowly (quarterly at most), making the engineering cost of a crawl-and-synthesize pipeline disproportionate to the value.

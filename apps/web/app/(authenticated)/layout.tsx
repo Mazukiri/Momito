@@ -26,6 +26,12 @@ export default function AuthenticatedLayout({
 
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard' },
+    { href: '/missions', label: 'Mission' },
+    { href: '/career', label: 'Career' },
+    { href: '/jobs', label: 'Jobs' },
+    { href: '/profile', label: 'Profile' },
+    { href: '/learning', label: 'Learning' },
+    { href: '/calendar', label: 'Calendar' },
     { href: '/questions', label: 'Questions' },
     { href: '/practice/new', label: 'Practice' },
     { href: '/attempts', label: 'History' },
@@ -36,12 +42,12 @@ export default function AuthenticatedLayout({
   return (
     <div className="min-h-screen bg-zinc-50">
       <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+        <div className="mx-auto flex min-h-14 max-w-6xl items-center justify-between gap-4 px-4 py-2">
           <div className="flex items-center gap-6">
             <Link href="/questions" className="text-lg font-bold text-indigo-600">
               Momito
             </Link>
-            <nav className="hidden sm:flex items-center gap-4">
+            <nav className="hidden sm:flex flex-wrap items-center gap-3">
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
@@ -68,7 +74,7 @@ export default function AuthenticatedLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-8">
+      <main className="mx-auto max-w-6xl px-4 py-8">
         {children}
       </main>
     </div>

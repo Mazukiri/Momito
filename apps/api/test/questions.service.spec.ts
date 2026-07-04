@@ -23,7 +23,12 @@ describe('QuestionsService', () => {
     }, 'user-1');
 
     expect(create.mock.calls[0][0].data).toEqual(expect.objectContaining({
-      createdByUserId: 'user-1',
+      createdBy: { connect: { id: 'user-1' } },
+      topic: { connect: { id: 'topic-1' } },
+      roleTags: [],
+      areaTags: [],
+      patternTags: [],
+      rubric: {},
       companies: { create: [{ companyId: 'company-1' }] },
     }));
     expect(result.companies).toEqual([{ id: 'company-1', name: 'Example Co' }]);

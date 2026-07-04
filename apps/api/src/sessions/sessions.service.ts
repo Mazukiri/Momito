@@ -21,16 +21,23 @@ export class SessionsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateSessionDto, userId: string) {
-    const { topicId, companyId, difficulty, questionCount, questionIds, ...sessionData } = dto;
+    const { topicId, companyId, difficulty, questionCount, questionIds, roleTrackId, area, pattern, jobApplicationId, missionId, ...sessionData } = dto;
+    if (jobApplicationId) await this.ensureJobBelongsToUser(jobApplicationId, userId);
+    if (missionId) await this.ensureMissionBelongsToUser(missionId, userId);
     const selected = questionIds
       ? await this.selectExactQuestions(questionIds)
-      : await this.selectFilteredQuestions({ topicId, companyId, difficulty, questionCount });
+      : await this.selectFilteredQuestions({ topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern });
 
     if (selected.length === 0) throw new BadRequestException('No questions match the selected filters');
 
     const session = await this.prisma.interviewSession.create({
       data: {
         ...sessionData,
+        roleTrackId,
+        area,
+        practiceMode: sessionData.sessionType,
+        jobApplicationId,
+        missionId,
         userId,
         sessionQuestions: {
           create: selected.map(({ id: questionId }, index) => ({ questionId, order: index + 1 })),
@@ -59,6 +66,9 @@ export class SessionsService {
     topicId?: string;
     companyId?: string;
     difficulty?: string;
+    roleTrackId?: string;
+    area?: string;
+    pattern?: string;
     questionCount: number;
   }) {
     const candidates = await this.prisma.question.findMany({
@@ -67,9 +77,20 @@ export class SessionsService {
         ...(filters.difficulty && { difficulty: filters.difficulty }),
         ...(filters.companyId && { companies: { some: { companyId: filters.companyId } } }),
       },
-      select: { id: true },
+      select: { id: true, roleTags: true, areaTags: true, patternTags: true, importance: true },
     });
-    return this.shuffle(candidates).slice(0, filters.questionCount);
+    const filtered = candidates.filter((question) => {
+      const roleTags = this.asStringArray(question.roleTags);
+      const areaTags = this.asStringArray(question.areaTags);
+      const patternTags = this.asStringArray(question.patternTags);
+      return (!filters.roleTrackId || roleTags.length === 0 || roleTags.includes(filters.roleTrackId)) &&
+        (!filters.area || areaTags.length === 0 || areaTags.includes(filters.area)) &&
+        (!filters.pattern || patternTags.map((tag) => tag.toLowerCase()).includes(filters.pattern.toLowerCase()));
+    });
+    return this.shuffle(filtered)
+      .sort((left, right) => right.importance - left.importance)
+      .slice(0, filters.questionCount)
+      .map(({ id }) => ({ id }));
   }
 
   async list(query: ListSessionsDto, userId: string) {
@@ -146,6 +167,20 @@ export class SessionsService {
       [result[index], result[swapWith]] = [result[swapWith], result[index]];
     }
     return result;
+  }
+
+  private async ensureJobBelongsToUser(jobApplicationId: string, userId: string) {
+    const job = await this.prisma.jobApplication.findFirst({ where: { id: jobApplicationId, userId }, select: { id: true } });
+    if (!job) throw new BadRequestException('Job application not found');
+  }
+
+  private async ensureMissionBelongsToUser(missionId: string, userId: string) {
+    const mission = await this.prisma.mission.findFirst({ where: { id: missionId, userId }, select: { id: true } });
+    if (!mission) throw new BadRequestException('Mission not found');
+  }
+
+  private asStringArray(value: Prisma.JsonValue): string[] {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
   }
 
   private serializeSessionQuestion(item: SessionQuestionWithQuestion) {

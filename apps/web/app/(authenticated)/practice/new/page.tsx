@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { sessionsApi, topicsApi, companiesApi } from '../../../lib/api-client';
-import type { TopicSummary, CompanySummary } from '@momito/shared';
+import { CAREER_ROLE_AREA_IDS, CAREER_ROLE_TRACKS, type TopicSummary, type CompanySummary } from '@momito/shared';
 import { Spinner } from '../../../components/ui';
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
@@ -11,6 +11,11 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
   topic_practice: 'Topic Practice',
   company_practice: 'Company Practice',
   mixed_mock: 'Mixed Mock',
+  role_drill: 'Role Drill',
+  weak_area_review: 'Weak Area Review',
+  daily_mixed_set: 'Daily Mixed Set',
+  job_prep: 'Job Prep',
+  spaced_review: 'Spaced Review',
 };
 
 const SESSION_TYPE_DESCRIPTIONS: Record<string, string> = {
@@ -18,16 +23,26 @@ const SESSION_TYPE_DESCRIPTIONS: Record<string, string> = {
   topic_practice: 'Focus on a specific topic',
   company_practice: 'Practice questions asked by a specific company',
   mixed_mock: 'Mix of question types and difficulties',
+  role_drill: 'Focus on one role track and area',
+  weak_area_review: 'Revisit low-confidence areas',
+  daily_mixed_set: 'Small balanced set for today',
+  job_prep: 'Practice against a target job',
+  spaced_review: 'Review items marked for revisit',
 };
 
 export default function NewPracticePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [title, setTitle] = useState('');
-  const [sessionType, setSessionType] = useState('quick_practice');
+  const [sessionType, setSessionType] = useState(searchParams.get('mode') || 'quick_practice');
   const [topicId, setTopicId] = useState('');
   const [companyId, setCompanyId] = useState('');
   const [difficulty, setDifficulty] = useState('');
+  const [roleTrackId, setRoleTrackId] = useState(searchParams.get('roleTrackId') || '');
+  const [area, setArea] = useState(searchParams.get('area') || '');
+  const missionId = searchParams.get('missionId') || undefined;
+  const [pattern, setPattern] = useState('');
   const [questionCount, setQuestionCount] = useState(5);
 
   const [topics, setTopics] = useState<TopicSummary[]>([]);
@@ -64,6 +79,10 @@ export default function NewPracticePage() {
         topicId: topicId || undefined,
         companyId: companyId || undefined,
         difficulty: difficulty || undefined,
+        roleTrackId: roleTrackId || undefined,
+        area: area || undefined,
+        pattern: pattern || undefined,
+        missionId,
         questionCount,
       });
       router.push(`/practice/session/${res.session.id}`);
@@ -120,6 +139,56 @@ export default function NewPracticePage() {
             {SESSION_TYPE_DESCRIPTIONS[sessionType]}
           </p>
         </div>
+
+        {/* Role filters */}
+        {['role_drill', 'weak_area_review', 'daily_mixed_set', 'job_prep', 'spaced_review'].includes(sessionType) && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor="roleTrackId" className="block text-sm font-medium text-zinc-700">
+                Role Track
+              </label>
+              <select
+                id="roleTrackId"
+                value={roleTrackId}
+                onChange={(e) => setRoleTrackId(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="">Any role</option>
+                {Object.values(CAREER_ROLE_TRACKS).map((track) => (
+                  <option key={track.id} value={track.id}>{track.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="area" className="block text-sm font-medium text-zinc-700">
+                Area
+              </label>
+              <select
+                id="area"
+                value={area}
+                onChange={(e) => setArea(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="">Any area</option>
+                {CAREER_ROLE_AREA_IDS.map((item) => (
+                  <option key={item} value={item}>{item.replaceAll('_', ' ')}</option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label htmlFor="pattern" className="block text-sm font-medium text-zinc-700">
+                Pattern <span className="text-zinc-400">(optional)</span>
+              </label>
+              <input
+                id="pattern"
+                value={pattern}
+                onChange={(e) => setPattern(e.target.value)}
+                placeholder="e.g. graph, dp, latency"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Title */}
         <div>
