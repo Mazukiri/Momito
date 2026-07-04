@@ -35,6 +35,19 @@ MOM-078/079 (reminders) are **NEEDS_REPO_INSPECTION** — implementers must rest
 only fill genuine gaps (e.g. miss-tags/reflection-note). No redundant columns.
 **Consequences:** Avoids duplicate/fake work and needless migrations.
 
+**MOM-028 inspection outcome (2026-07-05):** `AnswerAttempt.correctness` (free-text
+string) is already used as the plan's "outcome" field — `career.service.ts` and
+`missions.service.ts` both branch on values like `'correct'`, `'partial'`, `'strong'`.
+`confidence` and `timeSpentSeconds` already exist and are wired into
+`create-answer.dto.ts`. Genuinely missing, confirmed by grep across `apps/api/src` and
+`apps/web/app`: **miss tags** (an array describing why an attempt missed, e.g. the
+`WeaknessSignal.reason` taxonomy from plan §5.4), **reflection note** (free-text),
+**language** (the programming language used in the answer), and **complexity**
+(self-reported Big-O). Adding these requires a Prisma migration on `AnswerAttempt`,
+which is schema-gated per D-004 — **not implemented in this pass**. Follow-up task:
+a small, human-approved migration adding `missTags String[] @default([])`,
+`reflectionNote String?`, `language String?`, `complexity String?` to `AnswerAttempt`.
+
 ### D-004 — The planner never authors migrations; every schema change is human-gated
 **Context:** Hard rule "Do not create migrations." Net-new models (`ReviewState`, `WeaknessSignal`,
 `AiUsage`, `Story`, possibly `RoleTrack`) require schema changes.

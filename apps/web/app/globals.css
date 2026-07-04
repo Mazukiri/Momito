@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /* MOM-013: class-based dark mode so a user toggle (ThemeProvider) can override the
    system preference, instead of `dark:` only ever following prefers-color-scheme. */

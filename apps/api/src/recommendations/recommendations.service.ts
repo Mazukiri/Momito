@@ -4,6 +4,20 @@ import { CareerService } from '../career/career.service';
 import { MissionsService } from '../missions/missions.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+// MOM-033: standardized reason taxonomy (plan §6.2 wants every recommendation to
+// explain, in a complete sentence, why it appears — not a mix of phrases and
+// interpolated fragments). This module already had a `reason` field; this only
+// normalizes the text it's populated with.
+const RECOMMENDATION_REASONS = {
+  activeMission: (name: string) => `"${name}" is an active mission that needs weekly execution.`,
+  overdueTask: () => 'This task is overdue.',
+  readinessGap: (roleTrackLabel: string) => `This closes a readiness gap for ${roleTrackLabel}.`,
+  jobDeadline: () => 'This job application has an upcoming deadline.',
+  jobActive: () => 'This is an active job application in your pipeline.',
+  unreviewedHighlights: (count: number) =>
+    `You have ${count} unreviewed learning highlight${count === 1 ? '' : 's'} waiting in your inbox.`,
+};
+
 @Injectable()
 export class RecommendationsService {
   constructor(
@@ -35,7 +49,7 @@ export class RecommendationsService {
         id: `mission:${mission.id}`,
         type: 'task',
         title: `Focus ${mission.name}`,
-        reason: mission.diagnosisSummary ?? 'Active mission needs weekly execution',
+        reason: mission.diagnosisSummary ?? RECOMMENDATION_REASONS.activeMission(mission.name),
         roleTrackId: mission.roleTrackId,
         area: null,
         targetHref: `/missions/${mission.id}`,
@@ -47,7 +61,7 @@ export class RecommendationsService {
         id: `task:${task.id}`,
         type: 'task',
         title: task.title,
-        reason: 'Overdue scheduled work',
+        reason: RECOMMENDATION_REASONS.overdueTask(),
         roleTrackId: task.roleTrackId as PracticeRecommendationResponse['roleTrackId'],
         area: task.area as PracticeRecommendationResponse['area'],
         targetHref: task.missionId ? `/missions/${task.missionId}` : '/calendar',
@@ -60,7 +74,7 @@ export class RecommendationsService {
           id: `gap:${role.roleTrackId}:${gap.id}`,
           type: gap.evidenceType === 'project' ? 'task' : 'practice',
           title: gap.evidenceType === 'project' ? `Build evidence for ${gap.title}` : `Practice ${gap.title}`,
-          reason: `${role.roleTrack.label} readiness gap`,
+          reason: RECOMMENDATION_REASONS.readinessGap(role.roleTrack.label),
           roleTrackId: role.roleTrackId,
           area: gap.area,
           targetHref: gap.evidenceType === 'project'
@@ -75,7 +89,7 @@ export class RecommendationsService {
         id: `job:${job.id}`,
         type: 'job',
         title: `Prepare ${job.company} ${job.roleTitle}`,
-        reason: job.deadline ? 'Upcoming job deadline' : 'Active job pipeline item',
+        reason: job.deadline ? RECOMMENDATION_REASONS.jobDeadline() : RECOMMENDATION_REASONS.jobActive(),
         roleTrackId: job.roleTrackId as PracticeRecommendationResponse['roleTrackId'],
         area: null,
         targetHref: `/jobs/${job.id}`,
@@ -87,7 +101,7 @@ export class RecommendationsService {
         id: 'readwise:inbox',
         type: 'reading',
         title: `Review ${inboxCount} Readwise highlight${inboxCount === 1 ? '' : 's'}`,
-        reason: 'Unmapped learning evidence',
+        reason: RECOMMENDATION_REASONS.unreviewedHighlights(inboxCount),
         roleTrackId: null,
         area: null,
         targetHref: '/learning/inbox',

@@ -4,21 +4,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { sessionsApi, type SessionDetailResponse } from '../../../../lib/api-client';
 import type { SessionQuestionResponse } from '@momito/shared';
-import { Card, Badge, Spinner, ErrorBanner } from '../../../../components/ui';
-
-const TYPE_LABELS: Record<string, string> = {
-  dsa: 'DSA',
-  backend: 'Backend',
-  javascript: 'JavaScript',
-  typescript: 'TypeScript',
-  nodejs: 'Node.js',
-  database: 'Database',
-  os: 'OS',
-  networking: 'Networking',
-  oop: 'OOP',
-  system_design: 'System Design',
-  behavioral: 'Behavioral',
-};
+import { Spinner, ErrorBanner } from '../../../../components/ui';
+import { SessionHeader } from '../../../../components/session/SessionHeader';
+import { AnswerForm } from '../../../../components/session/AnswerForm';
+import { AllAnsweredPanel } from '../../../../components/session/AllAnsweredPanel';
+import { ReviewQuestionCard } from '../../../../components/session/ReviewQuestionCard';
 
 export default function ActiveSessionPage() {
   const params = useParams();
@@ -68,7 +58,7 @@ export default function ActiveSessionPage() {
     fetchSession();
   }, [fetchSession]);
 
-  async function handleSubmitAnswer() {
+  async function handleSubmitAnswer(timeSpentSeconds: number) {
     if (!session || !answerText.trim() || submitting) return;
     const currentQuestion = session.sessionQuestions[currentIndex];
     if (!currentQuestion) return;
@@ -79,6 +69,7 @@ export default function ActiveSessionPage() {
         questionId: currentQuestion.questionId,
         answerText: answerText.trim(),
         selfRating: selfRating > 0 ? selfRating : undefined,
+        timeSpentSeconds,
       });
       const newAnswered = new Set(answeredQuestions);
       newAnswered.add(currentQuestion.questionId);
@@ -161,33 +152,13 @@ export default function ActiveSessionPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-zinc-800">
-              {session.title || 'Practice Session'}
-            </h1>
-            <p className="mt-1 text-sm text-zinc-500">
-              {answeredQuestions.size} of {totalQuestions} answered
-            </p>
-          </div>
-          <button
-            onClick={handleAbandon}
-            disabled={completing}
-            className="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-          >
-            Abandon
-          </button>
-        </div>
-
-        {/* Progress bar */}
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-200">
-          <div
-            className="h-full rounded-full bg-indigo-500 transition-all duration-300"
-            style={{ width: `${(answeredQuestions.size / totalQuestions) * 100}%` }}
-          />
-        </div>
-      </div>
+      <SessionHeader
+        title={session.title}
+        answeredCount={answeredQuestions.size}
+        totalQuestions={totalQuestions}
+        completing={completing}
+        onAbandon={handleAbandon}
+      />
 
       {error && (
         <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
@@ -196,175 +167,35 @@ export default function ActiveSessionPage() {
       )}
 
       {currentQuestion && !allAnswered && (
-        <Card className="mb-4">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-zinc-400">
-              Question {currentIndex + 1} of {totalQuestions}
-            </span>
-            <div className="flex gap-2">
-              {currentQuestion.question.type && (
-                <Badge
-                  label={TYPE_LABELS[currentQuestion.question.type] ?? currentQuestion.question.type}
-                  variant={currentQuestion.question.type}
-                />
-              )}
-              <Badge label={currentQuestion.question.difficulty} variant={currentQuestion.question.difficulty} />
-              {currentQuestion.question.topic && (
-                <Badge label={currentQuestion.question.topic.name} />
-              )}
-            </div>
-          </div>
-          <h2 className="mb-3 text-lg font-semibold text-zinc-800">
-            {currentQuestion.question.title}
-          </h2>
-          <div className="mb-6 whitespace-pre-wrap rounded-lg bg-zinc-50 p-4 text-sm text-zinc-700">
-            {currentQuestion.question.prompt}
-          </div>
-
-          {currentQuestion.question.companies && currentQuestion.question.companies.length > 0 && (
-            <div className="mb-4">
-              <span className="text-xs font-medium text-zinc-400">Asked at: </span>
-              {currentQuestion.question.companies.map((c) => (
-                <Badge key={c.id} label={c.name} />
-              ))}
-            </div>
-          )}
-
-          {/* Answer form */}
-          <div>
-            <label htmlFor="answer" className="block text-sm font-medium text-zinc-700 mb-1">
-              Your Answer
-            </label>
-            <textarea
-              id="answer"
-              value={answerText}
-              onChange={(e) => setAnswerText(e.target.value)}
-              rows={8}
-              className="block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              placeholder="Write your answer here..."
-            />
-
-            {/* Self rating */}
-            <div className="mt-3">
-              <span className="text-sm font-medium text-zinc-700">
-                Self Rating <span className="text-zinc-400">(optional)</span>
-              </span>
-              <div className="mt-1 flex gap-2">
-                {[1, 2, 3, 4, 5].map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setSelfRating(selfRating === r ? 0 : r)}
-                    className={`h-8 w-8 rounded-full text-sm font-medium transition-colors ${
-                      selfRating >= r
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'
-                    }`}
-                    title={`${r} / 5`}
-                  >
-                    {r}
-                  </button>
-                ))}
-                <span className="ml-1 text-xs text-zinc-400 self-center">1-5</span>
-              </div>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between">
-              <div className="flex gap-2">
-                {currentIndex > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setCurrentIndex(currentIndex - 1)}
-                    className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
-                  >
-                    ← Previous
-                  </button>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={handleSubmitAnswer}
-                disabled={!answerText.trim() || submitting}
-                className="rounded-lg bg-indigo-600 px-5 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {submitting ? <Spinner className="h-4 w-4" /> : answeredQuestions.has(currentQuestion.questionId) ? 'Update Answer' : 'Submit Answer'}
-              </button>
-            </div>
-          </div>
-        </Card>
+        <AnswerForm
+          currentQuestion={currentQuestion}
+          currentIndex={currentIndex}
+          totalQuestions={totalQuestions}
+          answerText={answerText}
+          onAnswerTextChange={setAnswerText}
+          selfRating={selfRating}
+          onSelfRatingChange={setSelfRating}
+          submitting={submitting}
+          isAlreadyAnswered={answeredQuestions.has(currentQuestion.questionId)}
+          onPrevious={() => setCurrentIndex(currentIndex - 1)}
+          onSubmit={handleSubmitAnswer}
+        />
       )}
 
-      {/* All answered state — show remaining questions for review or complete */}
       {allAnswered && (
-        <Card className="mb-4 text-center">
-          <div className="py-6">
-            <span className="text-4xl">🎯</span>
-            <h2 className="mt-4 text-xl font-bold text-zinc-800">All Questions Answered!</h2>
-            <p className="mt-2 text-sm text-zinc-500">
-              You have answered all {totalQuestions} questions. Ready to finish?
-            </p>
-            <div className="mt-6 flex justify-center gap-3">
-              {questions.map((q, i) => (
-                <button
-                  key={q.id}
-                  onClick={() => setCurrentIndex(i)}
-                  className={`h-8 w-8 rounded-full text-xs font-medium ${
-                    i === currentIndex
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                  }`}
-                  title={q.question.title}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-          </div>
-        </Card>
+        <AllAnsweredPanel questions={questions} currentIndex={currentIndex} onSelect={setCurrentIndex} />
       )}
 
-      {/* Navigation between answered questions when all done */}
       {currentQuestion && allAnswered && (
-        <Card className="mb-4">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-zinc-400">
-              Question {currentIndex + 1} of {totalQuestions}
-            </span>
-            <div className="flex gap-2">
-              <Badge label={currentQuestion.question.difficulty} variant={currentQuestion.question.difficulty} />
-              {currentQuestion.question.topic && (
-                <Badge label={currentQuestion.question.topic.name} />
-              )}
-            </div>
-          </div>
-          <h2 className="mb-3 text-lg font-semibold text-zinc-800">
-            {currentQuestion.question.title}
-          </h2>
-          <div className="mb-4 whitespace-pre-wrap rounded-lg bg-zinc-50 p-4 text-sm text-zinc-700">
-            {currentQuestion.question.prompt}
-          </div>
-          <div className="flex gap-2">
-            {currentIndex > 0 && (
-              <button
-                onClick={() => setCurrentIndex(currentIndex - 1)}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
-              >
-                ← Previous
-              </button>
-            )}
-            {currentIndex < totalQuestions - 1 && (
-              <button
-                onClick={() => setCurrentIndex(currentIndex + 1)}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
-              >
-                Next →
-              </button>
-            )}
-          </div>
-        </Card>
+        <ReviewQuestionCard
+          currentQuestion={currentQuestion}
+          currentIndex={currentIndex}
+          totalQuestions={totalQuestions}
+          onPrevious={() => setCurrentIndex(currentIndex - 1)}
+          onNext={() => setCurrentIndex(currentIndex + 1)}
+        />
       )}
 
-      {/* Complete session button */}
       <div className="flex justify-center">
         <button
           onClick={handleComplete}

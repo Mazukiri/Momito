@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { questionsApi } from '../../../lib/api-client';
 import type { QuestionResponse } from '@momito/shared';
 import { Card, Badge, Spinner, ErrorBanner, EmptyState } from '../../../components/ui';
+import { Markdown } from '../../../components/Markdown';
 
 const TYPE_LABELS: Record<string, string> = {
   dsa: 'DSA',
@@ -193,9 +194,7 @@ export default function QuestionDetailPage() {
           </button>
           {showAnswer && (
             <div className="mt-4 border-t border-zinc-100 pt-4">
-              <p className="whitespace-pre-wrap text-sm text-zinc-700">
-                {question.referenceAnswer}
-              </p>
+              <Markdown className="prose-sm">{question.referenceAnswer}</Markdown>
             </div>
           )}
         </Card>
