@@ -10,7 +10,10 @@
     "test": "pnpm --filter @momito/shared build && pnpm db:generate && pnpm -r test",
     "db:generate": "pnpm --filter @momito/api prisma:generate",
     "db:migrate": "cd apps/api && pnpm exec prisma migrate dev",
-    "db:seed": "pnpm --filter @momito/api seed"
+    "db:seed": "pnpm --filter @momito/api seed",
+    "content:validate": "pnpm --filter @momito/api content:validate",
+    "content:stats": "pnpm --filter @momito/api content:stats",
+    "content:sample": "pnpm --filter @momito/api content:sample"
   },
   "engines": {
     "node": ">=20.16",

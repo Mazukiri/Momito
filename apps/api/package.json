@@ -10,7 +10,10 @@
     "prisma:generate": "prisma generate",
     "seed": "prisma db seed",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "content:validate": "tsx scripts/content-validate.ts",
+    "content:stats": "tsx scripts/content-stats.ts",
+    "content:sample": "tsx scripts/content-sample.ts"
   },
   "dependencies": {
     "@momito/shared": "workspace:*",

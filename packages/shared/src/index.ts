@@ -863,3 +863,158 @@ export interface PracticeRecommendationResponse {
   targetHref: string;
   priority: number;
 }
+
+// ── Knowledge Kernel (MOM-022/023) ──────────────────────────────────────────
+// Type/service-layer shapes from redesign-v2 plan §5. These describe how existing
+// models (Question, Story, Task, JobApplication, ...) are *presented* uniformly;
+// they intentionally do not require any schema change (see DECISIONS.md D-003).
+
+export const KNOWLEDGE_DOMAINS = [
+  'dsa',
+  'system_design',
+  'cs_fundamentals',
+  'behavioral',
+  'career',
+  'story',
+  'company',
+  'job',
+] as const;
+export type KnowledgeDomain = (typeof KNOWLEDGE_DOMAINS)[number];
+
+export const KNOWLEDGE_DIFFICULTIES = ['easy', 'medium', 'hard', 'advanced'] as const;
+export type KnowledgeDifficulty = (typeof KNOWLEDGE_DIFFICULTIES)[number];
+
+export const KNOWLEDGE_PROVENANCE = [
+  'seed',
+  'imported',
+  'user_created',
+  'ai_generated',
+  'manual_curated',
+] as const;
+export type KnowledgeProvenance = (typeof KNOWLEDGE_PROVENANCE)[number];
+
+// Only 'published' and 'verified' items should appear in the default curriculum
+// (plan §8.1) — 'draft'/'reviewable' are visible in authoring/review views only.
+export const KNOWLEDGE_QUALITY_STATUSES = ['draft', 'reviewable', 'published', 'verified'] as const;
+export type KnowledgeQualityStatus = (typeof KNOWLEDGE_QUALITY_STATUSES)[number];
+
+export interface KnowledgeObject {
+  id: string;
+  domain: KnowledgeDomain;
+  title: string;
+  summary?: string;
+  tags: string[];
+  difficulty?: KnowledgeDifficulty;
+  sourceUrl?: string;
+  provenance: KnowledgeProvenance;
+  qualityStatus: KnowledgeQualityStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const REVIEWABLE_OBJECT_TYPES = [
+  'question',
+  'story',
+  'system_design_case',
+  'behavioral_prompt',
+  'cs_card',
+] as const;
+export type ReviewableObjectType = (typeof REVIEWABLE_OBJECT_TYPES)[number];
+
+export interface Reviewable {
+  objectId: string;
+  objectType: ReviewableObjectType;
+  prompt: string;
+  referenceAnswer?: string;
+  rubricId?: string;
+  reviewStateId?: string;
+}
+
+// ── Rubric (MOM-023) ────────────────────────────────────────────────────────
+// Matches the Json shape already stored in Question.rubric (plan §5.3). Existing
+// rows may not conform yet — treat this as the target shape for new/updated rubrics,
+// not a runtime guarantee about historical data.
+
+export interface RubricCriterionLevel {
+  score: number;
+  description: string;
+}
+
+export interface RubricCriterion {
+  id: string;
+  title: string;
+  description: string;
+  weight: number;
+  levels?: RubricCriterionLevel[];
+}
+
+export interface Rubric {
+  id: string;
+  objectId: string;
+  criteria: RubricCriterion[];
+  maxScore: number;
+}
+
+// MOM-025: maps QuestionType (Question.type) to the broader KnowledgeDomain
+// taxonomy. Matches plan §8.2's CS Fundamentals scope (OS, networking, DB,
+// concurrency, JS/TS, backend/API, OOP, C++, ML) to the 'cs_fundamentals' domain.
+const QUESTION_TYPE_TO_KNOWLEDGE_DOMAIN: Record<QuestionType, KnowledgeDomain> = {
+  dsa: 'dsa',
+  system_design: 'system_design',
+  behavioral: 'behavioral',
+  backend: 'cs_fundamentals',
+  javascript: 'cs_fundamentals',
+  typescript: 'cs_fundamentals',
+  nodejs: 'cs_fundamentals',
+  database: 'cs_fundamentals',
+  os: 'cs_fundamentals',
+  networking: 'cs_fundamentals',
+  oop: 'cs_fundamentals',
+  cpp: 'cs_fundamentals',
+  concurrency: 'cs_fundamentals',
+  computer_architecture: 'cs_fundamentals',
+  machine_learning: 'cs_fundamentals',
+  hpc: 'cs_fundamentals',
+  quant: 'cs_fundamentals',
+};
+
+/**
+ * Presents an existing `Question` row as a `KnowledgeObject`. `Question` has no
+ * `provenance`/`qualityStatus` columns yet (D-003: no schema change until those
+ * are genuinely needed), so this infers reasonable defaults rather than reading
+ * stored values — every question in this app today is user-authored and treated
+ * as immediately usable in practice sessions.
+ */
+export function questionToKnowledgeObject(question: QuestionResponse): KnowledgeObject {
+  return {
+    id: question.id,
+    domain: QUESTION_TYPE_TO_KNOWLEDGE_DOMAIN[question.type],
+    title: question.title,
+    summary: question.notes ?? undefined,
+    tags: [...question.roleTags, ...question.areaTags, ...question.patternTags],
+    difficulty: question.difficulty,
+    sourceUrl: question.sourceUrl ?? undefined,
+    provenance: 'user_created',
+    qualityStatus: 'published',
+    createdAt: question.createdAt,
+    updatedAt: question.updatedAt,
+  };
+}
+
+export function isRubric(value: unknown): value is Rubric {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Partial<Rubric>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.objectId === 'string' &&
+    typeof candidate.maxScore === 'number' &&
+    Array.isArray(candidate.criteria) &&
+    candidate.criteria.every(
+      (c) =>
+        typeof c?.id === 'string' &&
+        typeof c?.title === 'string' &&
+        typeof c?.description === 'string' &&
+        typeof c?.weight === 'number',
+    )
+  );
+}

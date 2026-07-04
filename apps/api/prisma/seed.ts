@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 const DEMO_USER_ID = '00000000-0000-4000-8000-000000000001';
 
-const topics = [
+export const topics = [
   ['00000000-0000-4000-8001-000000000001', 'Backend Engineering', 'APIs, distributed services, reliability, and server-side design'],
   ['00000000-0000-4000-8001-000000000002', 'JavaScript & TypeScript', 'JavaScript runtime behavior and practical TypeScript'],
   ['00000000-0000-4000-8001-000000000003', 'Databases', 'Relational data modeling, transactions, indexing, and query performance'],
@@ -25,7 +25,7 @@ const companies = [
   ['00000000-0000-4000-8002-000000000006', 'Shopee', 'Southeast Asia'],
 ] as const;
 
-type SeedQuestion = {
+export type SeedQuestion = {
   title: string;
   prompt: string;
   type: string;
@@ -38,7 +38,7 @@ type SeedQuestion = {
   patternTags?: string[];
 };
 
-const questions: SeedQuestion[] = [
+export const questions: SeedQuestion[] = [
   { title: 'Design an idempotent payment endpoint', prompt: 'How would you design a POST payment endpoint so client retries cannot charge a customer twice?', type: 'backend', difficulty: 'hard', topic: 0, answer: 'Require a client-generated idempotency key, persist it with the request fingerprint and outcome in the same transaction as the payment state, return the stored result for matching retries, and reject reuse with a different payload. Define key expiry and handle concurrent inserts with a unique constraint.', companies: [1, 4] },
   { title: 'REST pagination tradeoffs', prompt: 'Compare offset pagination and cursor pagination. When would you choose each?', type: 'backend', difficulty: 'medium', topic: 0, answer: 'Offset pagination is simple and supports page jumps but becomes slow at large offsets and can duplicate or skip records during writes. Cursor pagination uses a stable ordered key, scales better, and remains consistent under inserts, but does not naturally support arbitrary page jumps.' },
   { title: 'API rate limiter design', prompt: 'Explain how to implement a distributed rate limiter for a public API.', type: 'backend', difficulty: 'hard', topic: 0, answer: 'Choose a policy such as token bucket, identify the key and limit window, and perform atomic state changes in a shared store such as Redis using Lua. Return standard limit headers, account for clock and store failures, and define whether failures are open or closed.', companies: [0, 3] },
@@ -87,7 +87,7 @@ const questions: SeedQuestion[] = [
   { title: 'Low-latency order book updates', prompt: 'How would you represent and update a limit order book for low-latency market data processing?', type: 'quant', difficulty: 'hard', topic: 0, answer: 'Use cache-friendly structures keyed by price levels, maintain best bid/ask pointers, apply incremental updates in sequence, detect gaps, and avoid allocation on the hot path. Measure latency percentiles and correctness under replay.', roleTags: ['quant-swe'], areaTags: ['system_design'], patternTags: ['latency', 'market data', 'data structures'] },
 ];
 
-function inferQuestionMetadata(question: SeedQuestion) {
+export function inferQuestionMetadata(question: SeedQuestion) {
   const roleTags = question.roleTags ?? inferRoleTags(question.type);
   const areaTags = question.areaTags ?? inferAreaTags(question.type);
   const patternTags = question.patternTags ?? inferPatternTags(question);
@@ -172,9 +172,13 @@ async function main() {
   console.log('Demo login: demo@momito.local / MomitoDemo123!');
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(async () => prisma.$disconnect());
+// MOM-024: guarded so `content-lib.ts` can import `questions`/`topics` for
+// validation without triggering a live DB seed as a side effect of the import.
+if (require.main === module) {
+  main()
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    })
+    .finally(async () => prisma.$disconnect());
+}
