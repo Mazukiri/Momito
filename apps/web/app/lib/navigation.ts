@@ -8,7 +8,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { href: '/today', label: 'Today', icon: '🏠', primary: true },
-  { href: '/practice/new', label: 'Practice', icon: '📝', primary: true },
+  { href: '/practice', label: 'Practice', icon: '📝', primary: true },
   { href: '/jobs', label: 'Jobs', icon: '💼', primary: true },
   { href: '/learning', label: 'Learning', icon: '📚', primary: true },
   { href: '/profile', label: 'Profile', icon: '👤', primary: true },

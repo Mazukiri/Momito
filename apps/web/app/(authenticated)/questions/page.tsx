@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { questionsApi, topicsApi, type ListQuestionsParams } from '../../lib/api-client';
 import type { QuestionResponse, TopicSummary } from '@momito/shared';
 import { Card, Badge, Pagination, Spinner, EmptyState, ErrorBanner } from '../../components/ui';
@@ -22,10 +22,11 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function QuestionsListPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Filters
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState(searchParams.get('type') || '');
   const [difficultyFilter, setDifficultyFilter] = useState('');
   const [topicFilter, setTopicFilter] = useState('');
   const [topics, setTopics] = useState<TopicSummary[]>([]);
