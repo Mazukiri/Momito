@@ -181,6 +181,11 @@ export default function SessionSummaryPage() {
                         : attempt.answerText}
                     </p>
                   </div>
+                  {typeof attempt.timeSpentSeconds === 'number' && (
+                    <p className="mt-2 text-xs text-zinc-400">
+                      Time spent: {Math.floor(attempt.timeSpentSeconds / 60)}m {attempt.timeSpentSeconds % 60}s
+                    </p>
+                  )}
                   {attempt.selfRating && (
                     <div>
                       <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Self Rating</p>

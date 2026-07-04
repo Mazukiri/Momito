@@ -222,11 +222,21 @@ export interface DashboardSummaryResponse {
   recommendations?: PracticeRecommendationResponse[];
 }
 
+// MOM-061: plan §8.2 targets 8 role-track categories (backend, AI/NLP, infra,
+// mobile, fullstack, quant/HPC, data, security). big-tech-swe/google-l4-swe cover
+// backend and hpc-gpu-engineer/quant-swe cover quant/HPC; the remaining six IDs
+// below fill the categories the plan lists that had no track at all.
 export const CAREER_ROLE_TRACK_IDS = [
   'big-tech-swe',
   'google-l4-swe',
   'hpc-gpu-engineer',
   'quant-swe',
+  'ai-ml-engineer',
+  'infra-platform-engineer',
+  'mobile-swe',
+  'fullstack-swe',
+  'data-engineer',
+  'security-engineer',
 ] as const;
 export type CareerRoleTrackId = (typeof CAREER_ROLE_TRACK_IDS)[number];
 
@@ -323,6 +333,94 @@ export const CAREER_ROLE_TRACKS: Record<CareerRoleTrackId, CareerRoleTrack> = {
       { id: 'quant-systems', area: 'system_design', title: 'Low-latency systems', description: 'Throughput, latency, queues, market data, caching, and operational risk.', evidenceType: 'practice', weight: 3, keywords: ['latency', 'throughput', 'market data', 'queue'] },
       { id: 'quant-project', area: 'projects', title: 'Backtesting/trading project', description: 'A tested project with data ingestion, strategy evaluation, and risk metrics.', evidenceType: 'project', weight: 4, keywords: ['backtesting', 'trading', 'risk', 'pandas', 'market'] },
       { id: 'quant-cpp-python', area: 'language_runtime', title: 'Python/C++ production fluency', description: 'Python data stack plus C++ performance fundamentals.', evidenceType: 'learning', weight: 2, keywords: ['python', 'c++', 'numpy', 'pandas'] },
+    ],
+  },
+  // MOM-061: profileRoleTemplate defaults to 'google-l4-swe' (the general SWE
+  // template) for these six tracks — no dedicated RoleTemplate skill/tier data
+  // exists yet for AI/mobile/fullstack/data/security/infra roles. Authoring those
+  // is separate scope (would need its own requiredSkills/tierWeights review).
+  'ai-ml-engineer': {
+    id: 'ai-ml-engineer',
+    label: 'AI/ML Engineer',
+    description: 'Preparation for applied ML and NLP engineering roles: model development, evaluation, and production ML systems.',
+    defaultHorizon: '6_months',
+    profileRoleTemplate: 'google-l4-swe',
+    checklist: [
+      { id: 'ai-ml-fundamentals', area: 'domain_knowledge', title: 'ML/NLP fundamentals', description: 'Supervised/unsupervised learning, embeddings, transformers, evaluation metrics, and overfitting.', evidenceType: 'learning', weight: 4, keywords: ['embeddings', 'transformer', 'evaluation', 'overfitting'] },
+      { id: 'ai-ml-dsa', area: 'dsa', title: 'DSA for ML infra', description: 'Arrays, graphs, and DP fluency, applied to data pipelines and feature engineering code.', evidenceType: 'practice', weight: 3, keywords: ['arrays', 'graphs', 'dp', 'pipelines'] },
+      { id: 'ai-ml-system-design', area: 'system_design', title: 'ML system design', description: 'Training/serving pipelines, feature stores, model versioning, and latency/accuracy tradeoffs.', evidenceType: 'practice', weight: 3, keywords: ['serving', 'feature store', 'versioning', 'latency'] },
+      { id: 'ai-ml-project', area: 'projects', title: 'End-to-end ML project', description: 'A project with data ingestion, training, evaluation, and a served inference path.', evidenceType: 'project', weight: 4, keywords: ['training', 'inference', 'evaluation', 'deployment'] },
+      { id: 'ai-ml-python', area: 'language_runtime', title: 'Python ML stack fluency', description: 'NumPy/PyTorch or TensorFlow, vectorized computation, and profiling.', evidenceType: 'learning', weight: 2, keywords: ['numpy', 'pytorch', 'tensorflow', 'vectorization'] },
+    ],
+  },
+  'infra-platform-engineer': {
+    id: 'infra-platform-engineer',
+    label: 'Infra/Platform Engineer',
+    description: 'Preparation for infrastructure, platform, and developer-tooling engineering roles.',
+    defaultHorizon: '6_months',
+    profileRoleTemplate: 'google-l4-swe',
+    checklist: [
+      { id: 'infra-dsa', area: 'dsa', title: 'Core DSA patterns', description: 'Graphs, trees, and scheduling-adjacent algorithms.', evidenceType: 'practice', weight: 2, keywords: ['graphs', 'trees', 'scheduling'] },
+      { id: 'infra-system-design', area: 'system_design', title: 'Infra system design', description: 'CI/CD, orchestration (Kubernetes), observability, and multi-tenant reliability tradeoffs.', evidenceType: 'practice', weight: 4, keywords: ['kubernetes', 'ci/cd', 'observability', 'reliability'] },
+      { id: 'infra-os-networking', area: 'cs_fundamentals', title: 'OS and networking depth', description: 'Containers, cgroups, networking primitives, and Linux internals.', evidenceType: 'learning', weight: 3, keywords: ['containers', 'cgroups', 'networking', 'linux'] },
+      { id: 'infra-project', area: 'projects', title: 'Platform tooling project', description: 'A project automating deployment, scaling, or observability for a real workload.', evidenceType: 'project', weight: 4, keywords: ['automation', 'deployment', 'scaling', 'observability'] },
+      { id: 'infra-behavioral', area: 'behavioral', title: 'Incident/ownership stories', description: 'STAR stories for on-call incidents, postmortems, and cross-team reliability work.', evidenceType: 'practice', weight: 1, keywords: ['incident', 'postmortem', 'on-call'] },
+    ],
+  },
+  'mobile-swe': {
+    id: 'mobile-swe',
+    label: 'Mobile SWE',
+    description: 'Preparation for iOS/Android/cross-platform mobile engineering roles.',
+    defaultHorizon: '6_months',
+    profileRoleTemplate: 'google-l4-swe',
+    checklist: [
+      { id: 'mobile-dsa', area: 'dsa', title: 'Core DSA patterns', description: 'Arrays, trees, and recursion fluency for standard mobile-team interview loops.', evidenceType: 'practice', weight: 3, keywords: ['arrays', 'trees', 'recursion'] },
+      { id: 'mobile-platform', area: 'language_runtime', title: 'Platform runtime depth', description: 'Lifecycle management, threading/concurrency on-device, and memory/battery constraints.', evidenceType: 'learning', weight: 3, keywords: ['lifecycle', 'concurrency', 'memory', 'battery'] },
+      { id: 'mobile-design', area: 'system_design', title: 'Mobile app architecture', description: 'Offline-first sync, state management, and API/backend integration tradeoffs.', evidenceType: 'practice', weight: 3, keywords: ['offline-first', 'sync', 'state management'] },
+      { id: 'mobile-project', area: 'projects', title: 'Shipped mobile app', description: 'A published or demoable app with real users or a polished demo covering a full feature.', evidenceType: 'project', weight: 4, keywords: ['app store', 'shipped', 'demo'] },
+      { id: 'mobile-behavioral', area: 'behavioral', title: 'Product collaboration stories', description: 'STAR stories on working with design/product and handling platform review feedback.', evidenceType: 'practice', weight: 1, keywords: ['design collaboration', 'app review', 'product'] },
+    ],
+  },
+  'fullstack-swe': {
+    id: 'fullstack-swe',
+    label: 'Fullstack SWE',
+    description: 'Preparation for fullstack roles spanning frontend, backend, and API integration.',
+    defaultHorizon: '6_months',
+    profileRoleTemplate: 'google-l4-swe',
+    checklist: [
+      { id: 'fullstack-dsa', area: 'dsa', title: 'Core DSA patterns', description: 'Arrays, strings, trees, and DP fluency for general SWE loops.', evidenceType: 'practice', weight: 3, keywords: ['arrays', 'strings', 'trees', 'dp'] },
+      { id: 'fullstack-frontend', area: 'language_runtime', title: 'Frontend runtime depth', description: 'Rendering, state management, and browser performance fundamentals.', evidenceType: 'learning', weight: 3, keywords: ['rendering', 'state management', 'performance'] },
+      { id: 'fullstack-design', area: 'system_design', title: 'Fullstack system design', description: 'API design, auth, caching, and end-to-end data-flow tradeoffs across the stack.', evidenceType: 'practice', weight: 3, keywords: ['api design', 'auth', 'caching'] },
+      { id: 'fullstack-project', area: 'projects', title: 'Shipped fullstack project', description: 'A project with a real frontend, backend, database, and deployment.', evidenceType: 'project', weight: 4, keywords: ['frontend', 'backend', 'database', 'deployment'] },
+      { id: 'fullstack-behavioral', area: 'behavioral', title: 'Cross-functional collaboration stories', description: 'STAR stories on working across frontend/backend/design boundaries.', evidenceType: 'practice', weight: 1, keywords: ['cross-functional', 'collaboration'] },
+    ],
+  },
+  'data-engineer': {
+    id: 'data-engineer',
+    label: 'Data Engineer',
+    description: 'Preparation for data engineering roles: pipelines, warehousing, and large-scale data processing.',
+    defaultHorizon: '6_months',
+    profileRoleTemplate: 'google-l4-swe',
+    checklist: [
+      { id: 'data-dsa', area: 'dsa', title: 'Core DSA patterns', description: 'Arrays, hashing, and sorting/merging fluency, applied to batch and streaming data problems.', evidenceType: 'practice', weight: 2, keywords: ['arrays', 'hashing', 'sorting', 'streaming'] },
+      { id: 'data-sql', area: 'cs_fundamentals', title: 'SQL and data modeling depth', description: 'Window functions, partitioning, indexing, and dimensional modeling.', evidenceType: 'learning', weight: 4, keywords: ['sql', 'window functions', 'partitioning', 'indexing'] },
+      { id: 'data-design', area: 'system_design', title: 'Data pipeline design', description: 'Batch vs. streaming tradeoffs, orchestration, schema evolution, and data quality checks.', evidenceType: 'practice', weight: 4, keywords: ['batch', 'streaming', 'orchestration', 'schema evolution'] },
+      { id: 'data-project', area: 'projects', title: 'End-to-end data pipeline project', description: 'A project ingesting, transforming, and serving data with measurable freshness/quality guarantees.', evidenceType: 'project', weight: 4, keywords: ['ingestion', 'transformation', 'data quality'] },
+      { id: 'data-python', area: 'language_runtime', title: 'Python/SQL production fluency', description: 'Pandas/Spark-style data manipulation plus production SQL.', evidenceType: 'learning', weight: 2, keywords: ['pandas', 'spark', 'sql'] },
+    ],
+  },
+  'security-engineer': {
+    id: 'security-engineer',
+    label: 'Security Engineer',
+    description: 'Preparation for application/infrastructure security engineering roles.',
+    defaultHorizon: '6_months',
+    profileRoleTemplate: 'google-l4-swe',
+    checklist: [
+      { id: 'security-dsa', area: 'dsa', title: 'Core DSA patterns', description: 'Arrays, graphs, and hashing fluency for general SWE loops most security teams still run.', evidenceType: 'practice', weight: 2, keywords: ['arrays', 'graphs', 'hashing'] },
+      { id: 'security-fundamentals', area: 'cs_fundamentals', title: 'Security fundamentals', description: 'AuthN/authZ, common vulnerability classes (OWASP Top 10), cryptography basics, and threat modeling.', evidenceType: 'learning', weight: 4, keywords: ['authn', 'authz', 'owasp', 'threat modeling'] },
+      { id: 'security-design', area: 'system_design', title: 'Secure system design', description: 'Defense in depth, least privilege, secrets management, and incident-response-aware architecture.', evidenceType: 'practice', weight: 4, keywords: ['defense in depth', 'least privilege', 'secrets management'] },
+      { id: 'security-project', area: 'projects', title: 'Security-focused project', description: 'A project demonstrating a security review, a fixed vulnerability class, or a hardening effort with before/after evidence.', evidenceType: 'project', weight: 4, keywords: ['security review', 'vulnerability', 'hardening'] },
+      { id: 'security-behavioral', area: 'behavioral', title: 'Incident response stories', description: 'STAR stories on responding to a security incident or driving a hardening initiative.', evidenceType: 'practice', weight: 1, keywords: ['incident response', 'hardening'] },
     ],
   },
 };

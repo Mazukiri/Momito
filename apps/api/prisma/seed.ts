@@ -17,13 +17,32 @@ export const topics = [
   ['00000000-0000-4000-8001-000000000009', 'Data Structures & Algorithms', 'Coding-interview patterns: arrays, strings, trees, graphs, and dynamic programming'],
 ] as const;
 
+// MOM-060: 20 company packs (plan §8.2). Company has no dedicated roleTags/focus
+// column, so focus areas and linked role tracks are encoded in `notes` (D-003:
+// reuse existing fields rather than add a column for this). Existing rows (index
+// 0-5) keep their original position — question seed entries above reference
+// companies by array index, not id, so appends only go at the end.
 const companies = [
-  ['00000000-0000-4000-8002-000000000001', 'Google', 'Global'],
-  ['00000000-0000-4000-8002-000000000002', 'Amazon', 'Global'],
-  ['00000000-0000-4000-8002-000000000003', 'Microsoft', 'Global'],
-  ['00000000-0000-4000-8002-000000000004', 'Meta', 'Global'],
-  ['00000000-0000-4000-8002-000000000005', 'Grab', 'Southeast Asia'],
-  ['00000000-0000-4000-8002-000000000006', 'Shopee', 'Southeast Asia'],
+  ['00000000-0000-4000-8002-000000000001', 'Google', 'Global', 'Focus areas: system design, DSA depth, distributed systems. Linked tracks: big-tech-swe, google-l4-swe.'],
+  ['00000000-0000-4000-8002-000000000002', 'Amazon', 'Global', 'Focus areas: leadership principles (behavioral), system design, operational excellence. Linked tracks: big-tech-swe.'],
+  ['00000000-0000-4000-8002-000000000003', 'Microsoft', 'Global', 'Focus areas: system design, C#/.NET or general backend, collaboration. Linked tracks: big-tech-swe, fullstack-swe.'],
+  ['00000000-0000-4000-8002-000000000004', 'Meta', 'Global', 'Focus areas: DSA speed, system design, product sense. Linked tracks: big-tech-swe, fullstack-swe.'],
+  ['00000000-0000-4000-8002-000000000005', 'Grab', 'Southeast Asia', 'Focus areas: backend systems, marketplace/logistics design. Linked tracks: big-tech-swe, fullstack-swe.'],
+  ['00000000-0000-4000-8002-000000000006', 'Shopee', 'Southeast Asia', 'Focus areas: backend systems, high-throughput e-commerce design. Linked tracks: big-tech-swe, fullstack-swe.'],
+  ['00000000-0000-4000-8002-000000000007', 'Apple', 'Global', 'Focus areas: platform/runtime depth, mobile architecture, performance. Linked tracks: mobile-swe.'],
+  ['00000000-0000-4000-8002-000000000008', 'Netflix', 'Global', 'Focus areas: distributed systems, streaming infra, chaos/reliability engineering. Linked tracks: infra-platform-engineer.'],
+  ['00000000-0000-4000-8002-000000000009', 'Uber', 'Global', 'Focus areas: marketplace systems, geo/real-time infra, backend design. Linked tracks: big-tech-swe, infra-platform-engineer.'],
+  ['00000000-0000-4000-8002-000000000010', 'Airbnb', 'Global', 'Focus areas: fullstack product engineering, API design, trust & safety systems. Linked tracks: fullstack-swe.'],
+  ['00000000-0000-4000-8002-000000000011', 'Stripe', 'Global', 'Focus areas: API design, payments correctness/idempotency, backend reliability. Linked tracks: big-tech-swe, fullstack-swe.'],
+  ['00000000-0000-4000-8002-000000000012', 'ByteDance', 'Global', 'Focus areas: recommendation/ML systems, mobile app performance. Linked tracks: ai-ml-engineer, mobile-swe.'],
+  ['00000000-0000-4000-8002-000000000013', 'NVIDIA', 'Global', 'Focus areas: CUDA/GPU performance, parallel computing, systems programming. Linked tracks: hpc-gpu-engineer.'],
+  ['00000000-0000-4000-8002-000000000014', 'Databricks', 'Global', 'Focus areas: distributed data processing (Spark), data pipeline design. Linked tracks: data-engineer.'],
+  ['00000000-0000-4000-8002-000000000015', 'Palantir', 'Global', 'Focus areas: data modeling, backend systems, ontology/graph design. Linked tracks: data-engineer, big-tech-swe.'],
+  ['00000000-0000-4000-8002-000000000016', 'Bloomberg', 'Global', 'Focus areas: low-latency systems, C++/Java backend, financial data. Linked tracks: quant-swe, fullstack-swe.'],
+  ['00000000-0000-4000-8002-000000000017', 'Two Sigma', 'Global', 'Focus areas: probability/statistics, quant research tooling, low-latency systems. Linked tracks: quant-swe.'],
+  ['00000000-0000-4000-8002-000000000018', 'Jane Street', 'Global', 'Focus areas: functional programming, probability, fast/correct reasoning under pressure. Linked tracks: quant-swe.'],
+  ['00000000-0000-4000-8002-000000000019', 'CrowdStrike', 'Global', 'Focus areas: security fundamentals, threat detection systems, systems programming. Linked tracks: security-engineer.'],
+  ['00000000-0000-4000-8002-000000000020', 'OpenAI', 'Global', 'Focus areas: ML/NLP research and infra, training/serving systems. Linked tracks: ai-ml-engineer, infra-platform-engineer.'],
 ] as const;
 
 export type SeedQuestion = {
@@ -171,8 +190,8 @@ async function main() {
   for (const [id, name, description] of topics) {
     await prisma.topic.upsert({ where: { id }, update: { name, description }, create: { id, name, description } });
   }
-  for (const [id, name, region] of companies) {
-    await prisma.company.upsert({ where: { id }, update: { name, region }, create: { id, name, region } });
+  for (const [id, name, region, notes] of companies) {
+    await prisma.company.upsert({ where: { id }, update: { name, region, notes }, create: { id, name, region, notes } });
   }
 
   for (const [index, question] of questions.entries()) {
