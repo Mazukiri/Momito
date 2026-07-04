@@ -48,6 +48,7 @@ The default API environment is ready for the Docker database below:
 
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/momito?schema=public"
+DIRECT_URL="postgresql://postgres:postgres@localhost:5432/momito?schema=public"
 JWT_SECRET="replace-with-at-least-32-random-characters"
 PORT=3001
 CORS_ORIGIN="http://localhost:3000"
@@ -78,7 +79,7 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-This creates all tables and then idempotently seeds 8 topics, 6 companies, and 38 interview questions with role/area metadata. It also creates a demo account:
+This creates all tables and then idempotently seeds 9 topics, 20 companies, and 55 interview questions (including a starter DSA batch) with role/area metadata. It also creates a demo account:
 
 ```txt
 Email: demo@momito.local
@@ -120,10 +121,13 @@ All frontend pages are under `apps/web/app/`.
 
 | Route | Page |
 |---|---|
-| `/` | Redirects to `/dashboard` |
-| `/login` | Login |
-| `/register` | Register |
+| `/` | Redirects to `/today` |
+| `/login` | Login (mobile-first, restyled) |
+| `/register` | Register (mobile-first, restyled) |
+| `/today` | Daily landing page (stub — the real reviews/practice/career queue lands with the Learning Engine, see `docs/agent/BACKLOG.MD` MOM-032) |
 | `/dashboard` | Progress overview, topic progress, weak areas, recent sessions |
+| `/missions` | Mission list (goal-driven weekly planning) |
+| `/missions/[id]` | Mission detail: competency states, weekly plan, check-ins |
 | `/career` | Role tracks, active career goals, readiness gaps |
 | `/jobs` | Job application pipeline |
 | `/jobs/[id]` | Job detail, prep generation, profile scoring, timeline |
@@ -153,22 +157,31 @@ All frontend pages are under `apps/web/app/`.
 ```
 Momito/
 ├── apps/
-│   ├── api/                    # NestJS backend
-│   │   ├── prisma/             # Prisma schema & migrations
+│   ├── api/                    # NestJS backend (backend of record — see docs/adr/0001)
+│   │   ├── prisma/             # Prisma schema, migrations, seed.ts
+│   │   ├── scripts/            # content:validate / :stats / :sample
 │   │   └── src/                # Controllers, services, guards, DTOs
-│   └── web/                    # Next.js frontend
+│   └── web/                    # Next.js frontend (client of record)
 │       └── app/
 │           ├── (auth)/         # Login, Register pages
-│           ├── (authenticated)/# Dashboard, Questions, Practice, Attempts, Study Plan
-│           ├── components/     # Shared UI components
-│           └── lib/            # API client, auth context
+│           ├── (authenticated)/# Today, Dashboard, Missions, Career, Jobs, Questions,
+│           │                   # Practice, Attempts, Study Plan, Learning, Calendar
+│           ├── components/     # Shared UI components (design system, nav, session UI)
+│           └── lib/            # API client, auth context, theme context, hooks
 ├── packages/
-│   └── shared/                 # Shared DTO types, Zod schemas, enums
-├── infra/                      # Docker / deployment config templates
-├── .swarm/                     # Swarm agent coordination files
+│   └── shared/                 # Shared DTO types, Zod schemas, enums, Knowledge Kernel types
+├── archive/                    # Legacy, inactive code — moved (not deleted) out of the
+│   │                           # active build path; see archive/README.md
+│   ├── backend/                # Former Python/FastAPI-style backend
+│   └── mobile/                 # Former Expo/React Native app
+├── docs/
+│   ├── plans/                  # Product/redesign plans (source of truth for scope)
+│   ├── agent/                  # Multi-agent execution docs: BACKLOG, NEXT, LOCKS,
+│   │                           # DECISIONS, LOG — read these before starting new work
+│   └── adr/                    # Architecture Decision Records
+├── .swarm/                     # Earlier swarm agent coordination files (pre-redesign)
 │   ├── BOARD.md
 │   ├── DECISIONS.md
-│   ├── LOCKS.md
 │   └── QA.md
 └── pnpm-workspace.yaml
 ```
@@ -187,6 +200,9 @@ Momito/
 | `pnpm db:generate` | Regenerate the Prisma client |
 | `pnpm db:migrate` | Apply development database migrations |
 | `pnpm db:seed` | Idempotently load demo content and the demo user |
+| `pnpm content:validate` | Check seed content for missing titles/tags, invalid topic refs, missing reference answer or rubric, and copied-statement heuristics; exits non-zero on error |
+| `pnpm content:stats` | Print seed content counts by type and difficulty |
+| `pnpm content:sample [n]` | Print `n` (default 5) random seed questions for manual spot-checking |
 
 ---
 
@@ -212,9 +228,13 @@ If port `5432` is already in use, stop the conflicting local PostgreSQL instance
 
 All endpoints are under `http://localhost:3001/api/v1`. Protected routes require `Authorization: Bearer <token>` header.
 
+### Health
+- `GET /health` — Liveness check, public, no DB dependency (safe for uptime pollers)
+- `GET /health/db` — Adds a DB ping; returns 503 if the database is unreachable
+
 ### Auth
-- `POST /auth/register` — Register
-- `POST /auth/login` — Login
+- `POST /auth/register` — Register. **Locked to a single account** once one user exists, unless `ALLOW_MULTI_USER_REGISTRATION=true` (Momito is a personal tool, not multi-tenant SaaS — see `docs/adr/`). Rate-limited to 5 requests/minute.
+- `POST /auth/login` — Login. Rate-limited to 5 requests/minute.
 - `POST /auth/logout` — Logout
 - `GET /auth/me` — Current user
 
@@ -287,6 +307,20 @@ For a public multi-user deployment, migrate auth to `httpOnly`, `Secure`, `SameS
 add CSRF protection as appropriate. Until then, only deploy trusted content and configure a
 restrictive Content Security Policy at the hosting layer.
 
+Momito is built as a **single-user personal tool**, not multi-tenant SaaS: registration is
+locked after the first account exists (see `ALLOW_MULTI_USER_REGISTRATION` below), and both auth
+routes are rate-limited. The API also applies `helmet()` security headers and a global rate limit
+(100 req/min) via `@nestjs/throttler`, and a global exception filter returns a consistent JSON
+error shape (`{ statusCode, message, path, timestamp }`) instead of leaking stack traces.
+
+### Mobile & Installability
+
+The web app is mobile-first: a fixed bottom tab bar on phone widths, a sidebar on tablet/desktop,
+and light/dark theme (toggle in the top bar, persisted in `localStorage`, defaulting to system
+preference). It ships an installable PWA manifest (`app/manifest.ts`) with generated icons, so it
+can be added to a phone home screen; there is intentionally **no service worker yet** — see
+`docs/agent/DECISIONS.MD` (D-007, SPIKE-002) for why that's deferred rather than shipped half-safe.
+
 ### Question Bank
 - 11 question types: DSA, Backend, JavaScript, TypeScript, Node.js, Database, OS, Networking, OOP, System Design, Behavioral
 - 3 difficulty levels: Easy, Medium, Hard
@@ -308,7 +342,7 @@ restrictive Content Security Policy at the hosting layer.
 - Suggested next topics to practice
 
 ### Career OS
-- Active role tracks for Big Tech SWE, Google L4 SWE, HPC/GPU Engineer, and Quant SWE
+- 10 role tracks covering backend (Big Tech SWE, Google L4 SWE), quant/HPC (Quant SWE, HPC/GPU Engineer), AI/ML, infra/platform, mobile, fullstack, data engineering, and security
 - Deterministic readiness by DSA, system design, LLD/OOP, CS fundamentals, language/runtime, projects, behavioral, and profile evidence
 - Job pipeline with JD text, deadline reminders, prep-task generation, and profile scoring
 - Learning ledger for long-term career evidence, including manual notes and reviewed Readwise highlights
@@ -336,9 +370,11 @@ restrictive Content Security Policy at the hosting layer.
 
 | Variable | Default | Required | Description |
 |---|---|---|---|
-| `DATABASE_URL` | — | Yes | PostgreSQL connection string |
+| `DATABASE_URL` | — | Yes | PostgreSQL connection string (pooled, used at runtime) |
+| `DIRECT_URL` | — | Yes for `prisma migrate` | Non-pooled connection string for migrations. With Neon, use its "direct connection" string (no `-pooler` in the hostname); without a pooler, set it to the same value as `DATABASE_URL`. |
 | `JWT_SECRET` | Development-only fallback | Production | JWT signing key. Production startup fails unless this is at least 32 characters. |
 | `CORS_ORIGIN` | Open in development; disabled in production | Production deployments | Comma-separated browser origin allowlist, for example `https://momito.example`. |
+| `ALLOW_MULTI_USER_REGISTRATION` | `false` (registration locked after the first account) | No | Set to `true` to allow open registration beyond a single account. |
 | `NODE_ENV` | Node default | No | Set to `production` to enable production config checks. |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:3001/api/v1` | Yes | Backend base URL for frontend API client |
 | `PORT` | `3001` | No | Backend listen port |
@@ -347,7 +383,7 @@ restrictive Content Security Policy at the hosting layer.
 
 ## Architecture Decisions
 
-Key decisions are documented in `.swarm/DECISIONS.md`:
+The original MVP decisions are documented in `.swarm/DECISIONS.md`:
 
 - **DEC-001**: Tech stack (NestJS + Next.js + PostgreSQL + Prisma)
 - **DEC-002**: JWT auth with bcrypt (no refresh tokens for MVP)
@@ -357,6 +393,15 @@ Key decisions are documented in `.swarm/DECISIONS.md`:
 - **DEC-006**: pnpm workspaces monorepo layout
 - **DEC-007**: Error response shape (NestJS global filter)
 - **DEC-008**: Session question selection logic
+
+Ongoing redesign-v2 work (mobile-first shell, Knowledge Kernel, Learning Engine, content
+factory, career engine) is tracked as PR-sized tasks in `docs/agent/BACKLOG.MD`, with its own
+decision log at `docs/agent/DECISIONS.MD` and formal ADRs under `docs/adr/`:
+
+- **ADR-0001**: NestJS `apps/api` is the backend of record (not the archived Python `backend/`)
+- **ADR-0002**: `ReviewState` uses a polymorphic `objectType`/`objectId` reference (design only — not yet implemented; schema changes are human-approval gated)
+- **ADR-0003**: The (not-yet-built) FSRS learning engine will coexist with the existing Mission engine rather than replace it
+- **ADR-0004**: No copyrighted third-party problem statements in seed content — metadata, links, and original notes only
 
 ---
 
