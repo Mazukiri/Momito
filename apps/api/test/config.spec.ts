@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getCorsOrigin, getJwtSecret } from '../src/common/config';
+import { getCorsOrigin, getJwtSecret, isMultiUserRegistrationAllowed } from '../src/common/config';
 
 describe('application config', () => {
   it('keeps the development JWT fallback for easy local setup', () => {
@@ -35,5 +35,14 @@ describe('application config', () => {
   it('allows local development but disables cross-origin requests by default in production', () => {
     expect(getCorsOrigin({ NODE_ENV: 'development' })).toBe(true);
     expect(getCorsOrigin({ NODE_ENV: 'production' })).toBe(false);
+  });
+
+  it('locks multi-user registration by default', () => {
+    expect(isMultiUserRegistrationAllowed({})).toBe(false);
+    expect(isMultiUserRegistrationAllowed({ ALLOW_MULTI_USER_REGISTRATION: 'false' })).toBe(false);
+  });
+
+  it('opts into multi-user registration only with an explicit true', () => {
+    expect(isMultiUserRegistrationAllowed({ ALLOW_MULTI_USER_REGISTRATION: 'true' })).toBe(true);
   });
 });

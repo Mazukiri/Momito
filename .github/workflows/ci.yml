@@ -30,6 +30,10 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/momito?schema=public
+      # MOM-020: schema.prisma now declares directUrl for Neon (non-pooled
+      # connection for migrate); CI's plain Postgres has no pooler, so both point
+      # at the same database.
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/momito?schema=public
       JWT_SECRET: ci-only-secret-with-at-least-32-characters
       NODE_ENV: test
 

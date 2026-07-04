@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { CompaniesModule } from './companies/companies.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -16,11 +18,17 @@ import { TasksModule } from './tasks/tasks.module';
 import { LearningModule } from './learning/learning.module';
 import { MissionsModule } from './missions/missions.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
+    // MOM-017: default global rate limit. Health checks stay unaffected in practice
+    // because liveness pollers run far below this rate; MOM-018 layers a tighter
+    // limit onto auth routes specifically.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     PrismaModule,
     AuthModule,
+    HealthModule,
     QuestionsModule,
     TopicsModule,
     CompaniesModule,
@@ -37,5 +45,6 @@ import { RecommendationsModule } from './recommendations/recommendations.module'
     MissionsModule,
     RecommendationsModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

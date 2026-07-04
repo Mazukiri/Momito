@@ -1,11 +1,29 @@
+import { ForbiddenException } from '@nestjs/common';
 import { hash } from 'bcryptjs';
 import { describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../src/auth/auth.service';
 
 describe('AuthService', () => {
+  it('rejects registration once an account already exists (single-user lock)', async () => {
+    const prisma = {
+      user: {
+        count: vi.fn().mockResolvedValue(1),
+        create: vi.fn(),
+      },
+    };
+    const service = new AuthService(prisma as never, {} as never);
+
+    await expect(
+      service.register({ email: 'second@example.com', password: 'secure-pass', name: 'Second' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
+
   it('normalizes registration data and returns a signed access token', async () => {
     const prisma = {
       user: {
+        count: vi.fn().mockResolvedValue(0),
         create: vi.fn().mockImplementation(({ data }) => ({
           id: 'user-1',
           email: data.email,

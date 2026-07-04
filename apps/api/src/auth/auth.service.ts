@@ -1,8 +1,9 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
 import { compare, hash } from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { isMultiUserRegistrationAllowed } from '../common/config';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
@@ -13,6 +14,13 @@ export class AuthService {
   constructor(private readonly prisma: PrismaService, private readonly jwt: JwtService) {}
 
   async register(dto: RegisterDto) {
+    if (!isMultiUserRegistrationAllowed()) {
+      const existingUserCount = await this.prisma.user.count();
+      if (existingUserCount > 0) {
+        throw new ForbiddenException('Registration is closed for this instance');
+      }
+    }
+
     try {
       const user = await this.prisma.user.create({
         data: {
