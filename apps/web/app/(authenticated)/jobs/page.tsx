@@ -19,6 +19,7 @@ export default function JobsPage() {
   const [roleTrackId, setRoleTrackId] = useState<CareerRoleTrackId>('big-tech-swe');
   const [deadline, setDeadline] = useState('');
   const [jdText, setJdText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | JobApplicationResponse['status']>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,6 +85,34 @@ export default function JobsPage() {
 
       {error && <ErrorBanner message={error} onRetry={load} />}
 
+      {jobs.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setStatusFilter('all')}
+            className={`rounded-full px-3 py-1 text-xs font-medium ${
+              statusFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+            }`}
+          >
+            All ({jobs.length})
+          </button>
+          {JOB_APPLICATION_STATUSES.map((status) => {
+            const count = jobs.filter((job) => job.status === status).length;
+            if (count === 0) return null;
+            return (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${
+                  statusFilter === status ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                }`}
+              >
+                {status} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {showForm && (
         <Card>
           <form onSubmit={createJob} className="space-y-4">
@@ -126,7 +155,9 @@ export default function JobsPage() {
         <EmptyState icon="JOB" title="No jobs yet" description="Add a target job to connect JD gaps, prep tasks, and reminders." />
       ) : (
         <div className="grid gap-3">
-          {jobs.map((job) => (
+          {jobs
+            .filter((job) => statusFilter === 'all' || job.status === statusFilter)
+            .map((job) => (
             <Card key={job.id} onClick={() => router.push(`/jobs/${job.id}`)}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -146,7 +177,6 @@ export default function JobsPage() {
           ))}
         </div>
       )}
-      <div className="hidden">{JOB_APPLICATION_STATUSES.join(',')}</div>
     </div>
   );
 }
