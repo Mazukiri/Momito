@@ -5,6 +5,42 @@
 
 ---
 
+## 2026-07-05 — MOM-046 (CLAUDE IMPLEMENTER mode)
+
+**Actor:** CLAUDE (implementer)
+**Task:** MOM-046 — Seed DSA ladder batch 2 (50 total), continuing from the "Bulk
+implementer pass" entry below.
+
+**Files changed:** `apps/api/prisma/seed.ts` (33 new DSA entries appended to the
+`questions` array; no reordering of existing entries).
+
+**What shipped:** 33 original DSA items covering the 8 `DSA_PATTERNS` values batch 1
+(MOM-045) hadn't reached — `cyclic_sort`, `tree_dfs`, `union_find`, `backtracking`,
+`greedy`, `prefix_sum`, `bit_manipulation`, `trie` — plus added depth to already-seeded
+patterns (`two_pointers`, `sliding_window`, `dynamic_programming`, `graph_traversal`,
+`heap_priority_queue`, `binary_search`, `monotonic_stack`). All 20 `DSA_PATTERNS` now have
+at least one seeded item. Same D-008 rule as MOM-045: `prompt`/`answer` are original
+approach notes (key insight + complexity), not restated problem text; `sourceUrl` links to
+the real LeetCode page.
+
+**Checks run:** `pnpm content:validate` (0 errors), `pnpm content:stats` (DSA count
+exactly 50, total 88 seed questions), `pnpm --filter @momito/api typecheck` (clean),
+`pnpm --filter @momito/api build` (clean), `pnpm --filter @momito/api test` (48/48 passed),
+manual `content:sample 3` read-through to confirm no entry reads like a restated problem.
+
+**Result:** DSA ladder now at 50/150 (Gate-3 target). Batch validated cleanly, so per the
+kill/defer rule ("defer batch 3 if batch 1/2 fails validation") batch 3 is not deferred.
+
+**Risks / follow-ups:**
+- `sourceUrl` slugs were chosen from well-known, long-stable LeetCode problems (not
+  verified via live network access in this sandbox) — worth a spot check against the live
+  site before this becomes user-facing in production.
+- Difficulty distribution after this batch: 23 easy / 49 medium / 16 hard (DSA-only was not
+  tracked separately by `content:stats`; consider adding a per-type difficulty breakdown if
+  the ladder needs tighter curve control later).
+
+---
+
 ## 2026-07-05 — Bulk implementer pass (CLAUDE, ~24 tasks across Tracks A-K)
 
 **Actor:** CLAUDE (implementer)
