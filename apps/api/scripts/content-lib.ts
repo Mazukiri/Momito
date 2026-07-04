@@ -9,12 +9,20 @@ export interface ContentIssue {
 // MOM-024 / D-008: crude heuristics for text that looks pasted from a third-party
 // problem statement rather than written for this app. Not a legal guarantee —
 // a human should still spot-check `content:sample` output before publishing.
+//
+// The risk D-008 actually guards against is copying an *external* source's text
+// (e.g. a LeetCode problem statement) — that only applies to items that link to
+// one via `sourceUrl`. Originally-authored content with no external source (CS
+// fundamentals, system design, behavioral) can legitimately be long-form without
+// being "copied" from anywhere, so the length check only fires when a sourceUrl
+// is present; the marker check (literal LeetCode formatting fingerprints) applies
+// everywhere since those specific tokens have no legitimate reason to appear.
 const COPIED_STATEMENT_MARKERS = ['Example 1:', 'Example 2:', 'Constraints:', 'Output:', 'Input:'];
 const SUSPICIOUS_LENGTH_THRESHOLD = 700;
 
-function looksCopied(text: string): boolean {
+function looksCopied(text: string, hasSourceUrl: boolean): boolean {
   const markerHits = COPIED_STATEMENT_MARKERS.filter((marker) => text.includes(marker)).length;
-  return markerHits >= 2 || text.length > SUSPICIOUS_LENGTH_THRESHOLD;
+  return markerHits >= 2 || (hasSourceUrl && text.length > SUSPICIOUS_LENGTH_THRESHOLD);
 }
 
 function hasUsableRubric(question: SeedQuestion): boolean {
@@ -55,7 +63,8 @@ export function validateContent(): ContentIssue[] {
       issues.push({ severity: 'warning', questionTitle: question.title, message: 'No role/area/pattern tags.' });
     }
 
-    if (looksCopied(question.prompt) || (question.answer && looksCopied(question.answer))) {
+    const hasSourceUrl = Boolean(question.sourceUrl);
+    if (looksCopied(question.prompt, hasSourceUrl) || (question.answer && looksCopied(question.answer, hasSourceUrl))) {
       issues.push({
         severity: 'error',
         questionTitle: question.title,
