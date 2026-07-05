@@ -5,6 +5,28 @@
 
 ---
 
+## 2026-07-05 — Dark mode pass, batch 3: missions detail, learning, calendar (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing the dark-mode remediation.
+
+**Pages fixed:** `missions/[id]/page.tsx` (all the repeated `border-zinc-200 p-3` cards,
+headings, form inputs via targeted replace-all across the 286-line file), `learning/page.tsx`
+(heading, Readwise connect/sync card, add-evidence form, evidence-ledger card titles),
+`calendar/page.tsx` (heading, range-tab bar, task-creation form, task cards, reminders
+card — the dismiss button itself was already fixed earlier this session, but the rest of
+the page had zero dark classes until now).
+
+**Verification:** `pnpm typecheck`/`lint`/`build`: green (32+ web routes). `pnpm test`:
+68/68 (no API changes — pure CSS-class additions).
+
+**Remaining:** `dashboard/page.tsx` (293 lines), `profile/page.tsx` (343 lines),
+`settings/page.tsx` (397 lines), `study-plan/page.tsx` (540 lines), `questions/new`,
+`questions/[id]/edit`, `practice/new/page.tsx`. These are the largest remaining files —
+continuing as budget allows.
+
+---
+
 ## 2026-07-05 — Dark mode pass, batch 2: jobs, career, missions (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

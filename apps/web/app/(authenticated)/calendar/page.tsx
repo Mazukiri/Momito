@@ -131,7 +131,7 @@ export default function CalendarPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-800">Calendar</h1>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Calendar</h1>
           <p className="mt-1 text-sm text-zinc-500">
             {missionId ? 'Scheduled work filtered to one mission.' : 'Scheduled prep work, reminders, and overdue career tasks.'}
           </p>
@@ -143,12 +143,12 @@ export default function CalendarPage() {
 
       {error && <ErrorBanner message={error} onRetry={load} />}
 
-      <div className="flex gap-1 rounded-lg bg-zinc-100 p-1">
+      <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
         {RANGES.map((item) => (
           <button
             key={item}
             onClick={() => setRange(item)}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium ${range === item ? 'bg-white text-zinc-800 shadow-sm' : 'text-zinc-500'}`}
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium ${range === item ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-900 dark:text-zinc-100' : 'text-zinc-500'}`}
           >
             {item}
           </button>
@@ -158,20 +158,20 @@ export default function CalendarPage() {
       {showForm && (
         <Card>
           <form onSubmit={createTask} className="grid gap-3 sm:grid-cols-2">
-            <input value={title} onChange={(event) => setTitle(event.target.value)} required placeholder="Task title" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm sm:col-span-2" />
-            <select value={type} onChange={(event) => setType(event.target.value as TaskType)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm">
+            <input value={title} onChange={(event) => setTitle(event.target.value)} required placeholder="Task title" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm sm:col-span-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+            <select value={type} onChange={(event) => setType(event.target.value as TaskType)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
               {TASK_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-            <select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm">
+            <select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
               {TASK_PRIORITIES.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-            <select value={roleTrackId} onChange={(event) => setRoleTrackId(event.target.value as CareerRoleTrackId)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm">
+            <select value={roleTrackId} onChange={(event) => setRoleTrackId(event.target.value as CareerRoleTrackId)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
               {Object.values(CAREER_ROLE_TRACKS).map((track) => <option key={track.id} value={track.id}>{track.label}</option>)}
             </select>
-            <select value={area} onChange={(event) => setArea(event.target.value as CareerRoleAreaId)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm">
+            <select value={area} onChange={(event) => setArea(event.target.value as CareerRoleAreaId)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
               {CAREER_ROLE_AREA_IDS.map((item) => <option key={item} value={item}>{item.replaceAll('_', ' ')}</option>)}
             </select>
-            <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
+            <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
             <button disabled={working || !title.trim()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Save</button>
           </form>
         </Card>
@@ -185,7 +185,7 @@ export default function CalendarPage() {
             <Card key={task.id}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h2 className="font-semibold text-zinc-800">{task.title}</h2>
+                  <h2 className="font-semibold text-zinc-800 dark:text-zinc-100">{task.title}</h2>
                   <p className="mt-1 text-sm text-zinc-500">{task.notes}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Badge label={task.status} />
@@ -195,7 +195,7 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => snooze(task.id)} disabled={working || task.status === 'done'} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 disabled:opacity-50">Snooze</button>
+                  <button onClick={() => snooze(task.id)} disabled={working || task.status === 'done'} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Snooze</button>
                   <button onClick={() => complete(task.id)} disabled={working || task.status === 'done'} className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">Done</button>
                 </div>
               </div>
@@ -207,14 +207,14 @@ export default function CalendarPage() {
         </div>
 
         <aside className="space-y-3">
-          <h2 className="font-semibold text-zinc-800">Reminders</h2>
+          <h2 className="font-semibold text-zinc-800 dark:text-zinc-100">Reminders</h2>
           {reminders.length === 0 ? (
             <Card><p className="text-sm text-zinc-500">No pending reminders.</p></Card>
           ) : reminders.map((reminder) => (
             <Card key={reminder.id}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-zinc-800">{reminder.title}</p>
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{reminder.title}</p>
                   <p className="mt-1 text-xs text-zinc-400">{new Date(reminder.dueAt).toLocaleString()}</p>
                 </div>
                 <button

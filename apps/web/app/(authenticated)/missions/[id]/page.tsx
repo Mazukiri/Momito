@@ -115,7 +115,7 @@ export default function MissionDetailPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button onClick={() => router.push('/missions')} className="text-sm font-medium text-indigo-600">Back to missions</button>
         <div className="flex flex-wrap gap-2">
-          <button onClick={runDiagnose} disabled={working} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50">Diagnose</button>
+          <button onClick={runDiagnose} disabled={working} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Diagnose</button>
           <button onClick={generatePlan} disabled={working} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Generate weekly plan</button>
         </div>
       </div>
@@ -127,7 +127,7 @@ export default function MissionDetailPage() {
           <Card>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-zinc-800">{mission.name}</h1>
+                <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{mission.name}</h1>
                 <p className="mt-2 text-sm text-zinc-500">{mission.summary || mission.roleTrack.description}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Badge label={mission.stage} />
@@ -143,11 +143,11 @@ export default function MissionDetailPage() {
               ) : null}
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-zinc-200 p-3">
+              <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Diagnosis</p>
                 <p className="mt-2 text-sm text-zinc-600">{mission.diagnosisSummary || 'Run diagnosis to translate this target into competency gaps.'}</p>
               </div>
-              <div className="rounded-lg border border-zinc-200 p-3">
+              <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Success Definition</p>
                 <p className="mt-2 text-sm text-zinc-600">{mission.successDefinition || 'No explicit success definition yet.'}</p>
               </div>
@@ -156,15 +156,15 @@ export default function MissionDetailPage() {
 
           <Card>
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-zinc-800">Competency State</h2>
+              <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">Competency State</h2>
               <span className="text-sm text-zinc-500">{mission.competencyStates.length} tracked items</span>
             </div>
             <div className="space-y-3">
               {mission.competencyStates.map((item) => (
-                <div key={item.id} className="rounded-lg border border-zinc-200 p-3">
+                <div key={item.id} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="text-sm font-medium text-zinc-800">{item.title}</p>
+                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{item.title}</p>
                       <p className="mt-1 text-xs text-zinc-500">{item.description}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -173,7 +173,7 @@ export default function MissionDetailPage() {
                       <Badge label={`${item.evidenceCount} evidence`} />
                     </div>
                   </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-200">
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                     <div className={`h-full rounded-full ${item.status === 'ready' ? 'bg-green-500' : item.status === 'building' ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.min(100, Math.round((item.currentLevel / Math.max(item.targetLevel, 1)) * 100))}%` }} />
                   </div>
                   {item.rationale && <p className="mt-2 text-xs text-zinc-500">{item.rationale}</p>}
@@ -184,7 +184,7 @@ export default function MissionDetailPage() {
 
           <Card>
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-zinc-800">Weekly Plan</h2>
+              <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">Weekly Plan</h2>
               {recentPlan ? (
                 <button onClick={() => reviewPlan(recentPlan.id)} disabled={working} className="text-sm font-medium text-indigo-600 disabled:opacity-50">
                   Review latest plan
@@ -195,14 +195,14 @@ export default function MissionDetailPage() {
               <p className="text-sm text-zinc-500">No active plan yet. Run diagnosis and generate a weekly plan.</p>
             ) : (
               <div className="space-y-3">
-                <div className="rounded-lg border border-zinc-200 p-3">
-                  <p className="text-sm font-medium text-zinc-800">{activePlan.focusSummary || 'This week focus'}</p>
+                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{activePlan.focusSummary || 'This week focus'}</p>
                   <p className="mt-1 text-xs text-zinc-500">{activePlan.weekStart} to {activePlan.weekEnd}</p>
                 </div>
                 {activePlan.items.map((item) => (
-                  <div key={item.id} className="rounded-lg border border-zinc-200 p-3">
+                  <div key={item.id} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-medium text-zinc-800">{item.title}</p>
+                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{item.title}</p>
                       <div className="flex gap-2">
                         <Badge label={item.type} />
                         <Badge label={item.status} />
@@ -223,14 +223,14 @@ export default function MissionDetailPage() {
 
         <aside className="space-y-6">
           <Card>
-            <h2 className="mb-3 text-lg font-semibold text-zinc-800">Today</h2>
+            <h2 className="mb-3 text-lg font-semibold text-zinc-800 dark:text-zinc-100">Today</h2>
             {!today.dueTasks.length ? (
               <p className="text-sm text-zinc-500">No due mission tasks today.</p>
             ) : (
               <div className="space-y-2">
                 {today.dueTasks.map((task) => (
                   <button key={task.id} onClick={() => router.push('/calendar')} className="block w-full rounded-lg border border-zinc-200 p-3 text-left hover:border-zinc-300">
-                    <p className="text-sm font-medium text-zinc-800">{task.title}</p>
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{task.title}</p>
                     <p className="mt-1 text-xs text-zinc-500">{task.dueDate ? new Date(task.dueDate).toLocaleString() : task.plannedFor ? new Date(task.plannedFor).toLocaleString() : 'Unscheduled'}</p>
                   </button>
                 ))}
@@ -244,14 +244,14 @@ export default function MissionDetailPage() {
           </Card>
 
           <Card>
-            <h2 className="mb-3 text-lg font-semibold text-zinc-800">Recent Evidence</h2>
+            <h2 className="mb-3 text-lg font-semibold text-zinc-800 dark:text-zinc-100">Recent Evidence</h2>
             {!today.recentEvidence.length ? (
               <p className="text-sm text-zinc-500">No mission evidence yet.</p>
             ) : (
               <div className="space-y-3">
                 {today.recentEvidence.map((item) => (
-                  <div key={item.id} className="rounded-lg border border-zinc-200 p-3">
-                    <p className="text-sm font-medium text-zinc-800">{item.title}</p>
+                  <div key={item.id} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{item.title}</p>
                     <p className="mt-1 text-xs text-zinc-500">{item.type} • {new Date(item.occurredAt).toLocaleString()}</p>
                   </div>
                 ))}
@@ -260,19 +260,19 @@ export default function MissionDetailPage() {
           </Card>
 
           <Card>
-            <h2 className="mb-3 text-lg font-semibold text-zinc-800">Check-in</h2>
+            <h2 className="mb-3 text-lg font-semibold text-zinc-800 dark:text-zinc-100">Check-in</h2>
             <form onSubmit={createCheckIn} className="space-y-3">
-              <textarea value={checkIn} onChange={(event) => setCheckIn(event.target.value)} rows={3} required placeholder="What changed this week?" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
-              <textarea value={wins} onChange={(event) => setWins(event.target.value)} rows={2} placeholder="Wins" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
-              <textarea value={blockers} onChange={(event) => setBlockers(event.target.value)} rows={2} placeholder="Blockers" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
-              <textarea value={adjustments} onChange={(event) => setAdjustments(event.target.value)} rows={2} placeholder="Adjustments" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
+              <textarea value={checkIn} onChange={(event) => setCheckIn(event.target.value)} rows={3} required placeholder="What changed this week?" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <textarea value={wins} onChange={(event) => setWins(event.target.value)} rows={2} placeholder="Wins" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <textarea value={blockers} onChange={(event) => setBlockers(event.target.value)} rows={2} placeholder="Blockers" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <textarea value={adjustments} onChange={(event) => setAdjustments(event.target.value)} rows={2} placeholder="Adjustments" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
               <button disabled={working || !checkIn.trim()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Save check-in</button>
             </form>
             {mission.recentCheckIns.length > 0 && (
               <div className="mt-4 space-y-3 border-t border-zinc-100 pt-4">
                 {mission.recentCheckIns.map((item: MissionCheckInResponse) => (
-                  <div key={item.id} className="rounded-lg border border-zinc-200 p-3">
-                    <p className="text-sm font-medium text-zinc-800">{item.summary}</p>
+                  <div key={item.id} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{item.summary}</p>
                     <p className="mt-1 text-xs text-zinc-500">{new Date(item.checkInAt).toLocaleString()}</p>
                   </div>
                 ))}
