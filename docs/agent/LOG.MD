@@ -1,5 +1,36 @@
 # LOG
 
+## 2026-07-05 - MOM-048 final DSA seed item (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Task:** MOM-048 - DSA ladder batch 3.
+
+**Current behavior before change:** The seed corpus had 149 DSA questions, one short of the 150-question Track G target.
+
+**Files changed:**
+- `apps/api/prisma/seed-data.ts`
+- `docs/agent/LOCKS.MD`
+- `docs/agent/LOG.MD`
+
+**Changes:**
+- Added one original, link-only DSA seed item for `Course Schedule IV`.
+- Kept the change limited to static seed content and agent coordination docs.
+- No schema, migrations, runtime code, or seeding logic changed.
+
+**Verification:**
+- `pnpm content:validate` - passed (0 errors, 0 warnings)
+- `pnpm content:stats` - passed (383 total questions, 150 DSA)
+- `pnpm --filter @momito/api build` - passed
+- `pnpm --filter @momito/api test` - passed (68 tests)
+
+**Risks / follow-ups:**
+- No live `pnpm db:seed` run was performed; this was verified through content tooling, build, and tests.
+- `AGENTS.MD` remains dirty from an earlier instruction/documentation change and was not touched by this task.
+
+**Suggested commit message:** `data(api): add final DSA seed item`
+
+---
+
 ## 2026-07-05 - MOM-044 idempotent seed upsert utilities (CLAUDE)
 
 **Actor:** CLAUDE (implementer)
