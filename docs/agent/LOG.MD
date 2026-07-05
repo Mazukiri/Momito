@@ -5,6 +5,52 @@
 
 ---
 
+## 2026-07-05 — MOM-031: hook answer submission into FSRS scheduling (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing straight from MOM-027/029 now that they're unblocked. This is the
+step that actually makes the review loop *real* — until now, `ReviewState` rows only got
+created via the standalone `/reviews` endpoint; nothing in the normal practice-session
+flow touched them.
+
+**Changes:**
+- `apps/api/src/sessions/sessions.service.ts` — injected `ReviewsService`; `answer()` now
+  calls `this.reviews.record(userId, 'question', dto.questionId, dto.selfRating)` right
+  after creating the `AnswerAttempt`, but only when `dto.selfRating` is defined (it's
+  optional on `CreateAnswerDto` — no rating means FSRS has no grade to schedule from).
+  Wrapped in try/catch with `Logger.warn` on failure, matching the existing project
+  principle (seen in the AI-feature docs) that a secondary feature's failure must never
+  break the primary action — here, answer submission always succeeds even if scheduling
+  doesn't.
+- `apps/api/src/sessions/sessions.module.ts` — imports `ReviewsModule`.
+- `apps/api/src/reviews/reviews.module.ts` — now `exports: [ReviewsService]` so other
+  modules can inject it.
+- `apps/api/test/sessions.service.spec.ts` — updated all 8 existing `new SessionsService(...)`
+  call sites for the new second constructor argument, plus 3 new tests: fires
+  `reviews.record` with a selfRating, doesn't fire without one, and the attempt is still
+  returned even if `reviews.record` rejects.
+
+**Verification:**
+- `pnpm test`: 64/64 (was 61). `pnpm typecheck`/`build`/lint: all green.
+- **Live round trip**: started the dev server again (hit and resolved a second
+  Windows-specific `EADDRINUSE` — a prior server instance had survived an earlier
+  `taskkill` on a different PID than the one actually bound to port 3001; found the real
+  PID via `netstat` and killed that one instead), logged in as the demo user, created a
+  real practice session via `POST /sessions`, submitted a real answer with
+  `selfRating: 4` via `POST /sessions/:id/answer`, and confirmed directly in Postgres that
+  a `ReviewState` row now exists for that user/question with FSRS-scheduled values
+  (`stability: 2.3065`, `state: 1` Learning, `reps: 1`, due ~10 minutes out for a
+  first-time Good-grade review). Cleaned up all test data (session, answer, review state)
+  afterward.
+
+**Docs updated:** `BACKLOG.MD` (MOM-031 → done, MOM-032 → ready).
+
+**Next:** MOM-032 (Today API surfacing due reviews) is now the natural next step —
+`GET /reviews/due` already exists; the work left is merging it into `/today`'s existing
+recommendations+reminders feed.
+
+---
+
 ## 2026-07-05 — MOM-027/029: ReviewState migration + Reviews module, human-approved (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

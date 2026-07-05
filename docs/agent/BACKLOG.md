@@ -273,13 +273,19 @@ Global verification / forbidden-file defaults:
   (`createInitialReviewState`, `scheduleNextReview`, `selfRatingToGrade`) operating on
   plain `ReviewCardState` objects shaped like ADR-0002's planned `ReviewState` columns.
   Now wired to real persistence by MOM-029.
-- **MOM-031** Hook answer submission into scheduling — now **READY** (MOM-029/030 done).
-  Next natural step: call `ReviewsService.record()` from `sessions.service.ts`'s answer
-  submission path so every practice attempt on a `dsa`/question-type object updates its
-  review schedule automatically, not just via the standalone `/reviews` endpoint.
-- **MOM-032** Today dashboard API (queue priority §6.1) — now **READY** (MOM-031 pending,
-  but `GET /reviews/due` already exists and could be merged into `/today` once MOM-031
-  auto-populates review state from practice sessions).
+- **MOM-031** Hook answer submission into scheduling — **DONE** 2026-07-05.
+  `sessions.service.ts`'s `answer()` now calls `ReviewsService.record()` whenever the
+  submitted `CreateAnswerDto` includes a `selfRating` (optional field — no rating means no
+  FSRS grade to schedule from). Wrapped in try/catch with a `Logger.warn` on failure so a
+  scheduling error can never break answer submission itself. `SessionsModule` now imports
+  `ReviewsModule` (which exports `ReviewsService`). Verified via unit tests (3 new cases:
+  fires with a rating, doesn't fire without one, attempt still returns on scheduling
+  failure) and a live round trip: registered/logged in, created a real session, submitted
+  a real answer with `selfRating: 4` through the actual HTTP endpoint, and confirmed a
+  `ReviewState` row was created in Postgres with the correct FSRS-scheduled values.
+- **MOM-032** Today dashboard API (queue priority §6.1) — now **READY** (MOM-031 done;
+  `GET /reviews/due` already exists and can be merged into `/today`'s data alongside the
+  existing recommendations/reminders feeds).
 - **MOM-033** Recommendation reason standardization — **DONE** 2026-07-05. The reason
   taxonomy half was already implemented in an earlier session (`RECOMMENDATION_REASONS`
   in `recommendations.service.ts`). This pass did the remaining "Today integration" half:

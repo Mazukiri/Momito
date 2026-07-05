@@ -22,7 +22,7 @@ describe('SessionsService', () => {
       question: { findMany: vi.fn().mockResolvedValue([{ id: 'q-1' }, { id: 'q-2' }]) },
       interviewSession: { create },
     };
-    const service = new SessionsService(prisma as never);
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
 
     const result = await service.create(
       { sessionType: 'mixed_mock', difficulty: 'hard', questionCount: 5 },
@@ -35,7 +35,7 @@ describe('SessionsService', () => {
   });
 
   it('rejects session creation when no question matches', async () => {
-    const service = new SessionsService({ question: { findMany: vi.fn().mockResolvedValue([]) } } as never);
+    const service = new SessionsService({ question: { findMany: vi.fn().mockResolvedValue([]) } } as never, { record: vi.fn() } as never);
     await expect(service.create({ sessionType: 'quick_practice', questionCount: 1 }, 'user-1'))
       .rejects.toEqual(new BadRequestException('No questions match the selected filters'));
   });
@@ -53,7 +53,7 @@ describe('SessionsService', () => {
       })),
     }));
     const findMany = vi.fn().mockResolvedValue([{ id: 'q-2' }, { id: 'q-1' }]);
-    const service = new SessionsService({ question: { findMany }, interviewSession: { create } } as never);
+    const service = new SessionsService({ question: { findMany }, interviewSession: { create } } as never, { record: vi.fn() } as never);
 
     await service.create(
       { sessionType: 'quick_practice', questionCount: 99, questionIds: ['q-1', 'q-2'] },
@@ -73,7 +73,7 @@ describe('SessionsService', () => {
   it('deduplicates exact question IDs while preserving first-seen order', async () => {
     const create = vi.fn().mockResolvedValue({ id: 'session-1', status: 'active', sessionQuestions: [] });
     const findMany = vi.fn().mockResolvedValue([{ id: 'q-2' }, { id: 'q-1' }]);
-    const service = new SessionsService({ question: { findMany }, interviewSession: { create } } as never);
+    const service = new SessionsService({ question: { findMany }, interviewSession: { create } } as never, { record: vi.fn() } as never);
 
     await service.create(
       { sessionType: 'quick_practice', questionCount: 3, questionIds: ['q-1', 'q-2', 'q-1'] },
@@ -103,7 +103,7 @@ describe('SessionsService', () => {
     const service = new SessionsService({
       question: { findMany: vi.fn().mockResolvedValue([{ id: 'q-1' }]) },
       interviewSession: { create },
-    } as never);
+    } as never, { record: vi.fn() } as never);
 
     await expect(service.create(
       { sessionType: 'quick_practice', questionCount: 2, questionIds: ['q-1', 'missing'] },
@@ -117,15 +117,66 @@ describe('SessionsService', () => {
       interviewSession: { findFirst: vi.fn().mockResolvedValue({ status: 'active', sessionQuestions: [] }) },
       answerAttempt: { create: vi.fn() },
     };
-    const service = new SessionsService(prisma as never);
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
 
     await expect(service.answer('session-1', { questionId: 'q-1', answerText: 'answer' }, 'user-1'))
       .rejects.toEqual(new BadRequestException('Question is not part of this session'));
     expect(prisma.answerAttempt.create).not.toHaveBeenCalled();
   });
 
+  it('updates the review schedule when an answer includes a selfRating', async () => {
+    const prisma = {
+      interviewSession: {
+        findFirst: vi.fn().mockResolvedValue({ status: 'active', sessionQuestions: [{ id: 'sq-1' }] }),
+      },
+      answerAttempt: {
+        create: vi.fn().mockResolvedValue({ id: 'attempt-1' }),
+      },
+    };
+    const record = vi.fn().mockResolvedValue({});
+    const service = new SessionsService(prisma as never, { record } as never);
+
+    await service.answer('session-1', { questionId: 'q-1', answerText: 'answer', selfRating: 4 }, 'user-1');
+
+    expect(record).toHaveBeenCalledWith('user-1', 'question', 'q-1', 4);
+  });
+
+  it('does not touch the review schedule when selfRating is omitted', async () => {
+    const prisma = {
+      interviewSession: {
+        findFirst: vi.fn().mockResolvedValue({ status: 'active', sessionQuestions: [{ id: 'sq-1' }] }),
+      },
+      answerAttempt: {
+        create: vi.fn().mockResolvedValue({ id: 'attempt-1' }),
+      },
+    };
+    const record = vi.fn();
+    const service = new SessionsService(prisma as never, { record } as never);
+
+    await service.answer('session-1', { questionId: 'q-1', answerText: 'answer' }, 'user-1');
+
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('still returns the created attempt even if updating the review schedule fails', async () => {
+    const prisma = {
+      interviewSession: {
+        findFirst: vi.fn().mockResolvedValue({ status: 'active', sessionQuestions: [{ id: 'sq-1' }] }),
+      },
+      answerAttempt: {
+        create: vi.fn().mockResolvedValue({ id: 'attempt-1' }),
+      },
+    };
+    const record = vi.fn().mockRejectedValue(new Error('scheduling exploded'));
+    const service = new SessionsService(prisma as never, { record } as never);
+
+    const result = await service.answer('session-1', { questionId: 'q-1', answerText: 'answer', selfRating: 2 }, 'user-1');
+
+    expect(result).toEqual({ id: 'attempt-1' });
+  });
+
   it('does not expose another users session', async () => {
-    const service = new SessionsService({ interviewSession: { findFirst: vi.fn().mockResolvedValue(null) } } as never);
+    const service = new SessionsService({ interviewSession: { findFirst: vi.fn().mockResolvedValue(null) } } as never, { record: vi.fn() } as never);
     await expect(service.get('session-1', 'user-2')).rejects.toEqual(new NotFoundException('Session not found'));
   });
 
@@ -136,7 +187,7 @@ describe('SessionsService', () => {
         findFirst: vi.fn().mockResolvedValue({ status: 'completed' }),
       },
     };
-    const service = new SessionsService(prisma as never);
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
     await expect(service.abandon('session-1', 'user-1'))
       .rejects.toEqual(new ConflictException('Session is already completed'));
   });

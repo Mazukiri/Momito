@@ -1,6 +1,7 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ReviewsService } from '../reviews/reviews.service';
 import { CreateAnswerDto } from './dto/create-answer.dto';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { ListSessionsDto } from './dto/list-sessions.dto';
@@ -18,7 +19,12 @@ type SessionQuestionWithQuestion = Prisma.SessionQuestionGetPayload<{ include: t
 
 @Injectable()
 export class SessionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger('SessionsService');
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reviews: ReviewsService,
+  ) {}
 
   async create(dto: CreateSessionDto, userId: string) {
     const { topicId, companyId, difficulty, questionCount, questionIds, roleTrackId, area, pattern, jobApplicationId, missionId, ...sessionData } = dto;
@@ -133,10 +139,25 @@ export class SessionsService {
     if (session.sessionQuestions.length === 0) {
       throw new BadRequestException('Question is not part of this session');
     }
-    return this.prisma.answerAttempt.create({
+    const attempt = await this.prisma.answerAttempt.create({
       data: { ...dto, sessionId: id, userId },
       include: { question: { select: { id: true, title: true } } },
     });
+
+    // MOM-031: every self-rated answer updates its FSRS review schedule so the
+    // Today queue (MOM-032) can eventually surface it when it comes due. Only
+    // fires when selfRating is present (it's optional on CreateAnswerDto) since
+    // FSRS needs a grade to schedule from. A scheduling failure must never
+    // break answer submission — the attempt itself already succeeded.
+    if (dto.selfRating !== undefined) {
+      try {
+        await this.reviews.record(userId, 'question', dto.questionId, dto.selfRating);
+      } catch (error) {
+        this.logger.warn(`Failed to update review schedule for question ${dto.questionId}: ${error}`);
+      }
+    }
+
+    return attempt;
   }
 
   complete(id: string, userId: string) {
