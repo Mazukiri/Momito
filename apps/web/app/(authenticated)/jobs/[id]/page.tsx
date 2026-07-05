@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { JOB_APPLICATION_STATUSES, type JobApplicationStatus } from '@momito/shared';
-import { jobsApi, missionsApi } from '../../../lib/api-client';
+import { jobsApi, missionsApi, remindersApi } from '../../../lib/api-client';
 import { Badge, Card, ErrorBanner, Spinner } from '../../../components/ui';
 
 type JobDetail = Awaited<ReturnType<typeof jobsApi.get>>;
@@ -84,6 +84,18 @@ export default function JobDetailPage() {
       router.push(`/missions/${mission.id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to open mission');
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function dismissReminder(id: string) {
+    setWorking(true);
+    try {
+      await remindersApi.dismiss(id);
+      await load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to dismiss reminder');
     } finally {
       setWorking(false);
     }
@@ -181,7 +193,16 @@ export default function JobDetailPage() {
             <h2 className="mb-3 font-semibold text-zinc-800">Reminders</h2>
             <div className="space-y-2">
               {job.reminders.length === 0 ? <p className="text-sm text-zinc-500">No reminders.</p> : job.reminders.map((item) => (
-                <div key={item.id} className="text-sm text-zinc-600">{item.title} - {new Date(item.dueAt).toLocaleDateString()}</div>
+                <div key={item.id} className="flex items-center justify-between gap-2 text-sm text-zinc-600">
+                  <span>{item.title} - {new Date(item.dueAt).toLocaleDateString()}</span>
+                  <button
+                    onClick={() => dismissReminder(item.id)}
+                    disabled={working}
+                    className="shrink-0 rounded-lg border border-zinc-300 px-2 py-0.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+                  >
+                    Dismiss
+                  </button>
+                </div>
               ))}
             </div>
           </Card>

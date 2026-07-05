@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-07-05 — Make job-detail reminders dismissible too (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** The earlier reminder-system investigation (this session, MOM-079/080) flagged
+two read-only reminder displays: the calendar page (fixed already) and the job detail
+page (`apps/web/app/(authenticated)/jobs/[id]/page.tsx`, via `job.reminders` from the job
+detail payload directly, not `remindersApi`) — not fixed at the time since the calendar
+fix was the higher-priority one. Closing the remaining gap now.
+
+**Change:** Added a `dismissReminder` handler (same pattern as calendar/today) and a
+Dismiss button next to each reminder in the job detail page's Reminders card.
+
+**Verification:** `pnpm typecheck`/`lint`/`build`: green (32+ web routes). `pnpm test`:
+68/68 (no API changes — reused the existing `remindersApi.dismiss()`).
+
+**This closes the last known read-only-reminder gap** — reminders are now dismissible
+everywhere they're shown (calendar, Today, job detail).
+
+---
+
 ## 2026-07-05 — Show reflection fields back to the user (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)
