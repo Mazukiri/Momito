@@ -330,7 +330,19 @@ Global verification / forbidden-file defaults:
 - **MOM-041** Practice hub — **DONE** (verified 2026-07-05, was already shipped in an
   earlier session; `apps/web/app/(authenticated)/practice/page.tsx` exists — stale
   BLOCKED status, not actually blocked).
-- **MOM-042** Today learning cards — BLOCKED on MOM-032, MOM-012.
+- **MOM-042** Today learning cards — **DONE** (both blockers resolved: MOM-012 done long
+  ago, MOM-032 done 2026-07-05 — `/today`'s "Due for Review" section with inline
+  "Review now" rating *is* the Today learning card implementation; stale BLOCKED status).
+- **Spaced Review session type wired up** (no MOM number — discovered 2026-07-05 while
+  reviewing `/practice/new`: the `spaced_review` session-type label/description existed
+  with zero backend logic behind it since an early session). Now pulls the exact set of
+  currently-due FSRS reviews (`reviewsApi.due()`) into a session via the existing
+  `questionIds` exact-selection path in `sessions.service.ts` — no backend change needed,
+  since `CreateSessionDto.questionIds` already supported an arbitrary question list.
+  `/practice/new` hides the filter fields for this type (the set is fixed, not filtered)
+  and previews the due titles/count before starting. Verified live: seeded two due
+  reviews, created a real `spaced_review` session via the exact API call the new UI
+  makes, confirmed both questions were included in order.
 
 ### Track G — Content Factory · Gate 3
 - **MOM-043** Seed-data structure — READY (`prisma/seed.ts` exists; restructure).

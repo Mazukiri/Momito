@@ -5,6 +5,40 @@
 
 ---
 
+## 2026-07-05 — Wire up the dormant `spaced_review` session type (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing autonomously per user instruction (no further check-ins). While
+scanning `/practice/new` for other stale/incomplete pieces, found `spaced_review` had a
+session-type label and description in the UI since an early session, but **zero backend
+logic** — selecting it just fell through to the generic random-filtered draw, mislabeled.
+
+**Fix:** No backend change needed — `sessions.service.ts`'s `create()` already supports
+an exact `questionIds` list (`selectExactQuestions`), unused for this purpose until now.
+- `apps/web/app/(authenticated)/practice/new/page.tsx` — when `sessionType ===
+  'spaced_review'` is selected, fetches `reviewsApi.due()`, hides the topic/company/
+  difficulty/questionCount/role-filter fields (the set is fixed to what's due, not
+  filtered), shows a preview (count + first 5 titles), and submits
+  `sessionsApi.create({ sessionType, questionIds: <due question ids>, questionCount:
+  <due count> })` instead of the filtered-draw path. Submit is disabled while fetching or
+  when nothing is due. Description text updated to reflect real behavior.
+
+**Verification:**
+- `pnpm lint`/`typecheck`/`build`: green (hit and fixed one `react-hooks/set-state-in-
+  effect` lint error, same pattern as elsewhere in this codebase — added the matching
+  eslint-disable comment).
+- **Live round trip**: seeded two `selfRating: 1` reviews (Again grade → due almost
+  immediately), polled until both appeared in `GET /reviews/due`, then created a real
+  session via the exact `POST /sessions` call the new UI makes
+  (`sessionType: 'spaced_review', questionIds: [...]`), confirmed both questions were
+  included in the session in order. Cleaned up all test data afterward.
+
+**Docs updated:** `BACKLOG.MD` — this had no MOM number (discovered gap, not a
+pre-catalogued task), documented inline; also fixed MOM-042 (Today learning cards),
+another stale BLOCKED entry whose blockers (MOM-012, MOM-032) were both already done.
+
+---
+
 ## 2026-07-05 — MOM-039: reflection panel UI (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sessionsApi, topicsApi, companiesApi } from '../../../lib/api-client';
-import { CAREER_ROLE_AREA_IDS, CAREER_ROLE_TRACKS, type TopicSummary, type CompanySummary } from '@momito/shared';
+import { sessionsApi, topicsApi, companiesApi, reviewsApi } from '../../../lib/api-client';
+import { CAREER_ROLE_AREA_IDS, CAREER_ROLE_TRACKS, type TopicSummary, type CompanySummary, type ReviewStateResponse } from '@momito/shared';
 import { Spinner } from '../../../components/ui';
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
@@ -27,7 +27,7 @@ const SESSION_TYPE_DESCRIPTIONS: Record<string, string> = {
   weak_area_review: 'Revisit low-confidence areas',
   daily_mixed_set: 'Small balanced set for today',
   job_prep: 'Practice against a target job',
-  spaced_review: 'Review items marked for revisit',
+  spaced_review: 'Practice everything currently due for spaced-repetition review',
 };
 
 export default function NewPracticePage() {
@@ -51,6 +51,13 @@ export default function NewPracticePage() {
   const [fetchingOptions, setFetchingOptions] = useState(true);
   const [error, setError] = useState('');
 
+  // MOM-032 follow-up: "Spaced Review" pulls the exact set of currently-due
+  // FSRS reviews (MOM-027/029/030/031) instead of a filtered random draw —
+  // this is the session-flow half of wiring up a session-type label that,
+  // until now, had no backend behavior behind it at all.
+  const [dueReviews, setDueReviews] = useState<ReviewStateResponse[] | null>(null);
+  const [fetchingDue, setFetchingDue] = useState(false);
+
   const fetchOptions = useCallback(async () => {
     try {
       const [t, c] = await Promise.all([topicsApi.list(), companiesApi.list()]);
@@ -68,23 +75,44 @@ export default function NewPracticePage() {
     fetchOptions();
   }, [fetchOptions]);
 
+  useEffect(() => {
+    if (sessionType !== 'spaced_review') return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard data-fetching on session-type change
+    setFetchingDue(true);
+    reviewsApi.due()
+      .then((due) => { if (!cancelled) setDueReviews(due); })
+      .catch(() => { if (!cancelled) setDueReviews([]); })
+      .finally(() => { if (!cancelled) setFetchingDue(false); });
+    return () => { cancelled = true; };
+  }, [sessionType]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const res = await sessionsApi.create({
-        title: title || undefined,
-        sessionType,
-        topicId: topicId || undefined,
-        companyId: companyId || undefined,
-        difficulty: difficulty || undefined,
-        roleTrackId: roleTrackId || undefined,
-        area: area || undefined,
-        pattern: pattern || undefined,
-        missionId,
-        questionCount,
-      });
+      const dueQuestionIds = (dueReviews ?? []).filter((r) => r.objectType === 'question').map((r) => r.objectId);
+      const res = sessionType === 'spaced_review'
+        ? await sessionsApi.create({
+            title: title || undefined,
+            sessionType,
+            missionId,
+            questionCount: dueQuestionIds.length,
+            questionIds: dueQuestionIds,
+          })
+        : await sessionsApi.create({
+            title: title || undefined,
+            sessionType,
+            topicId: topicId || undefined,
+            companyId: companyId || undefined,
+            difficulty: difficulty || undefined,
+            roleTrackId: roleTrackId || undefined,
+            area: area || undefined,
+            pattern: pattern || undefined,
+            missionId,
+            questionCount,
+          });
       router.push(`/practice/session/${res.session.id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to create session';
@@ -140,8 +168,31 @@ export default function NewPracticePage() {
           </p>
         </div>
 
+        {/* Spaced Review: a fixed set (currently-due FSRS reviews), no filters apply */}
+        {sessionType === 'spaced_review' && (
+          <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+            {fetchingDue ? (
+              <div className="flex justify-center py-4"><Spinner className="h-5 w-5" /></div>
+            ) : dueReviews && dueReviews.length > 0 ? (
+              <>
+                <p className="text-sm font-medium text-zinc-700">
+                  {dueReviews.length} item{dueReviews.length === 1 ? '' : 's'} due for review
+                </p>
+                <ul className="mt-2 space-y-1 text-xs text-zinc-500">
+                  {dueReviews.slice(0, 5).map((r) => (
+                    <li key={r.id} className="truncate">{r.title ?? 'Untitled review item'}</li>
+                  ))}
+                  {dueReviews.length > 5 && <li>+ {dueReviews.length - 5} more</li>}
+                </ul>
+              </>
+            ) : (
+              <p className="text-sm text-zinc-500">Nothing due for review right now.</p>
+            )}
+          </div>
+        )}
+
         {/* Role filters */}
-        {['role_drill', 'weak_area_review', 'daily_mixed_set', 'job_prep', 'spaced_review'].includes(sessionType) && (
+        {['role_drill', 'weak_area_review', 'daily_mixed_set', 'job_prep'].includes(sessionType) && (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor="roleTrackId" className="block text-sm font-medium text-zinc-700">
@@ -248,44 +299,48 @@ export default function NewPracticePage() {
           </div>
         )}
 
-        {/* Difficulty (optional for all types) */}
-        <div>
-          <label htmlFor="difficulty" className="block text-sm font-medium text-zinc-700">
-            Difficulty <span className="text-zinc-400">(optional)</span>
-          </label>
-          <select
-            id="difficulty"
-            value={difficulty}
-            onChange={(e) => setDifficulty(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          >
-            <option value="">Any difficulty</option>
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
-          </select>
-        </div>
+        {/* Difficulty (optional for all types except Spaced Review, whose set is fixed) */}
+        {sessionType !== 'spaced_review' && (
+          <div>
+            <label htmlFor="difficulty" className="block text-sm font-medium text-zinc-700">
+              Difficulty <span className="text-zinc-400">(optional)</span>
+            </label>
+            <select
+              id="difficulty"
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="">Any difficulty</option>
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+        )}
 
         {/* Question Count */}
-        <div>
-          <label htmlFor="questionCount" className="block text-sm font-medium text-zinc-700">
-            Number of Questions
-          </label>
-          <input
-            id="questionCount"
-            type="number"
-            min={1}
-            max={100}
-            value={questionCount}
-            onChange={(e) => setQuestionCount(Math.max(1, Math.min(100, Number(e.target.value))))}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
-          <p className="mt-1 text-xs text-zinc-400">Choose between 1 and 100 questions</p>
-        </div>
+        {sessionType !== 'spaced_review' && (
+          <div>
+            <label htmlFor="questionCount" className="block text-sm font-medium text-zinc-700">
+              Number of Questions
+            </label>
+            <input
+              id="questionCount"
+              type="number"
+              min={1}
+              max={100}
+              value={questionCount}
+              onChange={(e) => setQuestionCount(Math.max(1, Math.min(100, Number(e.target.value))))}
+              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            <p className="mt-1 text-xs text-zinc-400">Choose between 1 and 100 questions</p>
+          </div>
+        )}
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || fetchingDue || (sessionType === 'spaced_review' && (dueReviews?.length ?? 0) === 0)}
           className="flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
         >
           {loading && <Spinner className="mr-2 h-4 w-4" />}
