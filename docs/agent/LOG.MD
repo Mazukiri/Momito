@@ -1,5 +1,36 @@
 # LOG
 
+## 2026-07-05 - MOM-083 job prep linkage regression coverage (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Task:** MOM-083 - Link jobs to prep objects.
+
+**Current behavior before change:** Job prep generation already created `Task` rows with `jobApplicationId`, and job detail already loaded linked tasks/reminders, but there was no focused service test guarding that job-to-prep linkage.
+
+**Files changed:**
+- `apps/api/test/jobs.service.spec.ts` (new)
+- `docs/agent/LOCKS.MD`
+- `docs/agent/LOG.MD`
+
+**Changes:**
+- Added a `JobsService.generatePrep` regression test proving generated prep tasks include the target `jobApplicationId`, user, role track, deadline-relative due dates, and job deadline reminder linkage.
+- No production behavior, schema, migrations, or API contracts changed.
+- During inspection, MOM-050/MOM-051/MOM-057/MOM-060/MOM-062/MOM-085/MOM-086 were found already implemented in the current repo state.
+
+**Verification:**
+- `pnpm --filter @momito/api test -- jobs.service.spec.ts` - passed (1 test)
+- `pnpm --filter @momito/api typecheck` - passed
+- `pnpm --filter @momito/api build` - passed
+- `pnpm --filter @momito/api test` - passed (69 tests)
+
+**Risks / follow-ups:**
+- This is coverage-only; any future UI affordance changes for job prep should remain separate.
+- `AGENTS.MD` remains dirty from an earlier instruction/documentation change and was not touched by this task.
+
+**Suggested commit message:** `test(api): cover job prep task linkage`
+
+---
+
 ## 2026-07-05 - MOM-056 final system design seed item (CLAUDE)
 
 **Actor:** CLAUDE (implementer)
