@@ -84,7 +84,7 @@ export default function EditQuestionPage() {
         >
           ← Back to question
         </button>
-        <h1 className="text-2xl font-bold text-zinc-800">Edit Question</h1>
+        <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Edit Question</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Update your interview question
         </p>
@@ -92,7 +92,7 @@ export default function EditQuestionPage() {
 
       {error && <div className="mb-6"><ErrorBanner message={error} /></div>}
 
-      <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
         <QuestionForm
           initialData={{
             title: question.title,

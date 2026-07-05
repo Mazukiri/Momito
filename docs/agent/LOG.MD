@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-07-05 — Dark mode pass, batch 4: practice/new, QuestionForm (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing the dark-mode remediation.
+
+**Pages/components fixed:** `practice/new/page.tsx` (heading, error banner, all form
+labels/inputs/selects including the new Spaced Review preview card), the shared
+`QuestionForm.tsx` component (386 lines, used by both `questions/new` and
+`questions/[id]/edit` — every label/input/textarea/select, the topic/company
+inline-create rows, and the company toggle chips), plus the thin wrapper
+headings/cards on `questions/new/page.tsx` and `questions/[id]/edit/page.tsx`.
+
+**Verification:** `pnpm typecheck`/`lint`/`build`: green (32+ web routes). `pnpm test`:
+68/68 (no API changes — pure CSS-class additions).
+
+**Remaining:** `dashboard/page.tsx` (293 lines), `profile/page.tsx` (343 lines),
+`settings/page.tsx` (397 lines), `study-plan/page.tsx` (540 lines) — the four largest
+files, left for a follow-up pass given their size.
+
+---
+
 ## 2026-07-05 — Dark mode pass, batch 3: missions detail, learning, calendar (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

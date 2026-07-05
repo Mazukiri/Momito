@@ -139,10 +139,10 @@ export default function NewPracticePage() {
         ← Back
       </button>
 
-      <h1 className="mb-6 text-2xl font-bold text-zinc-800">New Practice Session</h1>
+      <h1 className="mb-6 text-2xl font-bold text-zinc-800 dark:text-zinc-100">New Practice Session</h1>
 
       {error && (
-        <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+        <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
           {error}
         </div>
       )}
@@ -150,14 +150,14 @@ export default function NewPracticePage() {
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Session Type */}
         <div>
-          <label htmlFor="sessionType" className="block text-sm font-medium text-zinc-700">
+          <label htmlFor="sessionType" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Session Type
           </label>
           <select
             id="sessionType"
             value={sessionType}
             onChange={(e) => { setSessionType(e.target.value); setTopicId(''); setCompanyId(''); }}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           >
             {Object.entries(SESSION_TYPE_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
@@ -175,7 +175,7 @@ export default function NewPracticePage() {
               <div className="flex justify-center py-4"><Spinner className="h-5 w-5" /></div>
             ) : dueReviews && dueReviews.length > 0 ? (
               <>
-                <p className="text-sm font-medium text-zinc-700">
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   {dueReviews.length} item{dueReviews.length === 1 ? '' : 's'} due for review
                 </p>
                 <ul className="mt-2 space-y-1 text-xs text-zinc-500">
@@ -195,14 +195,14 @@ export default function NewPracticePage() {
         {['role_drill', 'weak_area_review', 'daily_mixed_set', 'job_prep'].includes(sessionType) && (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label htmlFor="roleTrackId" className="block text-sm font-medium text-zinc-700">
+              <label htmlFor="roleTrackId" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Role Track
               </label>
               <select
                 id="roleTrackId"
                 value={roleTrackId}
                 onChange={(e) => setRoleTrackId(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               >
                 <option value="">Any role</option>
                 {Object.values(CAREER_ROLE_TRACKS).map((track) => (
@@ -211,14 +211,14 @@ export default function NewPracticePage() {
               </select>
             </div>
             <div>
-              <label htmlFor="area" className="block text-sm font-medium text-zinc-700">
+              <label htmlFor="area" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Area
               </label>
               <select
                 id="area"
                 value={area}
                 onChange={(e) => setArea(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               >
                 <option value="">Any area</option>
                 {CAREER_ROLE_AREA_IDS.map((item) => (
@@ -227,7 +227,7 @@ export default function NewPracticePage() {
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label htmlFor="pattern" className="block text-sm font-medium text-zinc-700">
+              <label htmlFor="pattern" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Pattern <span className="text-zinc-400">(optional)</span>
               </label>
               <input
@@ -235,7 +235,7 @@ export default function NewPracticePage() {
                 value={pattern}
                 onChange={(e) => setPattern(e.target.value)}
                 placeholder="e.g. graph, dp, latency"
-                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               />
             </div>
           </div>
@@ -243,7 +243,7 @@ export default function NewPracticePage() {
 
         {/* Title */}
         <div>
-          <label htmlFor="title" className="block text-sm font-medium text-zinc-700">
+          <label htmlFor="title" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Title <span className="text-zinc-400">(optional)</span>
           </label>
           <input
@@ -251,7 +251,7 @@ export default function NewPracticePage() {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             placeholder="e.g. DSA warmup"
             maxLength={200}
           />
@@ -260,7 +260,7 @@ export default function NewPracticePage() {
         {/* Topic (for topic_practice) */}
         {sessionType === 'topic_practice' && (
           <div>
-            <label htmlFor="topicId" className="block text-sm font-medium text-zinc-700">
+            <label htmlFor="topicId" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Topic
             </label>
             <select
@@ -268,7 +268,7 @@ export default function NewPracticePage() {
               value={topicId}
               onChange={(e) => setTopicId(e.target.value)}
               required
-              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             >
               <option value="">Select a topic</option>
               {topics.map((t) => (
@@ -281,7 +281,7 @@ export default function NewPracticePage() {
         {/* Company (for company_practice) */}
         {sessionType === 'company_practice' && (
           <div>
-            <label htmlFor="companyId" className="block text-sm font-medium text-zinc-700">
+            <label htmlFor="companyId" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Company
             </label>
             <select
@@ -289,7 +289,7 @@ export default function NewPracticePage() {
               value={companyId}
               onChange={(e) => setCompanyId(e.target.value)}
               required
-              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             >
               <option value="">Select a company</option>
               {companies.map((c) => (
@@ -302,14 +302,14 @@ export default function NewPracticePage() {
         {/* Difficulty (optional for all types except Spaced Review, whose set is fixed) */}
         {sessionType !== 'spaced_review' && (
           <div>
-            <label htmlFor="difficulty" className="block text-sm font-medium text-zinc-700">
+            <label htmlFor="difficulty" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Difficulty <span className="text-zinc-400">(optional)</span>
             </label>
             <select
               id="difficulty"
               value={difficulty}
               onChange={(e) => setDifficulty(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             >
               <option value="">Any difficulty</option>
               <option value="easy">Easy</option>
@@ -322,7 +322,7 @@ export default function NewPracticePage() {
         {/* Question Count */}
         {sessionType !== 'spaced_review' && (
           <div>
-            <label htmlFor="questionCount" className="block text-sm font-medium text-zinc-700">
+            <label htmlFor="questionCount" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Number of Questions
             </label>
             <input
@@ -332,7 +332,7 @@ export default function NewPracticePage() {
               max={100}
               value={questionCount}
               onChange={(e) => setQuestionCount(Math.max(1, Math.min(100, Number(e.target.value))))}
-              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             />
             <p className="mt-1 text-xs text-zinc-400">Choose between 1 and 100 questions</p>
           </div>

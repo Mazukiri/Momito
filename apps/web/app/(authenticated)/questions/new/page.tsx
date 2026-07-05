@@ -32,7 +32,7 @@ export default function NewQuestionPage() {
         >
           ← Back to questions
         </button>
-        <h1 className="text-2xl font-bold text-zinc-800">New Question</h1>
+        <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">New Question</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Add a new interview question to your collection
         </p>
@@ -40,7 +40,7 @@ export default function NewQuestionPage() {
 
       {error && <div className="mb-6"><ErrorBanner message={error} /></div>}
 
-      <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
         <QuestionForm onSubmit={handleSubmit} submitting={submitting} submitLabel="Create Question" />
       </div>
     </div>

@@ -165,7 +165,7 @@ export default function QuestionForm({
 
       {/* Title */}
       <div>
-        <label htmlFor="title" className="block text-sm font-medium text-zinc-700">
+        <label htmlFor="title" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Title <span className="text-red-500">*</span>
         </label>
         <input
@@ -173,7 +173,7 @@ export default function QuestionForm({
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           placeholder="e.g. Implement a Rate Limiter"
           maxLength={200}
         />
@@ -181,7 +181,7 @@ export default function QuestionForm({
 
       {/* Prompt */}
       <div>
-        <label htmlFor="prompt" className="block text-sm font-medium text-zinc-700">
+        <label htmlFor="prompt" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Prompt <span className="text-red-500">*</span>
         </label>
         <textarea
@@ -189,7 +189,7 @@ export default function QuestionForm({
           rows={6}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           placeholder="Describe the interview question in detail..."
         />
       </div>
@@ -197,14 +197,14 @@ export default function QuestionForm({
       {/* Type and Difficulty */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="type" className="block text-sm font-medium text-zinc-700">
+          <label htmlFor="type" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Type <span className="text-red-500">*</span>
           </label>
           <select
             id="type"
             value={type}
             onChange={(e) => setType(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           >
             <option value="">Select type...</option>
             {TYPE_OPTIONS.map((o) => (
@@ -213,14 +213,14 @@ export default function QuestionForm({
           </select>
         </div>
         <div>
-          <label htmlFor="difficulty" className="block text-sm font-medium text-zinc-700">
+          <label htmlFor="difficulty" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Difficulty <span className="text-red-500">*</span>
           </label>
           <select
             id="difficulty"
             value={difficulty}
             onChange={(e) => setDifficulty(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           >
             <option value="">Select difficulty...</option>
             {DIFFICULTY_OPTIONS.map((o) => (
@@ -232,14 +232,14 @@ export default function QuestionForm({
 
       {/* Topic */}
       <div>
-        <label htmlFor="topic" className="block text-sm font-medium text-zinc-700">
+        <label htmlFor="topic" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Topic <span className="text-red-500">*</span>
         </label>
         <select
           id="topic"
           value={topicId}
           onChange={(e) => setTopicId(e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
         >
           <option value="">Select topic...</option>
           {topics.map((t) => (
@@ -253,13 +253,13 @@ export default function QuestionForm({
             onChange={(e) => setNewTopicName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTopic(); } }}
             placeholder="Or create new topic..."
-            className="block flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="block flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           />
           <button
             type="button"
             onClick={handleCreateTopic}
             disabled={creatingTopic || !newTopicName.trim()}
-            className="rounded-lg border border-indigo-300 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-40"
+            className="rounded-lg border border-indigo-300 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-40 dark:border-indigo-800 dark:hover:bg-indigo-950"
           >
             {creatingTopic ? '...' : '+ Add'}
           </button>
@@ -268,7 +268,7 @@ export default function QuestionForm({
 
       {/* Subtopic */}
       <div>
-        <label htmlFor="subtopic" className="block text-sm font-medium text-zinc-700">
+        <label htmlFor="subtopic" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Subtopic <span className="text-zinc-400">(optional)</span>
         </label>
         <input
@@ -276,7 +276,7 @@ export default function QuestionForm({
           type="text"
           value={subtopic}
           onChange={(e) => setSubtopic(e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           placeholder="e.g. Token Bucket"
           maxLength={150}
         />
@@ -284,7 +284,7 @@ export default function QuestionForm({
 
       {/* Companies */}
       <div>
-        <label className="block text-sm font-medium text-zinc-700">
+        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Companies <span className="text-zinc-400">(optional)</span>
         </label>
         <div className="mt-1 flex flex-wrap gap-2">
@@ -295,8 +295,8 @@ export default function QuestionForm({
               onClick={() => toggleCompany(c.id)}
               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 selectedCompanyIds.includes(c.id)
-                  ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
-                  : 'border-zinc-300 text-zinc-600 hover:bg-zinc-50'
+                  ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-400'
+                  : 'border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
               }`}
             >
               {c.name}
@@ -313,13 +313,13 @@ export default function QuestionForm({
             onChange={(e) => setNewCompanyName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateCompany(); } }}
             placeholder="Or create new company..."
-            className="block flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="block flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           />
           <button
             type="button"
             onClick={handleCreateCompany}
             disabled={creatingCompany || !newCompanyName.trim()}
-            className="rounded-lg border border-indigo-300 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-40"
+            className="rounded-lg border border-indigo-300 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-40 dark:border-indigo-800 dark:hover:bg-indigo-950"
           >
             {creatingCompany ? '...' : '+ Add'}
           </button>
@@ -328,7 +328,7 @@ export default function QuestionForm({
 
       {/* Reference Answer */}
       <div>
-        <label htmlFor="referenceAnswer" className="block text-sm font-medium text-zinc-700">
+        <label htmlFor="referenceAnswer" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Reference Answer <span className="text-zinc-400">(optional)</span>
         </label>
         <textarea
@@ -336,14 +336,14 @@ export default function QuestionForm({
           rows={8}
           value={referenceAnswer}
           onChange={(e) => setReferenceAnswer(e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           placeholder="Write the reference answer or solution..."
         />
       </div>
 
       {/* Notes */}
       <div>
-        <label htmlFor="notes" className="block text-sm font-medium text-zinc-700">
+        <label htmlFor="notes" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Notes <span className="text-zinc-400">(optional)</span>
         </label>
         <textarea
@@ -351,14 +351,14 @@ export default function QuestionForm({
           rows={4}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           placeholder="Any additional notes..."
         />
       </div>
 
       {/* Source URL */}
       <div>
-        <label htmlFor="sourceUrl" className="block text-sm font-medium text-zinc-700">
+        <label htmlFor="sourceUrl" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Source URL <span className="text-zinc-400">(optional)</span>
         </label>
         <input
@@ -366,7 +366,7 @@ export default function QuestionForm({
           type="url"
           value={sourceUrl}
           onChange={(e) => setSourceUrl(e.target.value)}
-          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           placeholder="https://example.com/question-source"
         />
       </div>
