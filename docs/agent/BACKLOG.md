@@ -249,11 +249,19 @@ Global verification / forbidden-file defaults:
 - **MOM-025** KnowledgeObject response helpers — BLOCKED on MOM-022/023.
 
 ### Track E — Review & Learning Engine · Gate 2
-- **MOM-026** Design ReviewState migration — **NEEDS_SPIKE** (SPIKE-003). *Planner may not create migrations.*
-- **MOM-027** Implement ReviewState migration — BLOCKED on MOM-026 + human approval.
+- **MOM-026** Design ReviewState migration — **DONE** (2026-07-05). SPIKE-003 answered in
+  `docs/adr/0002-reviewstate-polymorphic-object-reference.md`; see `DECISIONS.MD` D-005.
+- **MOM-027** Implement ReviewState migration — READY, but **BLOCKED on human approval**
+  (D-004: planner/implementer may not author migrations unattended). Design is complete;
+  a human must explicitly greenlight running `prisma migrate dev` for this to proceed.
 - **MOM-028** Attempt reflection fields — **NEEDS_REPO_INSPECTION** (most fields already exist; only miss-tags/reflection-note may be missing).
 - **MOM-029** Reviews module (API) — BLOCKED on MOM-027.
-- **MOM-030** FSRS scheduling service — **NEEDS_SPIKE** (SPIKE-004 `ts-fsrs`).
+- **MOM-030** FSRS scheduling service — **DONE (algorithm layer only)** 2026-07-05.
+  `apps/api/src/reviews/fsrs-scheduler.ts` wraps `ts-fsrs` as pure functions
+  (`createInitialReviewState`, `scheduleNextReview`, `selfRatingToGrade`) operating on
+  plain `ReviewCardState` objects shaped like ADR-0002's planned `ReviewState` columns —
+  no persistence, no module/controller, since there's no `ReviewState` table yet
+  (MOM-027, human-gated). MOM-031 wires this to Prisma once that migration lands.
 - **MOM-031** Hook answer submission into scheduling — BLOCKED on MOM-029/030.
 - **MOM-032** Today dashboard API (queue priority §6.1) — BLOCKED on MOM-031.
 - **MOM-033** Recommendation reason standardization - READY-ish (`PracticeRecommendationResponse.reason` and `RecommendationsService` reasons already exist; standardize reason taxonomy and Today integration, do not add a duplicate field).
@@ -284,7 +292,10 @@ Global verification / forbidden-file defaults:
 - **MOM-062** Content coverage dashboard — BLOCKED on MOM-024.
 
 ### Track H — Story & Behavioral Engine · Gate 2/3
-- **MOM-063** Story schema + review integration — **NEEDS_SPIKE** (SPIKE-003; no `Story` model exists). *Migration → human-gated.*
+- **MOM-063** Story schema + review integration — **NEEDS_SPIKE** (no `Story` model exists yet;
+  SPIKE-003's ReviewState-reuse findings apply directly once `Story` exists, but `Story`'s own
+  schema — fields, columns, indexes — is not yet designed and needs its own short spike).
+  *Migration → human-gated.*
 - **MOM-064** Story CRUD API · **MOM-065** Story frontend · **MOM-066** Link stories↔prompts · **MOM-067** Rehearsal sessions — BLOCKED chain on MOM-063.
 
 ### Track I — AI Feedback Engine · Gate 4
@@ -320,8 +331,8 @@ Global verification / forbidden-file defaults:
 |---|---|---|
 | SPIKE-001 | shadcn + Tailwind v4 + Next 16.2.9 compatibility (React 19) | MOM-007 |
 | SPIKE-002 | Service-worker cache vs JWT auth behavior | MOM-016 |
-| SPIKE-003 | ReviewState / Story polymorphic `objectType/objectId` migration on existing DB | MOM-026, MOM-063 |
-| SPIKE-004 | `ts-fsrs` real API + scheduling semantics | MOM-030 |
+| SPIKE-003 | ReviewState polymorphic `objectType/objectId` migration on existing DB — **DONE 2026-07-05 for ReviewState/MOM-026**, see ADR-0002. `Story`'s own schema (MOM-063) is separate and still open. | MOM-026, MOM-063 |
+| SPIKE-004 | `ts-fsrs` real API + scheduling semantics — **DONE 2026-07-05**, see `apps/api/src/reviews/fsrs-scheduler.ts` | MOM-030 |
 | SPIKE-005 | Anthropic SDK structured output — verify **installed** package, model ids, usage shape, error classes | MOM-068 |
 | SPIKE-006 | LeetCode GraphQL response shape (metadata/links only) | MOM-049 |
 | SPIKE-007 | `StudyPlanItem` → `Task` field mapping + backfill | MOM-075 |

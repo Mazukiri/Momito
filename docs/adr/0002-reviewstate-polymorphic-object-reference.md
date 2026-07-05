@@ -1,8 +1,10 @@
 # ADR-0002: ReviewState uses a polymorphic object reference
 
 ## Status
-Accepted (design) — 2026-07-05. Schema change is **not yet implemented**; gated behind
-SPIKE-003 and human approval per `docs/agent/DECISIONS.MD` D-004.
+Accepted (design + SPIKE-003 complete) — 2026-07-05. Schema change is **not yet
+implemented**; SPIKE-003's three open questions are now answered below. The actual
+`prisma migrate` step still requires explicit human approval per `docs/agent/DECISIONS.MD`
+D-004 — nothing in this update touches `schema.prisma`.
 
 ## Context
 The Learning Engine (plan §6) needs one spaced-repetition scheduler (FSRS) that can review many
@@ -61,6 +63,52 @@ Before implementation (MOM-027), SPIKE-003 must confirm:
 - migration safety on the existing (non-empty) database,
 - how orphaned `objectId`s are detected/cleaned if a referenced row is deleted,
 - whether Postgres partial indexes are needed for `suspended`/`due` query performance.
+
+## SPIKE-003 findings (2026-07-05)
+
+**1. Migration safety on the existing (non-empty) database.**
+The migration is purely additive — one new `CREATE TABLE review_states`, no `ALTER TABLE`
+on any existing table, no new `NOT NULL` column added to a populated table, no backfill
+required. Existing users simply start with zero `review_states` rows; the review/FSRS
+service layer must use a get-or-create pattern the first time a user reviews an object
+(create the row with FSRS defaults — `stability: 0`, `state: 0`, `due: now()` — on first
+review) rather than a migration-time backfill job. Confirmed against the three prior
+migrations in `apps/api/prisma/migrations/` (`add_profile_scoring`,
+`add_career_os_mvp2`, `add_missions_v3`): all are additive `CREATE TABLE`/`ADD COLUMN`
+statements with defaults, the same low-risk shape this migration follows. **Safe on both
+fresh and existing DB**, no destructive step.
+
+**2. Orphaned `objectId` detection/cleanup.**
+Confirmed a real deletion path exists: `apps/api/src/questions/questions.service.ts`'s
+`remove()` calls `prisma.question.delete()`, currently blocked only by the `AnswerAttempt`
+foreign key (via `rethrowDeleteConstraint`). Because `ReviewState.objectId` has **no**
+foreign key (by design, since it's polymorphic), deleting a `Question` that has a
+`ReviewState` row would **not** be blocked and would silently orphan that row today.
+Decision: MOM-027's implementation must add an explicit service-layer step — before/with
+every hard-delete of a reviewable object (currently only `Question`), delete matching
+`ReviewState` rows in the same transaction: `prisma.reviewState.deleteMany({ where: {
+objectType: 'question', objectId: id } })`. This must ship as part of MOM-027, not a
+separate follow-up, since the orphan risk exists from the moment `ReviewState` rows can be
+created. A periodic integrity sweep is not needed given deletes are rare and this
+transactional cleanup is sufficient.
+
+**3. Partial indexes for `suspended`/`due` query performance.**
+Prisma's `@@index` cannot express a partial (`WHERE`) index directly in the schema DSL as
+of Prisma 6 for this attribute combination; the migration must add it via raw SQL appended
+to the generated `migration.sql` after `prisma migrate dev --create-only`:
+```sql
+CREATE INDEX "review_states_user_due_active_idx"
+  ON "review_states" ("user_id", "due")
+  WHERE NOT "suspended";
+```
+This is worth doing from the start (not deferred) because the Today queue's core query
+(`WHERE userId = ? AND due <= now() AND NOT suspended`) is the single highest-frequency
+query this table will serve, and partial indexes avoid the full-table-scan-adjacent cost
+of the default `@@index([userId, due])` once `suspended = true` rows accumulate over time.
+
+**Conclusion:** SPIKE-003 is answered; no unresolved design question blocks a human
+approving MOM-027. The migration is additive, its orphan risk has a concrete fix already
+scoped into MOM-027's acceptance criteria, and its indexing strategy is decided.
 
 ## Consequences
 - One review/scheduling engine (MOM-029/030/031) serves every domain, including `Story` review

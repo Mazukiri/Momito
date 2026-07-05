@@ -5,6 +5,79 @@
 
 ---
 
+## 2026-07-05 — MOM-030 / SPIKE-004: FSRS scheduling algorithm (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing `AGENTS.MD`'s P2 order after MOM-026/SPIKE-003. Verified `ts-fsrs`'s
+real API (installed it in a throwaway scratch dir, read its `.d.ts`) before writing
+against it, since AGENTS.MD explicitly requires that for third-party SDKs.
+
+**Findings:** `ts-fsrs`'s `Card`/`State` shape maps almost 1:1 onto ADR-0002's planned
+`ReviewState` columns — `stability`, `difficulty`, `due`, `reps`, `lapses`,
+`last_review`, and critically its `State` enum (New=0/Learning=1/Review=2/Relearning=3)
+exactly matches the planned `state: Int` column, so no extra state-code translation layer
+is needed. `fsrs().next(card, now, grade)` is the core scheduling call.
+
+**Implementation:** `apps/api/package.json` — added `ts-fsrs`. New
+`apps/api/src/reviews/fsrs-scheduler.ts` — pure functions only, no NestJS
+module/controller (nothing to inject into yet, no `ReviewState` table):
+- `createInitialReviewState(now)` — new-card defaults via `ts-fsrs`'s `createEmptyCard`.
+- `selfRatingToGrade(selfRating)` — maps the existing 1-5 star `selfRating` scale onto
+  FSRS's 4 grades (1→Again, 2→Hard, 3→Good, 4→Good, 5→Easy); recorded as **D-010** in
+  `DECISIONS.MD` since AGENTS.MD warns against silently changing scoring semantics. The
+  existing `selfRating` column/UI/other consumers (dashboard, DSA/mission heuristics) are
+  untouched — this mapping is scoped to the FSRS scheduler only.
+- `scheduleNextReview(current, selfRating, now)` — the actual scheduling step, operating
+  on/returning plain `ReviewCardState` objects (not Prisma models, since none exist yet).
+
+New `apps/api/test/fsrs-scheduler.spec.ts` (4 tests): initial-state defaults, the
+self-rating→grade mapping, that a higher rating schedules further out than a lower one,
+and that grading "Again" after a completed review increments `lapses`.
+
+**Checks:** `pnpm --filter @momito/api test` ✅ (56/56, was 52), `pnpm --filter @momito/api
+typecheck` ✅, `pnpm --filter @momito/api build` ✅.
+
+**Explicitly not done:** no NestJS module/controller/endpoint (nothing to wire to —
+`ReviewState` doesn't exist), no persistence, no hook into `sessions.service.ts`'s answer
+submission. That's MOM-031, blocked on MOM-027's human-approved migration landing first.
+
+**Docs updated:** `BACKLOG.MD` (MOM-030 → done/algorithm-only, SPIKE-004 → done),
+`DECISIONS.MD` (new D-010).
+
+---
+
+## 2026-07-05 — MOM-026 / SPIKE-003: ReviewState migration design finalized (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer, design-only task — no schema.prisma touched)
+**Scope:** Per `AGENTS.MD`'s P2 priority (Learning Loop), the first actionable step is
+designing the ReviewState migration so a human can approve implementation. ADR-0002 already
+had the shape decision (D-005); SPIKE-003's three open questions were still unanswered.
+
+**Findings (full detail in `docs/adr/0002-reviewstate-polymorphic-object-reference.md`):**
+1. Migration is purely additive (`CREATE TABLE review_states` only, no `ALTER`/backfill on
+   existing tables) — confirmed against the shape of the three most recent migrations in
+   `apps/api/prisma/migrations/`. Safe on both fresh and existing DB.
+2. Real orphan risk found: `apps/api/src/questions/questions.service.ts`'s `remove()` hard-
+   deletes a `Question` with no FK from `ReviewState.objectId` (by design, polymorphic).
+   MOM-027 must ship a transactional `reviewState.deleteMany({ where: { objectType, objectId
+   } })` alongside every reviewable-object delete, as part of that same PR, not a follow-up.
+3. Today's queue query (`due <= now() AND NOT suspended`) needs a Postgres partial index —
+   Prisma's schema DSL can't express `WHERE NOT suspended` directly, so it must be added as
+   raw SQL appended to the generated `migration.sql`.
+
+**Docs updated:** `docs/adr/0002-reviewstate-polymorphic-object-reference.md` (SPIKE-003
+findings section + status), `docs/agent/DECISIONS.MD` D-005 (outcome note),
+`docs/agent/BACKLOG.MD` (MOM-026 → DONE, MOM-027 status clarified as ready-but-human-gated,
+SPIKE-003 row marked done, MOM-063 clarified as a separate still-open Story-schema spike).
+
+**Not a migration** — `schema.prisma` untouched, per D-004/standing hands-off zone.
+
+**Next:** MOM-027 (the actual migration + service code) needs explicit human approval before
+proceeding. Meanwhile MOM-030 (SPIKE-004: `ts-fsrs` real API/scheduling semantics) is
+independently unblocked and doesn't touch schema — reasonable next step.
+
+---
+
 ## 2026-07-05 — P1 risk fix: DSA solved-heuristic counted 'partial' as solved (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

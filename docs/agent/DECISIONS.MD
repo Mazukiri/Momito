@@ -65,6 +65,16 @@ SPIKE-003 confirming migration + constraint behavior on the existing DB.
 **Consequences:** One review engine serves all domains; Story review (MOM-063) reuses it.
 **ADR:** [`docs/adr/0002-reviewstate-polymorphic-object-reference.md`](../adr/0002-reviewstate-polymorphic-object-reference.md)
 
+**SPIKE-003 outcome (2026-07-05):** Answered all three open questions (see ADR-0002's
+"SPIKE-003 findings" section). Summary: the migration is purely additive (no ALTER/backfill
+on existing tables — safe on fresh and existing DB); a real orphan risk exists because
+`Question.remove()` hard-deletes with no FK from `ReviewState.objectId`, so MOM-027 must
+ship a transactional `reviewState.deleteMany()` cleanup alongside every reviewable-object
+delete, not as a follow-up; and the Today queue's due-lookup needs a partial index
+(`WHERE NOT suspended`) added via raw SQL in the generated migration, since Prisma's
+schema DSL can't express it directly. No open design question remains — MOM-026 is done;
+MOM-027 (the actual `prisma migrate` + service code) awaits human approval per D-004.
+
 ### D-006 — The FSRS learning engine coexists with the existing Mission engine (no rewrite)
 **Context:** The repo already contains a substantial, plan-unmentioned engine: `Mission`,
 `WeeklyPlan`, `PlanItem`, `MissionCompetencyState`, `MissionCheckIn`, plus a Readwise learning-source
@@ -99,6 +109,17 @@ notes only — never external problem text. `content:validate` (MOM-024) enforce
 statement-pattern check and blocks publish on violation.
 **Consequences:** Legally safe content pipeline; validation gates every seed batch.
 **ADR:** [`docs/adr/0004-no-copyrighted-problem-statements-in-seeds.md`](../adr/0004-no-copyrighted-problem-statements-in-seeds.md)
+
+### D-010 — Self-rating (1-5 stars) maps to FSRS's 4 grades as 1/2/(3,4)/5
+**Context:** `CreateAnswerDto.selfRating` is an existing 1-5 star scale used elsewhere
+(dashboard averages, DSA/mission positive-attempt heuristics) that must not change.
+`ts-fsrs` (SPIKE-004) only has 4 grades: Again/Hard/Good/Easy.
+**Decision:** `apps/api/src/reviews/fsrs-scheduler.ts`'s `selfRatingToGrade` maps
+1→Again, 2→Hard, 3→Good, 4→Good, 5→Easy. The existing `selfRating` column/scale is
+untouched everywhere else; this mapping only applies inside the FSRS scheduler.
+**Consequences:** No schema change, no change to any existing selfRating consumer. If a
+future need arises to distinguish 3 from 4 for FSRS specifically, revisit here first
+rather than guessing again at the call site.
 
 ### D-009 — `roleTrackId` is currently a bare string; decide model-vs-constant before MOM-061
 **Context:** `roleTrackId` appears as an unconstrained `String` across `InterviewSession`, `Task`,
