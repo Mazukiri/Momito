@@ -1,5 +1,37 @@
 # LOG
 
+## 2026-07-05 - Spaced review frontend handoff cleanup (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Task:** Frontend follow-up for spaced-review sessions.
+
+**Current behavior before change:** The practice creation page fetched due reviews and submitted every due question ID as an exact-question session. That duplicated backend selection behavior and could exceed `CreateSessionDto.questionCount`'s max of 100 when a user had more than 100 due reviews.
+
+**Files changed:**
+- `apps/web/app/(authenticated)/practice/new/page.tsx`
+- `docs/agent/LOCKS.MD`
+- `docs/agent/LOG.MD`
+- `docs/agent/NEXT.MD`
+
+**Changes:**
+- Kept the due-review preview on the `spaced_review` form.
+- Stopped sending explicit `questionIds` for spaced-review session creation.
+- Submitted a capped `questionCount` so the API's due-review selector owns ordering and filtering.
+- Added copy explaining that sessions start with the 100 oldest due reviews when more than 100 are due.
+
+**Verification:**
+- `pnpm --filter @momito/web lint` - passed
+- `pnpm --filter @momito/web build` - passed (31 app routes)
+- `pnpm --filter @momito/web typecheck` - initial run failed on stale `.next/types/validator.ts` missing `routes.js`; rerun after `next build` regenerated route metadata and passed
+
+**Risks / follow-ups:**
+- Frontend still fetches due reviews for preview/disabled state; creation now relies on the backend for the final authoritative due set.
+- `AGENTS.MD` remains dirty from an earlier instruction/documentation change and was not touched by this task.
+
+**Suggested commit message:** `fix(web): let API select spaced review questions`
+
+---
+
 ## 2026-07-05 - Spaced review session selection (CLAUDE)
 
 **Actor:** CLAUDE (implementer)

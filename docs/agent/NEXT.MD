@@ -11,22 +11,23 @@ The core learning loop is substantially wired:
 3. Due reviews appear on `/today`.
 4. Inline review actions can reschedule due items.
 5. `spaced_review` session creation now pulls due `ReviewState` question IDs in due order.
+6. The `/today` page already renders one priority-ranked queue that interleaves reviews, recommendations, and reminders.
 
 ## Last completed task
 
-**Spaced review sessions** - completed 2026-07-05.
+**Spaced review frontend/backend handoff** - completed 2026-07-05.
 
-`sessionType: "spaced_review"` now selects due, non-suspended question review states ordered by `due`, capped by `questionCount`, while preserving explicit `questionIds` as an override.
+`sessionType: "spaced_review"` now selects due, non-suspended question review states ordered by `due`, capped by `questionCount`, while preserving explicit `questionIds` as an override. The frontend no longer sends every due question ID; it previews due reviews and lets the API choose the authoritative ordered set.
 
 ## Safest next task
 
-**Today unified priority queue inspection / implementation.**
+**Backlog reality cleanup / final safe inspection.**
 
-Goal: inspect whether `/today` still renders separate review/recommendation/reminder/prep sections instead of one ranked queue. If it is still split, implement the smallest backend/frontend change that presents a single ordered daily queue without changing schema or adding AI/external services.
+Goal: inspect remaining `BACKLOG.MD` READY/BLOCKED items against the current repo and update stale statuses only where the implementation is already present. Do not implement migration/spike-gated work.
 
 Constraints:
 - No schema or migration work.
 - No AI SDK work.
-- No new content batches.
-- Preserve existing due-review inline rating behavior.
-- Keep tests focused on ordering and item shape.
+- No external API/import work.
+- No content batches unless a concrete target is still short.
+- Prefer documentation/status cleanup over code if remaining items are already implemented.

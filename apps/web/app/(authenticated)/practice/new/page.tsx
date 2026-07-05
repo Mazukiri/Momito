@@ -92,14 +92,13 @@ export default function NewPracticePage() {
     setError('');
     setLoading(true);
     try {
-      const dueQuestionIds = (dueReviews ?? []).filter((r) => r.objectType === 'question').map((r) => r.objectId);
+      const dueQuestionCount = (dueReviews ?? []).filter((r) => r.objectType === 'question').length;
       const res = sessionType === 'spaced_review'
         ? await sessionsApi.create({
             title: title || undefined,
             sessionType,
             missionId,
-            questionCount: dueQuestionIds.length,
-            questionIds: dueQuestionIds,
+            questionCount: Math.min(dueQuestionCount, 100),
           })
         : await sessionsApi.create({
             title: title || undefined,
@@ -178,6 +177,9 @@ export default function NewPracticePage() {
                 <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   {dueReviews.length} item{dueReviews.length === 1 ? '' : 's'} due for review
                 </p>
+                {dueReviews.length > 100 && (
+                  <p className="mt-1 text-xs text-zinc-400">The next session will start with the 100 oldest due reviews.</p>
+                )}
                 <ul className="mt-2 space-y-1 text-xs text-zinc-500">
                   {dueReviews.slice(0, 5).map((r) => (
                     <li key={r.id} className="truncate">{r.title ?? 'Untitled review item'}</li>

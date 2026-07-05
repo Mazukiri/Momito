@@ -33,6 +33,7 @@
 | MOM-083 | CLAUDE | `apps/api/src/jobs/jobs.service.ts`, `apps/api/test/jobs.service.spec.ts`, `docs/agent/LOG.MD`, `docs/agent/LOCKS.MD` | 2026-07-05T10:28:50Z |
 | MOM-004 | CLAUDE | `README.md`, `docs/agent/LOG.MD`, `docs/agent/LOCKS.MD` | 2026-07-05T10:30:28Z |
 | Spaced review sessions | CLAUDE | `apps/api/src/sessions/sessions.service.ts`, `apps/api/test/sessions.service.spec.ts`, `docs/agent/LOG.MD`, `docs/agent/NEXT.MD`, `docs/agent/LOCKS.MD` | 2026-07-05T13:19:48Z |
+| Spaced review frontend follow-up | CLAUDE | `apps/web/app/(authenticated)/practice/new/page.tsx`, `docs/agent/LOG.MD`, `docs/agent/NEXT.MD`, `docs/agent/LOCKS.MD` | 2026-07-05T13:23:39Z |
 
 ## Standing "hands-off" zones (never claim without an explicit, human-approved task)
 
