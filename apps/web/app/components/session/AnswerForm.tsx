@@ -1,17 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import dynamic from 'next/dynamic';
+import { useEffect } from 'react';
 import type { SessionQuestionResponse } from '@momito/shared';
 import { Card, Badge, Spinner } from '../ui';
-import { Markdown } from '../Markdown';
 import { useTimer } from '../../lib/use-timer';
 import { TYPE_LABELS } from './question-type-labels';
-import { SYSTEM_DESIGN_TEMPLATE } from '../../lib/system-design-template';
-
-// MOM-035: CodeMirror depends on browser-only APIs and its language packs are
-// sizable, so it's excluded from SSR and only loaded when a code question is shown.
-const CodeEditor = dynamic(() => import('../CodeEditor'), { ssr: false });
+import { TextAnswerPanel } from './answer-panels/TextAnswerPanel';
+import { SystemDesignAnswerPanel } from './answer-panels/SystemDesignAnswerPanel';
+import { CodeAnswerPanel } from './answer-panels/CodeAnswerPanel';
 
 export function AnswerForm({
   currentQuestion,
@@ -47,13 +43,11 @@ export function AnswerForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only re-run per question
   }, [currentQuestion.questionId]);
 
-  // MOM-057: system design answers follow a fixed 7-section markdown template
-  // (plan §7.4). A preview toggle lets the user check formatting before submit.
+  // MOM-038: dispatch to a dedicated answer panel per question type instead of
+  // branching inline — system design gets the 7-section template/preview
+  // (MOM-057), dsa/cpp get the CodeMirror editor (MOM-035), everything else
+  // gets the plain textarea.
   const isSystemDesign = currentQuestion.question.type === 'system_design';
-  const [showPreview, setShowPreview] = useState(false);
-
-  // MOM-035: DSA/coding answers get a syntax-highlighted code editor instead
-  // of a plain textarea; every other question type is unaffected.
   const isCodeAnswer = currentQuestion.question.type === 'dsa' || currentQuestion.question.type === 'cpp';
 
   return (
@@ -93,50 +87,15 @@ export function AnswerForm({
       )}
 
       <div>
-        <div className="mb-1 flex items-center justify-between">
-          <label htmlFor="answer" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Your Answer
-          </label>
-          <div className="flex gap-3">
-            {isSystemDesign && !answerText.trim() && (
-              <button
-                type="button"
-                onClick={() => onAnswerTextChange(SYSTEM_DESIGN_TEMPLATE)}
-                className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
-              >
-                Insert 7-section template
-              </button>
-            )}
-            {isSystemDesign && (
-              <button
-                type="button"
-                onClick={() => setShowPreview((v) => !v)}
-                className="text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-              >
-                {showPreview ? 'Edit' : 'Preview'}
-              </button>
-            )}
-          </div>
-        </div>
-        {showPreview && isSystemDesign ? (
-          <div className="min-h-[12rem] rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700">
-            <Markdown className="prose-sm">{answerText || '*Nothing written yet.*'}</Markdown>
-          </div>
+        <label htmlFor="answer" className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Your Answer
+        </label>
+        {isSystemDesign ? (
+          <SystemDesignAnswerPanel value={answerText} onChange={onAnswerTextChange} />
         ) : isCodeAnswer ? (
-          <CodeEditor
-            value={answerText}
-            onChange={onAnswerTextChange}
-            placeholder="Write your code here..."
-          />
+          <CodeAnswerPanel value={answerText} onChange={onAnswerTextChange} />
         ) : (
-          <textarea
-            id="answer"
-            value={answerText}
-            onChange={(e) => onAnswerTextChange(e.target.value)}
-            rows={8}
-            className="block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-            placeholder={isSystemDesign ? 'Write your answer in markdown...' : 'Write your answer here...'}
-          />
+          <TextAnswerPanel value={answerText} onChange={onAnswerTextChange} />
         )}
 
         <div className="mt-3">

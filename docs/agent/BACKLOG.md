@@ -277,7 +277,10 @@ Global verification / forbidden-file defaults:
 - **MOM-035** CodeMirror editor — **NEEDS_SPIKE** (bundle/SSR in Next 16).
 - **MOM-036** Timer hook — READY.
 - **MOM-037** Split session page into components — **NEEDS_REPO_INSPECTION** (`practice/session/[id]` exists).
-- **MOM-038** Answer panel by question type — BLOCKED on MOM-034/035.
+- **MOM-038** Answer panel by question type — **DONE** 2026-07-05. Split
+  `AnswerForm.tsx`'s inline branching into `apps/web/app/components/session/answer-panels/`
+  (`TextAnswerPanel`, `SystemDesignAnswerPanel`, `CodeAnswerPanel`); `AnswerForm` now just
+  dispatches on question type. Pure refactor — behavior unchanged for every question type.
 - **MOM-039** Reflection panel — BLOCKED on MOM-028.
 - **MOM-040** Session summary — **NEEDS_REPO_INSPECTION** (`summary` route already exists).
 - **MOM-041** Practice hub — BLOCKED on MOM-032.

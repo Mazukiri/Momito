@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-07-05 — MOM-038: split AnswerForm into per-question-type panels (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Unblocked now that MOM-034 (markdown) and MOM-035 (CodeMirror) are both done.
+Pure refactor, no behavior change, per its own acceptance criteria.
+
+**Change:** Extracted `AnswerForm.tsx`'s three inline answer surfaces into
+`apps/web/app/components/session/answer-panels/`:
+- `TextAnswerPanel.tsx` — the plain textarea (every non-special type).
+- `SystemDesignAnswerPanel.tsx` — the MOM-057 7-section template button + Edit/Preview
+  toggle + markdown preview, moved verbatim.
+- `CodeAnswerPanel.tsx` — the MOM-035 `next/dynamic(..., { ssr: false })`-wrapped
+  CodeMirror editor, moved verbatim (dynamic import path adjusted for the new directory).
+
+`AnswerForm.tsx` now just picks one of the three based on `question.type` and no longer
+holds `showPreview` state or the `SYSTEM_DESIGN_TEMPLATE` import itself — both moved into
+`SystemDesignAnswerPanel`.
+
+**Checks:** `pnpm --filter @momito/web typecheck/lint/build` ✅ (32 routes), `pnpm test` ✅
+(56/56, unaffected — web-only change).
+
+---
+
 ## 2026-07-05 — MOM-033: Today integration for recommendations (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)
