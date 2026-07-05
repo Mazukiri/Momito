@@ -88,7 +88,7 @@ export default function QuestionsListPage() {
   return (
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-zinc-800">Questions</h1>
+        <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Questions</h1>
         <button
           onClick={() => router.push("/questions/new")}
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
@@ -104,12 +104,12 @@ export default function QuestionsListPage() {
           placeholder="Search by title..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
         />
         <select
           value={typeFilter}
           onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
         >
           <option value="">All types</option>
           {Object.entries(TYPE_LABELS).map(([k, v]) => (
@@ -119,7 +119,7 @@ export default function QuestionsListPage() {
         <select
           value={difficultyFilter}
           onChange={(e) => { setDifficultyFilter(e.target.value); setPage(1); }}
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
         >
           <option value="">All difficulties</option>
           <option value="easy">Easy</option>
@@ -129,7 +129,7 @@ export default function QuestionsListPage() {
         <select
           value={topicFilter}
           onChange={(e) => { setTopicFilter(e.target.value); setPage(1); }}
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
         >
           <option value="">All topics</option>
           {topics.map((t) => (
@@ -166,7 +166,7 @@ export default function QuestionsListPage() {
               className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
             >
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-zinc-800 truncate">{q.title}</h3>
+                <h3 className="font-medium text-zinc-800 truncate dark:text-zinc-100">{q.title}</h3>
                 <p className="mt-1 text-sm text-zinc-500 line-clamp-2">{q.prompt}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Badge label={TYPE_LABELS[q.type] ?? q.type} variant={q.type} />

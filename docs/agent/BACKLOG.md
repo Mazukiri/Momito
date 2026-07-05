@@ -235,8 +235,16 @@ Global verification / forbidden-file defaults:
 - **MOM-010** Desktop sidebar + top bar — **DONE** (verified: `Sidebar.tsx` exists).
 - **MOM-011** Rewrite authenticated layout shell (mobile-first) — **DONE** (implied by
   MOM-009/010 both being real; no further stub nav found).
-- **MOM-013** Theme + typography baseline (dark/light) — **DONE** (verified: `dark:`
-  variants used consistently across the whole app, e.g. login/register pages).
+- **MOM-013** Theme + typography baseline (dark/light) — **PARTIALLY DONE**, corrected
+  2026-07-05 after an overclaim earlier the same session: the design-system primitives
+  (`ui.tsx`'s Card/Badge/Spinner/ErrorBanner/EmptyState) and auth pages
+  (login/register) do support dark mode, and `/practice`+`/today` (touched heavily this
+  session) do too, but a census of every `(authenticated)/*/page.tsx` found **zero**
+  `dark:` classes on 11 other top-level pages (attempts, calendar, career, dashboard,
+  jobs, learning, missions, profile, questions, settings, study-plan) — their headings,
+  labels, and custom form elements are light-only, even though the `Card`/`Badge`
+  components they use already flip correctly. Fixing this page-by-page, starting with
+  the smaller/higher-traffic ones.
 - **MOM-014** Restyle auth pages for phone — **DONE** (verified: login/register already
   styled with dark-mode-aware Tailwind classes).
 - **MOM-015** PWA manifest + icons — **DONE** (verified: `apps/web/app/manifest.ts`

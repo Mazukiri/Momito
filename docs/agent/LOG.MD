@@ -5,6 +5,42 @@
 
 ---
 
+## 2026-07-05 — Dark mode pass, batch 1: core practice loop pages (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Trigger:** While checking the calendar page's dismiss-button styling, noticed it (and
+every other top-level authenticated page except `/practice` and `/today`) had **zero**
+`dark:` classes — a census confirmed 11 pages entirely light-only. Corrected an earlier
+overclaim in this same session (MOM-013 marked fully DONE; actually only the `ui.tsx`
+design-system primitives and a couple of pages support dark mode).
+
+**Scope of this pass — the core practice/review loop, since it's the most-used part of
+the app and directly tied to tonight's Learning Loop work:**
+- `apps/web/app/(authenticated)/attempts/page.tsx` — heading, card title, hover border.
+- `apps/web/app/(authenticated)/practice/session/[id]/page.tsx` — the one light-only
+  error banner (its child components `SessionHeader`/`AllAnsweredPanel`/
+  `ReviewQuestionCard` were already fine).
+- `apps/web/app/(authenticated)/practice/session/[id]/summary/page.tsx` — heading, stat
+  cards, per-question title/miss-tags/reflection text, status-color badges, action
+  buttons.
+- `apps/web/app/(authenticated)/questions/[id]/page.tsx` — heading, edit/delete buttons,
+  delete-confirm dialog, prompt/notes text, reference-answer heading, practice-card
+  accent border.
+- `apps/web/app/(authenticated)/questions/page.tsx` — heading, search/filter
+  inputs, card titles.
+
+**Verification:** `pnpm typecheck`/`lint`/`build`: green (32+ web routes). `pnpm test`:
+68/68 (no API changes — pure CSS-class additions).
+
+**Not done in this pass — genuinely large remaining scope, tracked for follow-up:**
+`jobs/page.tsx` + `jobs/[id]/page.tsx`, `career/page.tsx`, `missions/page.tsx` +
+`missions/[id]/page.tsx`, `learning/page.tsx`, `calendar/page.tsx`, `dashboard/page.tsx`
+(293 lines), `profile/page.tsx` (343 lines), `settings/page.tsx` (397 lines),
+`study-plan/page.tsx` (540 lines), `questions/new` + `questions/[id]/edit`,
+`practice/new/page.tsx`. Continuing in the next entry.
+
+---
+
 ## 2026-07-05 — Add missing (auth) error boundary + stale-doc batch fix (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

@@ -22,9 +22,9 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  completed: { label: 'Completed', color: 'bg-green-100 text-green-700' },
-  abandoned: { label: 'Abandoned', color: 'bg-yellow-100 text-yellow-700' },
-  active: { label: 'Active', color: 'bg-blue-100 text-blue-700' },
+  completed: { label: 'Completed', color: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400' },
+  abandoned: { label: 'Abandoned', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400' },
+  active: { label: 'Active', color: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400' },
 };
 
 function formatDuration(startedAt: string, endedAt: string | null): string {
@@ -108,7 +108,7 @@ export default function SessionSummaryPage() {
         ← Back to questions
       </button>
 
-      <h1 className="text-2xl font-bold text-zinc-800">
+      <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">
         {session.title || 'Session Summary'}
       </h1>
 
@@ -122,24 +122,24 @@ export default function SessionSummaryPage() {
         </Card>
         <Card>
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Questions</p>
-          <p className="mt-1 text-xl font-bold text-zinc-800">{answeredCount}/{totalCount}</p>
+          <p className="mt-1 text-xl font-bold text-zinc-800 dark:text-zinc-100">{answeredCount}/{totalCount}</p>
         </Card>
         <Card>
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Duration</p>
-          <p className="mt-1 text-xl font-bold text-zinc-800">
+          <p className="mt-1 text-xl font-bold text-zinc-800 dark:text-zinc-100">
             {formatDuration(session.startedAt, session.endedAt)}
           </p>
         </Card>
         <Card>
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Type</p>
-          <p className="mt-1 text-sm font-medium text-zinc-700 capitalize">
+          <p className="mt-1 text-sm font-medium text-zinc-700 capitalize dark:text-zinc-300">
             {session.sessionType.replace(/_/g, ' ')}
           </p>
         </Card>
       </div>
 
       {/* Questions and answers */}
-      <h2 className="mt-8 mb-4 text-lg font-semibold text-zinc-800">Questions &amp; Answers</h2>
+      <h2 className="mt-8 mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">Questions &amp; Answers</h2>
 
       <div className="space-y-4">
         {questions.map((q, i) => {
@@ -149,10 +149,10 @@ export default function SessionSummaryPage() {
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-xs font-medium text-zinc-500">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
                       {i + 1}
                     </span>
-                    <h3 className="font-medium text-zinc-800 truncate">{q.question.title}</h3>
+                    <h3 className="font-medium text-zinc-800 truncate dark:text-zinc-100">{q.question.title}</h3>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Badge label={q.question.difficulty} variant={q.question.difficulty} />
@@ -163,21 +163,21 @@ export default function SessionSummaryPage() {
                   </div>
                 </div>
                 {attempt ? (
-                  <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                  <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-400">
                     Answered
                   </span>
                 ) : (
-                  <span className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-500">
+                  <span className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
                     Skipped
                   </span>
                 )}
               </div>
 
               {attempt && (
-                <div className="border-t border-zinc-100 pt-3">
+                <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
                   <div className="mb-2">
                     <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Your Answer</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
                       {attempt.answerText.length > 300
                         ? `${attempt.answerText.slice(0, 300)}...`
                         : attempt.answerText}
@@ -212,7 +212,7 @@ export default function SessionSummaryPage() {
                         {attempt.missTags.map((tag: MissTagReason) => (
                           <span
                             key={tag}
-                            className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600"
+                            className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
                           >
                             {MISS_TAG_LABELS[tag]}
                           </span>
@@ -223,7 +223,7 @@ export default function SessionSummaryPage() {
                   {attempt.reflectionNote && (
                     <div className="mt-2">
                       <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Reflection</p>
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600">{attempt.reflectionNote}</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-400">{attempt.reflectionNote}</p>
                     </div>
                   )}
                   <div className="mt-2">
@@ -245,7 +245,7 @@ export default function SessionSummaryPage() {
       <div className="mt-8 flex justify-center gap-4">
         <button
           onClick={() => router.push('/questions')}
-          className="rounded-lg border border-zinc-300 px-5 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+          className="rounded-lg border border-zinc-300 px-5 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
           Back to Questions
         </button>

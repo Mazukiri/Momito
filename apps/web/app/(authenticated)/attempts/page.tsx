@@ -37,7 +37,7 @@ export default function AttemptsListPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-800">Answer History</h1>
+        <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Answer History</h1>
         <p className="mt-1 text-sm text-zinc-500">All your past answers across sessions</p>
       </div>
 
@@ -67,11 +67,11 @@ export default function AttemptsListPage() {
             <Card
               key={a.id}
               onClick={() => router.push(`/attempts/${a.id}`)}
-              className="cursor-pointer hover:border-zinc-300 hover:shadow-md transition-shadow"
+              className="cursor-pointer hover:border-zinc-300 hover:shadow-md transition-shadow dark:hover:border-zinc-600"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-zinc-800 truncate">
+                  <p className="text-sm font-medium text-zinc-800 truncate dark:text-zinc-100">
                     Attempt on {new Date(a.createdAt).toLocaleDateString('en-US', {
                       year: 'numeric', month: 'short', day: 'numeric',
                       hour: '2-digit', minute: '2-digit',

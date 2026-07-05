@@ -112,13 +112,13 @@ export default function QuestionDetailPage() {
         <div className="flex gap-2">
           <button
             onClick={() => router.push(`/questions/${id}/edit`)}
-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             Edit
           </button>
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+            className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
           >
             Delete
           </button>
@@ -127,8 +127,8 @@ export default function QuestionDetailPage() {
 
       {/* Delete confirmation dialog */}
       {showDeleteConfirm && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-sm font-medium text-red-800">
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
+          <p className="text-sm font-medium text-red-800 dark:text-red-300">
             Are you sure you want to delete this question? This action cannot be undone.
           </p>
           <div className="mt-3 flex gap-2">
@@ -141,7 +141,7 @@ export default function QuestionDetailPage() {
             </button>
             <button
               onClick={() => setShowDeleteConfirm(false)}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               Cancel
             </button>
@@ -154,7 +154,7 @@ export default function QuestionDetailPage() {
       <Card className="mb-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-zinc-800">{question.title}</h1>
+            <h1 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{question.title}</h1>
             <div className="mt-2 flex flex-wrap gap-2">
               <Badge label={TYPE_LABELS[question.type] ?? question.type} variant={question.type} />
               <Badge label={question.difficulty} variant={question.difficulty} />
@@ -167,7 +167,7 @@ export default function QuestionDetailPage() {
           <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
             Prompt
           </h3>
-          <p className="mt-2 whitespace-pre-wrap text-zinc-700">{question.prompt}</p>
+          <p className="mt-2 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">{question.prompt}</p>
         </div>
 
         {question.companies && question.companies.length > 0 && (
@@ -189,11 +189,11 @@ export default function QuestionDetailPage() {
             onClick={() => setShowAnswer(!showAnswer)}
             className="flex w-full items-center justify-between text-left"
           >
-            <h2 className="text-lg font-semibold text-zinc-800">Reference Answer</h2>
+            <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">Reference Answer</h2>
             <span className="text-sm text-zinc-400">{showAnswer ? 'Hide' : 'Show'}</span>
           </button>
           {showAnswer && (
-            <div className="mt-4 border-t border-zinc-100 pt-4">
+            <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
               <Markdown className="prose-sm">{question.referenceAnswer}</Markdown>
             </div>
           )}
@@ -201,10 +201,10 @@ export default function QuestionDetailPage() {
       )}
 
       {/* Practice this question */}
-      <Card className="mt-4 border-indigo-200">
+      <Card className="mt-4 border-indigo-200 dark:border-indigo-900">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-zinc-800">Practice This Question</h2>
+            <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">Practice This Question</h2>
             <p className="mt-1 text-sm text-zinc-500">
               Start a quick practice session with this question
             </p>
@@ -238,7 +238,7 @@ export default function QuestionDetailPage() {
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-500">
             Notes
           </h2>
-          <p className="whitespace-pre-wrap text-sm text-zinc-700">{question.notes}</p>
+          <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{question.notes}</p>
         </Card>
       )}
 
