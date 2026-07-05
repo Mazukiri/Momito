@@ -5,6 +5,62 @@
 
 ---
 
+## 2026-07-05 — MOM-032: due reviews on Today (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Closing out the P2 Learning Loop chain from this session: MOM-026→027→029→030→
+031→032, each unblocking the next. This is the last piece — surfacing due reviews where a
+user actually sees them.
+
+**Changes:**
+- `packages/shared/src/index.ts` — `ReviewStateResponse` gained a `title: string | null`
+  field, populated for display purposes only.
+- `apps/api/src/reviews/reviews.service.ts` — `listDue()` now does a second batched
+  `question.findMany({ where: { id: { in: questionIds } } })` lookup for `question`-type
+  due rows and merges titles in (can't join directly — `objectId` has no FK, by design,
+  per ADR-0002). `record()`'s response leaves `title: null` (unnecessary there — the
+  client already knows which question it just reviewed).
+- `apps/web/app/lib/api-client.ts` — added `reviewsApi.due()`.
+- `apps/web/app/(authenticated)/today/page.tsx` — fetches recommendations, reminders, and
+  due reviews in parallel (`Promise.all`); renders a new "Due for Review" section above
+  reminders, each card linking to `/questions/:id` (the existing read-only detail/
+  reference-answer page — reviewing here means re-reading the question and its reference
+  answer, not necessarily a full timed session). Updated the empty-state check to also
+  require zero due reviews.
+- `apps/api/test/reviews.service.spec.ts` — updated the existing `listDue` test for the
+  new `question.findMany` call, added a new test asserting title enrichment.
+
+**Verification:**
+- `pnpm test`: 65/65 (unchanged count — one test updated, one added, net even after
+  accounting for the earlier MOM-031 additions). `pnpm typecheck`/`lint`/`build`: green
+  across all 3 packages (32+ web routes). `pnpm content:validate`: 0 errors.
+- **Live round trip**: recorded a review via `POST /reviews/question/:id` with
+  `selfRating: 1` (Again grade → ~1 minute relearning step), then polled
+  `GET /reviews/due` every 10s until the due time passed, confirming the response
+  included `"title":"Transaction isolation anomalies"` — the enrichment lookup works
+  correctly end to end.
+- Cleaned up all test `ReviewState` rows created during manual verification afterward.
+
+**Housekeeping note:** hit repeated `EPERM` errors regenerating the Prisma client during
+this task's verification passes — traced to **four** leftover `pnpm dev`/`nest start
+--watch` process pairs plus one compiled `dist/main` server, all orphaned from earlier
+manual E2E checks in this session (background `pnpm dev` launches whose `taskkill`s only
+killed the wrapper process, not the actual `nest`/compiled child holding the Prisma
+client file open). Found and killed all of them via `Get-CimInstance Win32_Process` +
+`Stop-Process`, which cleared the lock permanently. Worth remembering for any future
+manual E2E verification in this Windows sandbox: `taskkill //F //PID <wrapper>` is not
+enough for `nest start --watch`; use `//T` (tree-kill) or find the actual listening PID
+via `netstat`, not the process that launched it.
+
+**This closes the Learning Loop groundwork this session set out to unblock.** `/today`
+now shows three real, independently-useful sections (due reviews, recommendations,
+reminders) instead of a static stub — not yet the single unified priority queue plan
+§6.1 ultimately wants, but a genuine, working version of the loop: answer with a
+self-rating → FSRS schedules a review → it surfaces on Today when due → reviewing it
+(via `/questions/:id` today, a full review UI later) → back to Today.
+
+---
+
 ## 2026-07-05 — MOM-031: hook answer submission into FSRS scheduling (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

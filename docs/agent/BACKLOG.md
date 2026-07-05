@@ -283,9 +283,17 @@ Global verification / forbidden-file defaults:
   failure) and a live round trip: registered/logged in, created a real session, submitted
   a real answer with `selfRating: 4` through the actual HTTP endpoint, and confirmed a
   `ReviewState` row was created in Postgres with the correct FSRS-scheduled values.
-- **MOM-032** Today dashboard API (queue priority §6.1) — now **READY** (MOM-031 done;
-  `GET /reviews/due` already exists and can be merged into `/today`'s data alongside the
-  existing recommendations/reminders feeds).
+- **MOM-032** Today dashboard API (queue priority §6.1) — **DONE (three-section version)**
+  2026-07-05. `ReviewsService.listDue()` now enriches `question`-type rows with the
+  question's `title` (a second batched lookup, since `objectId` has no FK to join through
+  — ADR-0002). `apps/web/app/lib/api-client.ts` gained `reviewsApi.due()`.
+  `apps/web/app/(authenticated)/today/page.tsx` now fetches recommendations, reminders,
+  and due reviews in parallel and renders three labeled sections (a due-review card links
+  to `/questions/:id`). **Not** a single unified priority-ranked queue (plan §6.1's full
+  vision merges all three sources into one ranking) — that's a further follow-up, not
+  done here. Verified via unit tests, a live round trip (recorded a review with
+  `selfRating: 1`, polled `/reviews/due` until its ~1-minute relearning-step due time
+  passed, confirmed the title-enriched response), and the full web build/lint/typecheck.
 - **MOM-033** Recommendation reason standardization — **DONE** 2026-07-05. The reason
   taxonomy half was already implemented in an earlier session (`RECOMMENDATION_REASONS`
   in `recommendations.service.ts`). This pass did the remaining "Today integration" half:

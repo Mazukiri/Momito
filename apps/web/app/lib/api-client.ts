@@ -458,6 +458,13 @@ export const remindersApi = {
     request<ReminderResponse>(`/reminders/${id}/dismiss`, { method: 'POST' }),
 };
 
+import type { ReviewStateResponse } from '@momito/shared';
+
+export const reviewsApi = {
+  due: () =>
+    request<ReviewStateResponse[]>('/reviews/due'),
+};
+
 export const learningApi = {
   readwiseConnection: () =>
     request<ReadwiseConnectionResponse | null>('/integrations/readwise'),

@@ -1221,4 +1221,8 @@ export interface ReviewStateResponse {
   lapses: number;
   suspended: boolean;
   lastReviewedAt: string | null;
+  // MOM-032: populated for display purposes (e.g. the Today queue) when the
+  // referenced object can be resolved — objectId has no DB-level foreign key
+  // (ADR-0002), so this is looked up separately, not joined.
+  title: string | null;
 }

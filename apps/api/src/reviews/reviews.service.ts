@@ -25,7 +25,16 @@ export class ReviewsService {
       where: { userId, suspended: false, due: { lte: now } },
       orderBy: { due: 'asc' },
     });
-    return states.map(serialize);
+
+    const questionIds = states.filter((s) => s.objectType === 'question').map((s) => s.objectId);
+    const questions = questionIds.length
+      ? await this.prisma.question.findMany({ where: { id: { in: questionIds } }, select: { id: true, title: true } })
+      : [];
+    const titleByQuestionId = new Map(questions.map((q) => [q.id, q.title]));
+
+    return states.map((state) =>
+      serialize(state, state.objectType === 'question' ? (titleByQuestionId.get(state.objectId) ?? null) : null),
+    );
   }
 
   async record(
@@ -53,19 +62,22 @@ export class ReviewsService {
   }
 }
 
-function serialize(state: {
-  id: string;
-  objectType: string;
-  objectId: string;
-  stability: number;
-  difficulty: number;
-  due: Date;
-  state: number;
-  reps: number;
-  lapses: number;
-  suspended: boolean;
-  lastReviewedAt: Date | null;
-}): ReviewStateResponse {
+function serialize(
+  state: {
+    id: string;
+    objectType: string;
+    objectId: string;
+    stability: number;
+    difficulty: number;
+    due: Date;
+    state: number;
+    reps: number;
+    lapses: number;
+    suspended: boolean;
+    lastReviewedAt: Date | null;
+  },
+  title: string | null = null,
+): ReviewStateResponse {
   return {
     id: state.id,
     objectType: state.objectType as ReviewableObjectType,
@@ -78,5 +90,6 @@ function serialize(state: {
     lapses: state.lapses,
     suspended: state.suspended,
     lastReviewedAt: state.lastReviewedAt ? state.lastReviewedAt.toISOString() : null,
+    title,
   };
 }

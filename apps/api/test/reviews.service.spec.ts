@@ -65,7 +65,7 @@ describe('ReviewsService', () => {
 
   it('lists only due, non-suspended states ordered soonest-first', async () => {
     const findMany = vi.fn().mockResolvedValue([]);
-    const prisma = { reviewState: { findMany } };
+    const prisma = { reviewState: { findMany }, question: { findMany: vi.fn().mockResolvedValue([]) } };
     const service = new ReviewsService(prisma as never);
     const now = new Date('2026-07-05T00:00:00.000Z');
 
@@ -75,5 +75,24 @@ describe('ReviewsService', () => {
       where: { userId: 'user-1', suspended: false, due: { lte: now } },
       orderBy: { due: 'asc' },
     });
+  });
+
+  it('enriches due question reviews with the question title', async () => {
+    const prisma = {
+      reviewState: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'rs-1', objectType: 'question', objectId: 'q-1', stability: 1, difficulty: 1, due: new Date(), state: 2, reps: 1, lapses: 0, suspended: false, lastReviewedAt: null },
+        ]),
+      },
+      question: {
+        findMany: vi.fn().mockResolvedValue([{ id: 'q-1', title: 'Explain idempotency' }]),
+      },
+    };
+    const service = new ReviewsService(prisma as never);
+
+    const result = await service.listDue('user-1');
+
+    expect(prisma.question.findMany).toHaveBeenCalledWith({ where: { id: { in: ['q-1'] } }, select: { id: true, title: true } });
+    expect(result[0].title).toBe('Explain idempotency');
   });
 });

@@ -3,19 +3,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { recommendationsApi, remindersApi } from '../../lib/api-client';
-import type { PracticeRecommendationResponse, ReminderResponse } from '@momito/shared';
+import { recommendationsApi, remindersApi, reviewsApi } from '../../lib/api-client';
+import type { PracticeRecommendationResponse, ReminderResponse, ReviewStateResponse } from '@momito/shared';
 import { Card, Badge, Spinner, ErrorBanner } from '../../components/ui';
 
-// MOM-033 (Today integration half): the queue now surfaces real recommendations
-// (active missions, overdue tasks, career readiness gaps, job deadlines, reading
-// inbox) from the same standardized-reason RecommendationsService the dashboard
-// uses, plus pending reminders (MOM-080's "Today" half — reminders already existed
-// as a working query-time feature, just weren't surfaced here yet). Spaced-repetition
-// due-reviews (plan §6.1's other queue source) still can't appear here — that needs
-// the ReviewState migration (MOM-027, human-approval gated per DECISIONS.md D-004)
-// and MOM-032's Today API. This is the "closest currently available path," not the
-// final decision-engine queue.
+// MOM-032/033 (Today integration): the queue surfaces due FSRS reviews
+// (MOM-027/029/030/031's review loop), real recommendations (active missions,
+// overdue tasks, career readiness gaps, job deadlines, reading inbox — the
+// same standardized-reason RecommendationsService the dashboard uses), and
+// pending reminders (MOM-080). This is still not a single unified priority
+// queue (plan §6.1's full "Today decision engine") — that would merge all
+// three sources with one ranking; for now they're three clearly-labeled
+// sections, each already independently useful.
 const TYPE_LABELS: Record<PracticeRecommendationResponse['type'], string> = {
   practice: 'Practice',
   task: 'Task',
@@ -28,6 +27,7 @@ export default function TodayPage() {
   const router = useRouter();
   const [items, setItems] = useState<PracticeRecommendationResponse[] | null>(null);
   const [reminders, setReminders] = useState<ReminderResponse[]>([]);
+  const [dueReviews, setDueReviews] = useState<ReviewStateResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
@@ -36,12 +36,14 @@ export default function TodayPage() {
     setLoading(true);
     setError('');
     try {
-      const [recommendations, reminderList] = await Promise.all([
+      const [recommendations, reminderList, due] = await Promise.all([
         recommendationsApi.list(),
         remindersApi.list(),
+        reviewsApi.due(),
       ]);
       setItems(recommendations);
       setReminders(reminderList);
+      setDueReviews(due);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load today');
     } finally {
@@ -84,6 +86,26 @@ export default function TodayPage() {
 
       {!loading && error && <ErrorBanner message={error} onRetry={fetchAll} />}
 
+      {!loading && !error && dueReviews.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">Due for Review</h2>
+          <div className="space-y-2">
+            {dueReviews.map((review) => (
+              <button
+                key={review.id}
+                onClick={() => router.push(`/questions/${review.objectId}`)}
+                className="block w-full rounded-lg border border-zinc-200 p-4 text-left hover:border-zinc-300 dark:border-zinc-700 dark:hover:border-zinc-600"
+              >
+                <p className="font-medium text-zinc-800 dark:text-zinc-100">
+                  {review.title ?? 'Review item'}
+                </p>
+                <p className="mt-1 text-xs text-zinc-400">Due {new Date(review.due).toLocaleString()}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {!loading && !error && reminders.length > 0 && (
         <div>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">Reminders</h2>
@@ -109,7 +131,7 @@ export default function TodayPage() {
         </div>
       )}
 
-      {!loading && !error && items && items.length === 0 && reminders.length === 0 && (
+      {!loading && !error && items && items.length === 0 && reminders.length === 0 && dueReviews.length === 0 && (
         <Card>
           <p className="text-sm text-zinc-500">
             Nothing urgent right now. Start a practice session or check your career pipeline.
