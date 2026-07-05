@@ -72,7 +72,7 @@ export default function JobsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-800">Jobs</h1>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Jobs</h1>
           <p className="mt-1 text-sm text-zinc-500">Track applications, deadlines, JD gaps, and prep work.</p>
         </div>
         <button
@@ -90,7 +90,7 @@ export default function JobsPage() {
           <button
             onClick={() => setStatusFilter('all')}
             className={`rounded-full px-3 py-1 text-xs font-medium ${
-              statusFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+              statusFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400'
             }`}
           >
             All ({jobs.length})
@@ -103,7 +103,7 @@ export default function JobsPage() {
                 key={status}
                 onClick={() => setStatusFilter(status)}
                 className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${
-                  statusFilter === status ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                  statusFilter === status ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400'
                 }`}
               >
                 {status} ({count})
@@ -118,31 +118,31 @@ export default function JobsPage() {
           <form onSubmit={createJob} className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-zinc-700">Company</label>
-                <input value={company} onChange={(event) => setCompany(event.target.value)} required className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Company</label>
+                <input value={company} onChange={(event) => setCompany(event.target.value)} required className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700">Role</label>
-                <input value={roleTitle} onChange={(event) => setRoleTitle(event.target.value)} required className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Role</label>
+                <input value={roleTitle} onChange={(event) => setRoleTitle(event.target.value)} required className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700">Role Track</label>
-                <select value={roleTrackId} onChange={(event) => setRoleTrackId(event.target.value as CareerRoleTrackId)} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Role Track</label>
+                <select value={roleTrackId} onChange={(event) => setRoleTrackId(event.target.value as CareerRoleTrackId)} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
                   {Object.values(CAREER_ROLE_TRACKS).map((track) => <option key={track.id} value={track.id}>{track.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700">Deadline</label>
-                <input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Deadline</label>
+                <input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700">URL</label>
-              <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://..." className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">URL</label>
+              <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://..." className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700">Job Description</label>
-              <textarea value={jdText} onChange={(event) => setJdText(event.target.value)} rows={6} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Job Description</label>
+              <textarea value={jdText} onChange={(event) => setJdText(event.target.value)} rows={6} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
             </div>
             <button disabled={saving || !company.trim() || !roleTitle.trim()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
               {saving ? 'Saving...' : 'Save Job'}
@@ -161,7 +161,7 @@ export default function JobsPage() {
             <Card key={job.id} onClick={() => router.push(`/jobs/${job.id}`)}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h2 className="font-semibold text-zinc-800">{job.company}</h2>
+                  <h2 className="font-semibold text-zinc-800 dark:text-zinc-100">{job.company}</h2>
                   <p className="text-sm text-zinc-500">{job.roleTitle}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Badge label={job.status} variant={job.status} />

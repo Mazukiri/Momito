@@ -67,7 +67,7 @@ export default function MissionsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-800">Mission</h1>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Mission</h1>
           <p className="mt-1 text-sm text-zinc-500">Turn a role target or job target into one execution loop with diagnosis, weekly plan, evidence, and review.</p>
         </div>
         <button
@@ -84,28 +84,28 @@ export default function MissionsPage() {
         <Card>
           <form onSubmit={createMission} className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-zinc-700">Mission name</label>
-              <input value={name} onChange={(event) => setName(event.target.value)} required className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Mission name</label>
+              <input value={name} onChange={(event) => setName(event.target.value)} required className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700">Role track</label>
-              <select value={roleTrackId} onChange={(event) => setRoleTrackId(event.target.value as CareerRoleTrackId)} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Role track</label>
+              <select value={roleTrackId} onChange={(event) => setRoleTrackId(event.target.value as CareerRoleTrackId)} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
                 {Object.values(CAREER_ROLE_TRACKS).map((track) => (
                   <option key={track.id} value={track.id}>{track.label}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700">Hours per week</label>
-              <input type="number" min={1} max={80} value={weeklyHours} onChange={(event) => setWeeklyHours(Math.max(1, Math.min(80, Number(event.target.value) || 1)))} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Hours per week</label>
+              <input type="number" min={1} max={80} value={weeklyHours} onChange={(event) => setWeeklyHours(Math.max(1, Math.min(80, Number(event.target.value) || 1)))} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700">Target date</label>
-              <input type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Target date</label>
+              <input type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-zinc-700">Context</label>
-              <textarea value={summary} onChange={(event) => setSummary(event.target.value)} rows={4} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Context</label>
+              <textarea value={summary} onChange={(event) => setSummary(event.target.value)} rows={4} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
             </div>
             <div className="sm:col-span-2">
               <button disabled={saving || !name.trim()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
@@ -124,7 +124,7 @@ export default function MissionsPage() {
             <Card key={mission.id} onClick={() => router.push(`/missions/${mission.id}`)}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h2 className="font-semibold text-zinc-800">{mission.name}</h2>
+                  <h2 className="font-semibold text-zinc-800 dark:text-zinc-100">{mission.name}</h2>
                   <p className="mt-1 text-sm text-zinc-500">{mission.summary || mission.roleTrack.description}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Badge label={mission.stage} />

@@ -5,6 +5,28 @@
 
 ---
 
+## 2026-07-05 — Dark mode pass, batch 2: jobs, career, missions (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing the dark-mode remediation from batch 1.
+
+**Pages fixed:** `jobs/page.tsx` (heading, status filter chips, the full "Add Job" form's
+labels/inputs, job card titles), `jobs/[id]/page.tsx` (all card headings via one
+replace-all, action buttons, JD notes text, timeline form + event cards, status select,
+reminders row — building on the dismiss-button fix from earlier this session),
+`career/page.tsx` (progress bars, heading, role-track selector, track cards' active/
+inactive badge, readiness cards, area breakdowns, top-gaps list), `missions/page.tsx`
+(heading, the full "New Mission" form's labels/inputs, mission card titles).
+
+**Verification:** `pnpm typecheck`/`lint`/`build`: green (32+ web routes). `pnpm test`:
+68/68 (no API changes — pure CSS-class additions).
+
+**Remaining:** `missions/[id]/page.tsx`, `learning/page.tsx`, `calendar/page.tsx`,
+`dashboard/page.tsx`, `profile/page.tsx`, `settings/page.tsx`, `study-plan/page.tsx`,
+`questions/new`, `questions/[id]/edit`, `practice/new/page.tsx`.
+
+---
+
 ## 2026-07-05 — Dark mode pass, batch 1: core practice loop pages (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

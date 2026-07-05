@@ -128,7 +128,7 @@ export default function JobDetailPage() {
       <button onClick={() => router.push('/jobs')} className="text-sm font-medium text-indigo-600">Back to jobs</button>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-800">{job.company}</h1>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{job.company}</h1>
           <p className="mt-1 text-sm text-zinc-500">{job.roleTitle}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Badge label={job.status} variant={job.status} />
@@ -136,8 +136,8 @@ export default function JobDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={openMission} disabled={working} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50">{missionId ? 'Open Mission' : 'Create Mission'}</button>
-          <button onClick={generatePrep} disabled={working} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50">Generate Prep</button>
+          <button onClick={openMission} disabled={working} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">{missionId ? 'Open Mission' : 'Create Mission'}</button>
+          <button onClick={generatePrep} disabled={working} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Generate Prep</button>
           <button onClick={scoreProfile} disabled={working} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Score Profile</button>
         </div>
       </div>
@@ -147,24 +147,24 @@ export default function JobDetailPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
           <Card>
-            <h2 className="mb-3 font-semibold text-zinc-800">JD Notes</h2>
-            <p className="whitespace-pre-wrap text-sm text-zinc-600">{job.jdText || job.notes || 'No JD text saved yet.'}</p>
+            <h2 className="mb-3 font-semibold text-zinc-800 dark:text-zinc-100">JD Notes</h2>
+            <p className="whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-400">{job.jdText || job.notes || 'No JD text saved yet.'}</p>
             {job.url && <a href={job.url} target="_blank" className="mt-4 inline-block text-sm font-medium text-indigo-600">Open posting</a>}
           </Card>
 
           <Card>
-            <h2 className="mb-3 font-semibold text-zinc-800">Timeline</h2>
+            <h2 className="mb-3 font-semibold text-zinc-800 dark:text-zinc-100">Timeline</h2>
             <form onSubmit={addEvent} className="mb-4 grid gap-3 sm:grid-cols-[120px_1fr]">
-              <input value={eventType} onChange={(event) => setEventType(event.target.value)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
-              <input value={eventTitle} onChange={(event) => setEventTitle(event.target.value)} required placeholder="Event title" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
-              <textarea value={eventNotes} onChange={(event) => setEventNotes(event.target.value)} rows={2} placeholder="Notes" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm sm:col-span-2" />
+              <input value={eventType} onChange={(event) => setEventType(event.target.value)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <input value={eventTitle} onChange={(event) => setEventTitle(event.target.value)} required placeholder="Event title" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <textarea value={eventNotes} onChange={(event) => setEventNotes(event.target.value)} rows={2} placeholder="Notes" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm sm:col-span-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
               <button disabled={working || !eventTitle.trim()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 sm:col-span-2">Add Event</button>
             </form>
             <div className="space-y-3">
               {job.events.length === 0 ? <p className="text-sm text-zinc-500">No events yet.</p> : job.events.map((item) => (
-                <div key={item.id} className="rounded-lg border border-zinc-200 p-3">
+                <div key={item.id} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium text-zinc-800">{item.title}</span>
+                    <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{item.title}</span>
                     <span className="text-xs text-zinc-400">{new Date(item.eventAt).toLocaleString()}</span>
                   </div>
                   {item.notes && <p className="mt-1 text-sm text-zinc-500">{item.notes}</p>}
@@ -176,29 +176,29 @@ export default function JobDetailPage() {
 
         <aside className="space-y-6">
           <Card>
-            <h2 className="mb-3 font-semibold text-zinc-800">Status</h2>
-            <select value={status} onChange={(event) => setStatus(event.target.value as JobApplicationStatus)} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
+            <h2 className="mb-3 font-semibold text-zinc-800 dark:text-zinc-100">Status</h2>
+            <select value={status} onChange={(event) => setStatus(event.target.value as JobApplicationStatus)} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
               {JOB_APPLICATION_STATUSES.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
             <button onClick={updateStatus} disabled={working || status === job.status} className="mt-3 w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Update</button>
           </Card>
 
           <Card>
-            <h2 className="mb-3 font-semibold text-zinc-800">Prep Tasks</h2>
+            <h2 className="mb-3 font-semibold text-zinc-800 dark:text-zinc-100">Prep Tasks</h2>
             <p className="text-sm text-zinc-500">{job.tasks.length} tasks linked to this job.</p>
             <button onClick={() => router.push(missionId ? `/calendar?missionId=${missionId}` : '/calendar')} className="mt-3 text-sm font-medium text-indigo-600">Open calendar</button>
           </Card>
 
           <Card>
-            <h2 className="mb-3 font-semibold text-zinc-800">Reminders</h2>
+            <h2 className="mb-3 font-semibold text-zinc-800 dark:text-zinc-100">Reminders</h2>
             <div className="space-y-2">
               {job.reminders.length === 0 ? <p className="text-sm text-zinc-500">No reminders.</p> : job.reminders.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-2 text-sm text-zinc-600">
+                <div key={item.id} className="flex items-center justify-between gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                   <span>{item.title} - {new Date(item.dueAt).toLocaleDateString()}</span>
                   <button
                     onClick={() => dismissReminder(item.id)}
                     disabled={working}
-                    className="shrink-0 rounded-lg border border-zinc-300 px-2 py-0.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+                    className="shrink-0 rounded-lg border border-zinc-300 px-2 py-0.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   >
                     Dismiss
                   </button>
