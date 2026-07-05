@@ -5,6 +5,39 @@
 
 ---
 
+## 2026-07-05 — MOM-032 follow-up: inline "Review now" action on Today (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Per `NEXT.MD`'s own identified next step — closing the loop so a due review
+can be re-rated without leaving `/today` or starting a full session.
+
+**Changes:**
+- `apps/web/app/lib/api-client.ts` — added `reviewsApi.record(objectType, objectId,
+  selfRating)`, calling the existing `POST /reviews/:objectType/:objectId` (no new API
+  work needed — MOM-029 already built this endpoint).
+- `apps/web/app/(authenticated)/today/page.tsx` — each due-review card now has a
+  "Review now" button that expands an inline 1-5 rating row (matching the existing
+  self-rating star pattern used in `AnswerForm`); picking a rating calls
+  `reviewsApi.record()` directly and refetches, so a rescheduled item immediately
+  disappears from the due list.
+
+**Verification:**
+- `pnpm typecheck`/`lint`/`build`: green. `pnpm test`: 65/65 (no API changes this pass —
+  purely a web-side wiring of an already-tested endpoint).
+- **Live round trip**: recorded an initial `selfRating: 1` review, polled until due,
+  then called the same endpoint the new "Review now" button calls with `selfRating: 5`,
+  confirmed the item rescheduled ~1 day out (`reps: 2`, `state: 2`) and immediately
+  disappeared from `GET /reviews/due`.
+- Cleaned up test data; killed all lingering Momito node processes this time via
+  `Get-CimInstance`/`Stop-Process` filtered by command line, rather than per-PID
+  `taskkill`, avoiding the repeated `EPERM` lock issue from earlier in this session.
+
+**This is the practical end of tonight's Learning Loop push.** The remaining `/today`
+gap (merging reviews/recommendations/reminders into one ranked queue, per the plan's
+fuller §6.1 vision) is a real but separate follow-up, not required for the loop to work.
+
+---
+
 ## 2026-07-05 — MOM-032: due reviews on Today (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

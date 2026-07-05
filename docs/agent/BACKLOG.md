@@ -313,7 +313,9 @@ Global verification / forbidden-file defaults:
   dispatches on question type. Pure refactor — behavior unchanged for every question type.
 - **MOM-039** Reflection panel — BLOCKED on MOM-028.
 - **MOM-040** Session summary — **NEEDS_REPO_INSPECTION** (`summary` route already exists).
-- **MOM-041** Practice hub — BLOCKED on MOM-032.
+- **MOM-041** Practice hub — **DONE** (verified 2026-07-05, was already shipped in an
+  earlier session; `apps/web/app/(authenticated)/practice/page.tsx` exists — stale
+  BLOCKED status, not actually blocked).
 - **MOM-042** Today learning cards — BLOCKED on MOM-032, MOM-012.
 
 ### Track G — Content Factory · Gate 3

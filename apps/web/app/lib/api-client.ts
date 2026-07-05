@@ -458,11 +458,17 @@ export const remindersApi = {
     request<ReminderResponse>(`/reminders/${id}/dismiss`, { method: 'POST' }),
 };
 
-import type { ReviewStateResponse } from '@momito/shared';
+import type { ReviewableObjectType, ReviewStateResponse } from '@momito/shared';
 
 export const reviewsApi = {
   due: () =>
     request<ReviewStateResponse[]>('/reviews/due'),
+
+  record: (objectType: ReviewableObjectType, objectId: string, selfRating: number) =>
+    request<ReviewStateResponse>(`/reviews/${objectType}/${objectId}`, {
+      method: 'POST',
+      body: JSON.stringify({ selfRating }),
+    }),
 };
 
 export const learningApi = {
