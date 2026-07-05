@@ -290,17 +290,20 @@ Global verification / forbidden-file defaults:
   failure) and a live round trip: registered/logged in, created a real session, submitted
   a real answer with `selfRating: 4` through the actual HTTP endpoint, and confirmed a
   `ReviewState` row was created in Postgres with the correct FSRS-scheduled values.
-- **MOM-032** Today dashboard API (queue priority §6.1) — **DONE (three-section version)**
-  2026-07-05. `ReviewsService.listDue()` now enriches `question`-type rows with the
+- **MOM-032** Today dashboard API (queue priority §6.1) — **DONE, including the unified
+  queue** (three-section version shipped 2026-07-05, upgraded to a single ranked queue
+  the same day). `ReviewsService.listDue()` enriches `question`-type rows with the
   question's `title` (a second batched lookup, since `objectId` has no FK to join through
   — ADR-0002). `apps/web/app/lib/api-client.ts` gained `reviewsApi.due()`.
-  `apps/web/app/(authenticated)/today/page.tsx` now fetches recommendations, reminders,
-  and due reviews in parallel and renders three labeled sections (a due-review card links
-  to `/questions/:id`). **Not** a single unified priority-ranked queue (plan §6.1's full
-  vision merges all three sources into one ranking) — that's a further follow-up, not
-  done here. Verified via unit tests, a live round trip (recorded a review with
-  `selfRating: 1`, polled `/reviews/due` until its ~1-minute relearning-step due time
-  passed, confirmed the title-enriched response), and the full web build/lint/typecheck.
+  `apps/web/app/(authenticated)/today/page.tsx` fetches recommendations, reminders, and
+  due reviews in parallel, computes a client-side priority per source (due reviews:
+  200 + hours-overdue; recommendations: the service's existing 50-190ish scale as-is;
+  reminders: 150 + hours-overdue if past due, else a low flat 30 so upcoming-not-yet-due
+  reminders still show but sink to the bottom), and renders one sorted list — each entry
+  keeps its own specialized card (inline re-rating for reviews, dismiss for reminders,
+  navigate for recommendations), just interleaved instead of stacked in three sections.
+  Verified via unit tests, two live round trips (one per section version), and full web
+  build/lint/typecheck.
 - **MOM-033** Recommendation reason standardization — **DONE** 2026-07-05. The reason
   taxonomy half was already implemented in an earlier session (`RECOMMENDATION_REASONS`
   in `recommendations.service.ts`). This pass did the remaining "Today integration" half:

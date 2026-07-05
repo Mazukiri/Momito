@@ -5,6 +5,42 @@
 
 ---
 
+## 2026-07-05 — Unify Today into one priority-ranked queue (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** The last item explicitly flagged as "not blocked but not done" across the last
+several `NEXT.MD` updates — plan §6.1's fuller vision of a single ranked queue, instead of
+three stacked sections (due reviews / recommendations / reminders).
+
+**Design:** kept each source's existing specialized card UI (inline re-rating for
+reviews, dismiss for reminders, navigate for recommendations) — only the *arrangement*
+changed, from three headed sections to one interleaved list sorted by a computed
+priority:
+- Due reviews: `200 + min(hoursOverdue, 100)` — reviews rank above everything else by
+  default, since spaced-repetition forgetting compounds the longer a due item waits, and
+  scale further with how overdue they are.
+- Recommendations: unchanged, uses `RecommendationsService`'s existing priority field
+  as-is (roughly 50-190 depending on source — mission/task/gap/job/reading).
+- Reminders: `150 + min(hoursOverdue, 50)` if already past due (ranks just under
+  fresh due-reviews), otherwise a flat low `30` — a reminder that isn't due yet still
+  shows (nothing is hidden), but sinks toward the bottom rather than crowding out
+  anything actually actionable right now.
+
+**Changes:** `apps/web/app/(authenticated)/today/page.tsx` — replaced the three
+`{!loading && !error && X.length > 0 && (...)}` blocks with a `useMemo`-computed,
+discriminated-union `QueueEntry[]` sorted descending by priority, rendered via one
+`.map()` with a per-`kind` branch. No API changes — purely a client-side merge of data
+that was already being fetched in parallel.
+
+**Verification:** `pnpm typecheck`/`lint`/`build`: green (32+ web routes). `pnpm test`:
+68/68 (no API changes this pass).
+
+**This closes out every item this session's `NEXT.MD` had flagged as "not blocked but not
+yet done."** Remaining backlog items are migration-gated (separate D-004 decisions),
+credential-gated, or explicitly deferred pending those (MOM-073/074 AI feedback card).
+
+---
+
 ## 2026-07-05 — Wire up the dormant `spaced_review` session type (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)
