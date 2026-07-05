@@ -59,7 +59,7 @@ export default function DashboardPage() {
   return (
     <div>
       {/* Greeting */}
-      <h1 className="mb-6 text-2xl font-bold text-zinc-800">Dashboard</h1>
+      <h1 className="mb-6 text-2xl font-bold text-zinc-800 dark:text-zinc-100">Dashboard</h1>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -89,7 +89,7 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Focus Mission</p>
-              <h2 className="mt-2 text-xl font-semibold text-zinc-800">{summary.focusMission.name}</h2>
+              <h2 className="mt-2 text-xl font-semibold text-zinc-800 dark:text-zinc-100">{summary.focusMission.name}</h2>
               <p className="mt-2 text-sm text-zinc-500">{summary.focusMission.diagnosisSummary || summary.focusMission.summary || 'No diagnosis yet.'}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Badge label={summary.focusMission.stage} />
@@ -105,8 +105,8 @@ export default function DashboardPage() {
           {summary.todayPlanItems?.length ? (
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {summary.todayPlanItems.slice(0, 4).map((item) => (
-                <div key={item.id} className="rounded-lg border border-zinc-200 p-3">
-                  <p className="text-sm font-medium text-zinc-800">{item.title}</p>
+                <div key={item.id} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{item.title}</p>
                   <p className="mt-1 text-xs text-zinc-500">{item.type} • {item.estimatedMinutes} min</p>
                 </div>
               ))}
@@ -118,7 +118,7 @@ export default function DashboardPage() {
       {Boolean(summary.roleReadiness?.length || summary.recommendations?.length || summary.dueTasks?.length) && (
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
           <Card>
-            <h2 className="mb-4 text-lg font-semibold text-zinc-800">Role Readiness</h2>
+            <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">Role Readiness</h2>
             {!summary.roleReadiness?.length ? (
               <p className="text-sm text-zinc-500">Activate a career track to see readiness.</p>
             ) : (
@@ -126,10 +126,10 @@ export default function DashboardPage() {
                 {summary.roleReadiness.map((role) => (
                   <div key={role.roleTrackId}>
                     <div className="mb-1 flex items-center justify-between">
-                      <span className="text-sm font-medium text-zinc-700">{role.roleTrack.label}</span>
+                      <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{role.roleTrack.label}</span>
                       <span className="text-xs text-zinc-500">{role.overallPercentage}%</span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-zinc-200">
+                    <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                       <div className="h-full rounded-full bg-indigo-500" style={{ width: `${role.overallPercentage}%` }} />
                     </div>
                     {role.nextActions.length > 0 && (
@@ -142,7 +142,7 @@ export default function DashboardPage() {
           </Card>
 
           <Card>
-            <h2 className="mb-4 text-lg font-semibold text-zinc-800">Next Actions</h2>
+            <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">Next Actions</h2>
             {!summary.recommendations?.length ? (
               <p className="text-sm text-zinc-500">No recommendations yet.</p>
             ) : (
@@ -151,9 +151,9 @@ export default function DashboardPage() {
                   <button
                     key={item.id}
                     onClick={() => router.push(item.targetHref)}
-                    className="block w-full rounded-lg border border-zinc-200 p-3 text-left hover:border-zinc-300"
+                    className="block w-full rounded-lg border border-zinc-200 p-3 text-left hover:border-zinc-300 dark:border-zinc-700 dark:hover:border-zinc-600"
                   >
-                    <p className="text-sm font-medium text-zinc-800">{item.title}</p>
+                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{item.title}</p>
                     <p className="mt-1 text-xs text-zinc-500">{item.reason}</p>
                   </button>
                 ))}
@@ -165,15 +165,15 @@ export default function DashboardPage() {
 
       {summary.dueTasks?.length ? (
         <Card className="mt-6">
-          <h2 className="mb-4 text-lg font-semibold text-zinc-800">This Week</h2>
+          <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">This Week</h2>
           <div className="grid gap-3 md:grid-cols-2">
             {summary.dueTasks.slice(0, 6).map((task) => (
               <button
                 key={task.id}
                 onClick={() => router.push('/calendar')}
-                className="rounded-lg border border-zinc-200 p-3 text-left hover:border-zinc-300"
+                className="rounded-lg border border-zinc-200 p-3 text-left hover:border-zinc-300 dark:border-zinc-700 dark:hover:border-zinc-600"
               >
-                <p className="text-sm font-medium text-zinc-800">{task.title}</p>
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{task.title}</p>
                 <p className="mt-1 text-xs text-zinc-500">
                   {task.dueDate ? `Due ${new Date(task.dueDate).toLocaleDateString()}` : task.plannedFor ? `Planned ${new Date(task.plannedFor).toLocaleDateString()}` : 'Unscheduled'}
                 </p>
@@ -187,7 +187,7 @@ export default function DashboardPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         {/* Topic Progress */}
         <Card className="lg:col-span-2">
-          <h2 className="text-lg font-semibold text-zinc-800 mb-4">Topic Progress</h2>
+          <h2 className="text-lg font-semibold text-zinc-800 mb-4 dark:text-zinc-100">Topic Progress</h2>
           {summary.topicProgress.length === 0 ? (
             <p className="text-sm text-zinc-500">Start practicing to see your progress.</p>
           ) : (
@@ -195,12 +195,12 @@ export default function DashboardPage() {
               {summary.topicProgress.map((tp: TopicProgress) => (
                 <div key={tp.topicId}>
                   <div className="mb-1 flex items-center justify-between">
-                    <span className="text-sm font-medium text-zinc-700">{tp.topicName}</span>
+                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{tp.topicName}</span>
                     <span className="text-xs text-zinc-500">
                       {tp.attempted}/{tp.total} ({Math.round(tp.percentage)}%)
                     </span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-zinc-200">
+                  <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                     <div
                       className={`h-full rounded-full transition-all ${
                         tp.percentage >= 80 ? 'bg-green-500' :
@@ -218,21 +218,21 @@ export default function DashboardPage() {
 
         {/* Weak Topics */}
         <Card>
-          <h2 className="text-lg font-semibold text-zinc-800 mb-4">Weak Areas</h2>
+          <h2 className="text-lg font-semibold text-zinc-800 mb-4 dark:text-zinc-100">Weak Areas</h2>
           {summary.weakTopics.length === 0 ? (
             <p className="text-sm text-zinc-500">No weak areas detected. Keep it up!</p>
           ) : (
             <div className="space-y-3">
               {summary.weakTopics.map((wt: WeakTopic) => (
                 <div key={wt.topicId} className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-zinc-700">{wt.topicName}</span>
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{wt.topicName}</span>
                   <Badge label={`Avg: ${wt.avgSelfRating.toFixed(1)}/5`} variant="hard" />
                 </div>
               ))}
             </div>
           )}
           {summary.suggestedNextTopics.length > 0 && (
-            <div className="mt-4 border-t border-zinc-100 pt-4">
+            <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
               <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">
                 Suggested Next Topics
               </p>
@@ -240,7 +240,7 @@ export default function DashboardPage() {
                 {summary.suggestedNextTopics.map((t) => (
                   <span
                     key={t.id}
-                    className="inline-block rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700"
+                    className="inline-block rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-400"
                   >
                     {t.name}
                   </span>
@@ -252,7 +252,7 @@ export default function DashboardPage() {
 
         {/* Recent Sessions */}
         <Card>
-          <h2 className="text-lg font-semibold text-zinc-800 mb-4">Recent Sessions</h2>
+          <h2 className="text-lg font-semibold text-zinc-800 mb-4 dark:text-zinc-100">Recent Sessions</h2>
           {summary.recentSessions.length === 0 ? (
             <div className="text-center py-6">
               <p className="text-sm text-zinc-500">No sessions yet.</p>
@@ -269,10 +269,10 @@ export default function DashboardPage() {
                 <button
                   key={s.id}
                   onClick={() => router.push(`/practice/session/${s.id}/summary`)}
-                  className="flex w-full items-center justify-between rounded-lg border border-zinc-200 p-3 text-left hover:border-zinc-300 transition-colors"
+                  className="flex w-full items-center justify-between rounded-lg border border-zinc-200 p-3 text-left hover:border-zinc-300 transition-colors dark:border-zinc-700 dark:hover:border-zinc-600"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-zinc-700 truncate">
+                    <p className="text-sm font-medium text-zinc-700 truncate dark:text-zinc-300">
                       {s.title || SESSION_TYPE_LABELS[s.sessionType] || s.sessionType}
                     </p>
                     <p className="text-xs text-zinc-400">
