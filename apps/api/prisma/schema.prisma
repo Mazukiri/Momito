@@ -181,6 +181,14 @@ model AnswerAttempt {
   hintUsed   Boolean           @default(false) @map("hint_used")
   rubricScore Float?           @map("rubric_score")
   needsReview Boolean          @default(false) @map("needs_review")
+  // MOM-028 (DECISIONS.MD D-003 outcome): the genuinely-missing reflection
+  // fields, human-approved migration. missTags draws from plan §5.4's
+  // WeaknessSignal.reason taxonomy (packages/shared MISS_TAG_REASONS) but
+  // isn't DB-constrained to it — validated at the DTO layer instead.
+  missTags   String[]          @default([]) @map("miss_tags")
+  reflectionNote String?       @map("reflection_note")
+  language   String?
+  complexity String?
   createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)

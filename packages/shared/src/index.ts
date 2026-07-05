@@ -171,6 +171,10 @@ export interface AnswerAttemptResponse {
   hintUsed?: boolean;
   rubricScore?: number | null;
   needsReview?: boolean;
+  missTags?: MissTagReason[];
+  reflectionNote?: string | null;
+  language?: string | null;
+  complexity?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1053,6 +1057,23 @@ export interface Reviewable {
   rubricId?: string;
   reviewStateId?: string;
 }
+
+// ── Miss tags (MOM-028) ──────────────────────────────────────────────────────
+// Plan §5.4's WeaknessSignal.reason taxonomy, reused here as AnswerAttempt.missTags
+// (DECISIONS.MD D-003's MOM-028 outcome) — a user self-tags *why* an attempt missed,
+// distinct from `correctness`'s coarse correct/partial/incorrect outcome.
+export const MISS_TAG_REASONS = [
+  'misread',
+  'wrong_pattern',
+  'edge_case',
+  'time_pressure',
+  'blank',
+  'implementation_bug',
+  'concept_gap',
+  'communication_gap',
+  'tradeoff_gap',
+] as const;
+export type MissTagReason = (typeof MISS_TAG_REASONS)[number];
 
 // ── Rubric (MOM-023) ────────────────────────────────────────────────────────
 // Matches the Json shape already stored in Question.rubric (plan §5.3). Existing

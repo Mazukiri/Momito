@@ -48,6 +48,19 @@ which is schema-gated per D-004 — **not implemented in this pass**. Follow-up 
 a small, human-approved migration adding `missTags String[] @default([])`,
 `reflectionNote String?`, `language String?`, `complexity String?` to `AnswerAttempt`.
 
+**MOM-028 implemented (2026-07-05), human-approved:** migration
+`20260705060053_add_attempt_reflection_fields` applied to a real Postgres instance —
+purely additive (`ADD COLUMN` only, all nullable/defaulted), matching the shape every
+prior migration in this repo has used. `missTags` draws from plan §5.4's
+`WeaknessSignal.reason` taxonomy, added to `packages/shared/src/index.ts` as
+`MISS_TAG_REASONS`/`MissTagReason` (not previously defined anywhere in the codebase).
+`CreateAnswerDto` validates `missTags` against that taxonomy (`@IsIn(..., { each: true })`)
+and length-caps `reflectionNote`/`language`/`complexity`. No `sessions.service.ts` change
+needed — `answer()` already spreads the whole DTO into `answerAttempt.create`, so the new
+fields flow through automatically. Verified live: submitted a real answer via
+`POST /sessions/:id/answer` with all four fields populated, confirmed they persisted
+correctly, and confirmed an out-of-taxonomy miss tag is rejected with 400.
+
 ### D-004 — The planner never authors migrations; every schema change is human-gated
 **Context:** Hard rule "Do not create migrations." Net-new models (`ReviewState`, `WeaknessSignal`,
 `AiUsage`, `Story`, possibly `RoleTrack`) require schema changes.

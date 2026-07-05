@@ -259,7 +259,14 @@ Global verification / forbidden-file defaults:
   wraps the delete in a `$transaction` with `reviewState.deleteMany()` to prevent the
   orphan risk ADR-0002 identified. Verified with a live create→delete round-trip against
   Postgres (zero orphaned rows left), not just mocked unit tests.
-- **MOM-028** Attempt reflection fields — **NEEDS_REPO_INSPECTION** (most fields already exist; only miss-tags/reflection-note may be missing).
+- **MOM-028** Attempt reflection fields — **DONE** 2026-07-05, human-approved migration.
+  Added `missTags String[] @default([])`, `reflectionNote String?`, `language String?`,
+  `complexity String?` to `AnswerAttempt` exactly per D-003's spec. `missTags` validated
+  against plan §5.4's taxonomy (new `MISS_TAG_REASONS`/`MissTagReason` in
+  `packages/shared`). `CreateAnswerDto` updated; no service-layer change needed since
+  `answer()` already spreads the DTO into the create call. Verified via unit tests (3 new
+  DTO-validation cases) and a live round trip submitting a real answer with all four
+  fields through the actual HTTP endpoint. MOM-039 (reflection panel UI) is now unblocked.
 - **MOM-029** Reviews module (API) — **DONE** 2026-07-05. New
   `apps/api/src/reviews/{reviews.service,reviews.controller,reviews.module,dto/record-review.dto}.ts`,
   registered in `app.module.ts`. `GET /reviews/due` lists non-suspended due reviews;

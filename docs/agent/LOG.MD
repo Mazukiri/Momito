@@ -5,6 +5,64 @@
 
 ---
 
+## 2026-07-05 — MOM-028: attempt reflection fields, human-approved (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Trigger:** User approved a second migration ("i approve") in response to being asked
+about MOM-028 specifically. Treated as a distinct D-004 approval from the earlier
+ReviewState one — a different migration, not covered by blanket prior consent.
+
+**Design (from DECISIONS.MD D-003's existing MOM-028 inspection outcome, already
+recorded in an earlier session):** add exactly the four genuinely-missing fields —
+`missTags String[] @default([])`, `reflectionNote String?`, `language String?`,
+`complexity String?` — to `AnswerAttempt`. Found the intended `missTags` taxonomy in
+`docs/plans/MOMITO_REDESIGN_PLAN_V2.md` §5.4 (`WeaknessSignal.reason`): `misread |
+wrong_pattern | edge_case | time_pressure | blank | implementation_bug | concept_gap |
+communication_gap | tradeoff_gap` — not previously defined anywhere in the codebase.
+
+**Changes:**
+- `packages/shared/src/index.ts` — added `MISS_TAG_REASONS`/`MissTagReason`; extended
+  `AnswerAttemptResponse` with the four new optional fields.
+- `apps/api/prisma/schema.prisma` — added the four columns to `AnswerAttempt`, with a
+  comment explaining `missTags` isn't DB-constrained to the taxonomy (validated at the
+  DTO layer instead, consistent with how `correctness` is handled).
+- `prisma migrate dev --name add_attempt_reflection_fields` — purely additive
+  (`ALTER TABLE ... ADD COLUMN`, all nullable/defaulted), matching every prior migration's
+  shape in this repo. Applied to the same real Postgres instance used for tonight's
+  ReviewState migration.
+- `apps/api/src/sessions/dto/create-answer.dto.ts` — added the four fields:
+  `missTags?: MissTagReason[]` validated with `@IsArray() @ArrayMaxSize(...) @IsIn(...,
+  { each: true })` against the taxonomy; `reflectionNote`/`language`/`complexity` as
+  length-capped optional strings. **No `sessions.service.ts` change needed** —
+  `answer()` already does `data: { ...dto, sessionId, userId }`, so the new fields flow
+  through automatically once the DTO and schema both have them.
+- New `apps/api/test/create-answer.dto.spec.ts` (3 tests: accepts valid taxonomy tags,
+  rejects an out-of-taxonomy tag, rejects an over-length reflection note). Hit and fixed
+  a `Reflect.getMetadata is not a function` error — this app relies on `@nestjs/common`/
+  `@nestjs/core`'s own imports to transitively polyfill `reflect-metadata` (no explicit
+  `import 'reflect-metadata'` in `main.ts`), so a standalone DTO test that doesn't import
+  any Nest package needs that import itself; added it explicitly to the new test file.
+
+**Verification:**
+- `pnpm test`: 68/68 (was 65). `pnpm typecheck`/`lint`/`build`: green across all 3
+  packages. `pnpm content:validate`: 0 errors.
+- **Live round trip**: created a real session, submitted a real answer via
+  `POST /sessions/:id/answer` with all four fields populated
+  (`missTags: ["time_pressure", "edge_case"]`, a `reflectionNote`, `language:
+  "typescript"`, `complexity: "O(n)"`), confirmed all four persisted correctly in the
+  response. Separately confirmed an out-of-taxonomy miss tag (`"gave_up"`) is rejected
+  with 400 and the correct validation message. Cleaned up all test data afterward.
+- Killed lingering Momito node processes via `Get-CimInstance`/`Stop-Process` filtered by
+  command line before each pipeline re-run, avoiding the `EPERM` lock issue from earlier.
+
+**Docs updated:** `DECISIONS.MD` D-003 (implementation outcome appended), `BACKLOG.MD`
+(MOM-028 → done, notes MOM-039 is now unblocked).
+
+**Not done, deliberately:** MOM-039 (reflection panel UI) itself — that's the natural
+next PR now that the fields exist, but is a separate unit of web work, not bundled here.
+
+---
+
 ## 2026-07-05 — MOM-032 follow-up: inline "Review now" action on Today (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)
