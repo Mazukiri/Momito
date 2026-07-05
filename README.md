@@ -79,7 +79,7 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-This creates all tables and then idempotently seeds 12 topics, 20 companies, and 382 interview questions with role/area metadata — 149 DSA (all 20 coding-interview patterns, 2-3 examples each), 149 CS Fundamentals (OS, networking, databases, concurrency, computer architecture, ML fundamentals, OOP, JS/TS, Node.js, backend, C++), 24 System Design cases (7-section reference outlines), and 60 Behavioral prompts (STAR-structuring guidance). Run `pnpm content:stats` for a live breakdown, or visit `/settings/content` in the app. It also creates a demo account:
+This creates all tables and then idempotently seeds 12 topics, 20 companies, and 384 interview questions with role/area metadata — 150 DSA (all 20 coding-interview patterns), 149 CS Fundamentals (OS, networking, databases, concurrency, computer architecture, ML fundamentals, OOP, JS/TS, Node.js, backend, C++), 25 System Design cases (7-section reference outlines), and 60 Behavioral prompts (STAR-structuring guidance). Run `pnpm content:stats` for a live breakdown, or visit `/settings/content` in the app. It also creates a demo account:
 
 ```txt
 Email: demo@momito.local
@@ -124,7 +124,7 @@ All frontend pages are under `apps/web/app/`.
 | `/` | Redirects to `/today` |
 | `/login` | Login (mobile-first, restyled) |
 | `/register` | Register (mobile-first, restyled) |
-| `/today` | Daily landing page (stub — the real reviews/practice/career queue lands with the Learning Engine, see `docs/agent/BACKLOG.MD` MOM-032) |
+| `/today` | Daily queue for due reviews, recommendations, reminders, and scheduled prep work |
 | `/dashboard` | Progress overview, topic progress, weak areas, recent sessions |
 | `/missions` | Mission list (goal-driven weekly planning) |
 | `/missions/[id]` | Mission detail: competency states, weekly plan, check-ins |
@@ -333,7 +333,7 @@ can be added to a phone home screen; there is intentionally **no service worker 
 - 3 difficulty levels: Easy, Medium, Hard
 - Search and multi-filter (topic, difficulty, type, company, keyword) — deep-linkable via `?type=` query param
 - Reference answer toggle for self-study, rendered as markdown
-- 382 seeded questions: 149 DSA (all 20 coding patterns), 149 CS Fundamentals, 24 System Design, 60 Behavioral
+- 384 seeded questions: 150 DSA (all 20 coding patterns), 149 CS Fundamentals, 25 System Design, 60 Behavioral
 
 ### Mock Interview Sessions
 - Four session types: Quick Practice, Topic Practice, Company Practice, Mixed Mock
@@ -413,7 +413,7 @@ factory, career engine) is tracked as PR-sized tasks in `docs/agent/BACKLOG.MD`,
 decision log at `docs/agent/DECISIONS.MD` and formal ADRs under `docs/adr/`:
 
 - **ADR-0001**: NestJS `apps/api` is the backend of record (not the archived Python `backend/`)
-- **ADR-0002**: `ReviewState` uses a polymorphic `objectType`/`objectId` reference (design only — not yet implemented; schema changes are human-approval gated)
+- **ADR-0002**: `ReviewState` uses a polymorphic `objectType`/`objectId` reference for persisted review scheduling
 - **ADR-0003**: The (not-yet-built) FSRS learning engine will coexist with the existing Mission engine rather than replace it
 - **ADR-0004**: No copyrighted third-party problem statements in seed content — metadata, links, and original notes only
 

@@ -31,6 +31,7 @@
 | MOM-056 | CLAUDE | `apps/api/prisma/seed-data.ts`, `docs/agent/LOG.MD`, `docs/agent/LOCKS.MD` | 2026-07-05T10:25:00Z |
 | MOM-050 (already implemented) | CLAUDE | `apps/api/src/dsa/**`, `apps/api/test/dsa.service.spec.ts`, `docs/agent/LOG.MD`, `docs/agent/LOCKS.MD` | 2026-07-05T10:26:15Z |
 | MOM-083 | CLAUDE | `apps/api/src/jobs/jobs.service.ts`, `apps/api/test/jobs.service.spec.ts`, `docs/agent/LOG.MD`, `docs/agent/LOCKS.MD` | 2026-07-05T10:28:50Z |
+| MOM-004 | CLAUDE | `README.md`, `docs/agent/LOG.MD`, `docs/agent/LOCKS.MD` | 2026-07-05T10:30:28Z |
 
 ## Standing "hands-off" zones (never claim without an explicit, human-approved task)
 

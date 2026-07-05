@@ -1,5 +1,35 @@
 # LOG
 
+## 2026-07-05 - MOM-004 root README accuracy refresh (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Task:** MOM-004 / MOM-089 - Root project docs refresh.
+
+**Current behavior before change:** The README still described `/today` as a stub, reported pre-MOM-048/MOM-056 seed counts, and described ADR-0002 ReviewState as design-only despite the current persisted review scheduling implementation.
+
+**Files changed:**
+- `README.md`
+- `docs/agent/LOCKS.MD`
+- `docs/agent/LOG.MD`
+
+**Changes:**
+- Updated seed totals to 384 questions, 150 DSA, and 25 system design cases.
+- Updated `/today` to describe the live due-review/recommendation/reminder/prep queue.
+- Updated ADR-0002 wording to reflect persisted ReviewState scheduling.
+
+**Verification:**
+- `rg -n "382|149 DSA|24 System|stub|design only|not yet implemented" README.md` - no stale count/status hits remained
+- `pnpm content:stats` - passed (384 total questions, 150 DSA, 25 system design)
+- `git diff --check -- README.md docs/agent/LOG.MD docs/agent/LOCKS.MD` - passed
+
+**Risks / follow-ups:**
+- Docs-only change; no runtime behavior changed.
+- `AGENTS.MD` remains dirty from an earlier instruction/documentation change and was not touched by this task.
+
+**Suggested commit message:** `docs: refresh root README status`
+
+---
+
 ## 2026-07-05 - MOM-083 job prep linkage regression coverage (CLAUDE)
 
 **Actor:** CLAUDE (implementer)
