@@ -78,7 +78,7 @@ function TopicsManager() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-zinc-800">Topics</h3>
+        <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">Topics</h3>
         {!editingTopic && (
           <button
             onClick={() => { resetForm(); setEditingTopic({ id: '', name: '' }); }}
@@ -93,15 +93,15 @@ function TopicsManager() {
 
       {/* Create/Edit form inline when editingTopic is set */}
       {editingTopic && (
-        <Card className="mb-4 border-indigo-200">
+        <Card className="mb-4 border-indigo-200 dark:border-indigo-900">
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-zinc-700">Name</label>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Name</label>
               <input
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                 placeholder="e.g. System Design"
                 maxLength={200}
                 autoFocus
@@ -109,14 +109,14 @@ function TopicsManager() {
             </div>
             {!editingTopic.id && (
               <div>
-                <label className="block text-sm font-medium text-zinc-700">
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Description <span className="text-zinc-400">(optional)</span>
                 </label>
                 <textarea
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   rows={2}
-                  className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                   placeholder="Brief description of the topic..."
                 />
               </div>
@@ -131,7 +131,7 @@ function TopicsManager() {
               </button>
               <button
                 onClick={resetForm}
-                className="rounded-lg border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+                className="rounded-lg border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 Cancel
               </button>
@@ -149,20 +149,20 @@ function TopicsManager() {
           {topics.map((t) => (
             <div
               key={t.id}
-              className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3"
+              className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900"
             >
-              <span className="text-sm font-medium text-zinc-700">{t.name}</span>
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.name}</span>
               <div className="flex gap-2">
                 <button
                   onClick={() => startEdit(t)}
-                  className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                  className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   Edit
                 </button>
                 <button
                   onClick={() => handleDelete(t.id)}
                   disabled={deletingId === t.id}
-                  className="rounded border border-red-300 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  className="rounded border border-red-300 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
                 >
                   {deletingId === t.id ? '...' : 'Delete'}
                 </button>
@@ -250,7 +250,7 @@ function CompaniesManager() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-zinc-800">Companies</h3>
+        <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">Companies</h3>
         {!editingCompany && (
           <button
             onClick={() => { resetForm(); setEditingCompany({ id: '', name: '' }); }}
@@ -264,15 +264,15 @@ function CompaniesManager() {
       {error && <div className="mb-3"><ErrorBanner message={error} /></div>}
 
       {editingCompany && (
-        <Card className="mb-4 border-indigo-200">
+        <Card className="mb-4 border-indigo-200 dark:border-indigo-900">
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-zinc-700">Name</label>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Name</label>
               <input
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                 placeholder="e.g. Google"
                 maxLength={200}
                 autoFocus
@@ -281,26 +281,26 @@ function CompaniesManager() {
             {!editingCompany.id && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700">
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                     Region <span className="text-zinc-400">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={newRegion}
                     onChange={(e) => setNewRegion(e.target.value)}
-                    className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                     placeholder="e.g. US, Singapore, Global"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700">
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                     Notes <span className="text-zinc-400">(optional)</span>
                   </label>
                   <textarea
                     value={newNotes}
                     onChange={(e) => setNewNotes(e.target.value)}
                     rows={2}
-                    className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                     placeholder="Any notes about the company..."
                   />
                 </div>
@@ -316,7 +316,7 @@ function CompaniesManager() {
               </button>
               <button
                 onClick={resetForm}
-                className="rounded-lg border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+                className="rounded-lg border border-zinc-300 px-4 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 Cancel
               </button>
@@ -334,20 +334,20 @@ function CompaniesManager() {
           {companies.map((c) => (
             <div
               key={c.id}
-              className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3"
+              className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900"
             >
-              <span className="text-sm font-medium text-zinc-700">{c.name}</span>
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{c.name}</span>
               <div className="flex gap-2">
                 <button
                   onClick={() => startEdit(c)}
-                  className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                  className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   Edit
                 </button>
                 <button
                   onClick={() => handleDelete(c.id)}
                   disabled={deletingId === c.id}
-                  className="rounded border border-red-300 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  className="rounded border border-red-300 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
                 >
                   {deletingId === c.id ? '...' : 'Delete'}
                 </button>
@@ -365,7 +365,7 @@ export default function SettingsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-800">Settings</h1>
+        <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Settings</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Manage topics and companies used across your question bank
         </p>
@@ -375,7 +375,7 @@ export default function SettingsPage() {
         <Card>
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="font-semibold text-zinc-800">Content Coverage</h2>
+              <h2 className="font-semibold text-zinc-800 dark:text-zinc-100">Content Coverage</h2>
               <p className="mt-1 text-sm text-zinc-500">See seed/published question progress toward plan targets.</p>
             </div>
             <Link href="/settings/content" className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
