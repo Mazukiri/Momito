@@ -333,8 +333,11 @@ Global verification / forbidden-file defaults:
   `apps/web/app/(authenticated)/today/page.tsx` now fetches and displays pending
   reminders alongside the recommendation queue, with a working Dismiss action. Top-bar
   badge/bell is still not implemented — smaller follow-up, not blocking.
-- **MOM-081** Jobs page → mobile-first list (no drag-drop) — **NEEDS_REPO_INSPECTION** (`jobs/` route exists).
-- **MOM-082** Career hub — **NEEDS_REPO_INSPECTION** (`career/` route exists).
+- **MOM-081** Jobs page → mobile-first list (no drag-drop) — **DONE** (verified 2026-07-05:
+  `jobs/page.tsx` is already a single-column, filterable, mobile-first card list with a
+  responsive form grid; no drag-drop anywhere).
+- **MOM-082** Career hub — **DONE** (verified 2026-07-05: `career/page.tsx` already shows
+  role-readiness bars, role track selection, and career goals; fully built out).
 - **MOM-083** Link jobs ↔ prep objects — BLOCKED on MOM-032.
 
 ### Track K — Operations & Hardening · Gate 6

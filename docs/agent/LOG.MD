@@ -5,6 +5,44 @@
 
 ---
 
+## 2026-07-05 — Stale-doc cleanup + final verification (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** After MOM-033/038/078/079/080, did a final sweep for any other backlog entries
+that looked stale (marked NEEDS_REPO_INSPECTION/blocked from an earlier audit but likely
+already done given how much has shipped since). Verified and marked done:
+- **MOM-061** (role tracks) — `CAREER_ROLE_TRACKS` already has 10 tracks; backlog said 4.
+- **MOM-081** (jobs mobile-first list) — `jobs/page.tsx` already a single-column,
+  filterable card list, no drag-drop.
+- **MOM-082** (career hub) — `career/page.tsx` already shows readiness bars, role track
+  selection, and goals.
+No code changes for these three — docs-only corrections against already-shipped work.
+
+**Searched for remaining TODO/FIXME/stub markers** across `apps/web/app` and
+`apps/api/src` — none found (the one `'todo'` match is the Task status enum value, not a
+code comment).
+
+**Final full-pipeline verification:** `pnpm lint` ✅ (3/3 projects), `pnpm typecheck` ✅
+(3/3), `pnpm build` ✅ (32 web routes, api + shared build clean), `pnpm test` ✅ (56/56),
+`pnpm content:validate` ✅ (0 errors, 382 questions, unchanged this session).
+
+**State of the backlog after this session's 6 commits (MOM-035, P1 partial-correctness
+fix, MOM-026/SPIKE-003, MOM-030/SPIKE-004, MOM-033, MOM-038, MOM-078/079/080, plus this
+doc cleanup):** every remaining open backlog item is now genuinely blocked on one of three
+things this agent cannot resolve unattended:
+1. **Human approval for a schema migration** (D-004) — MOM-027 (ReviewState) is fully
+   designed and ready; MOM-069 (AiUsage), MOM-075 (Task consolidation), MOM-063 (Story) are
+   spike-gated the same way.
+2. **Credentials/external services** — MOM-021 (deploy), MOM-068+ (AI feedback engine),
+   MOM-049 (LeetCode import), MOM-087 (backup workflow).
+3. **A running Docker/Postgres instance in this environment**, which isn't available —
+   blocks manually verifying the Golden Path (MOM-090) and would block any task requiring
+   live DB interaction beyond unit tests.
+No further autonomous progress is possible without the user resolving one of these three
+gates. Reported this back to the user rather than inventing further busywork.
+
+---
+
 ## 2026-07-05 — MOM-079/080: reminder dismiss UI on calendar + Today (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

@@ -1,79 +1,66 @@
 # NEXT
 
 > The single active PR-sized task. Only one at a time (Engineering Invariant 2.4.1).
-> `AGENTS.MD` sets the current priority order: P0 (stabilize truth) → P1 (fix named
-> technical risks) → P2 (Learning Loop: ReviewState/FSRS/Today) → P3 (everything else).
-> As of this update: P1 risks are resolved (DIRECT_URL verified fine, `aiScore` scale
-> landmine documented — no writer exists yet so nothing to fix blind, Golden Path check
-> blocked on Docker not being available in this environment). P2 progress: MOM-026/
-> SPIKE-003 (ReviewState migration design) and MOM-030/SPIKE-004 (FSRS scheduling
-> algorithm) are both done at the design/pure-logic layer. MOM-027 (the actual migration)
-> is READY but requires explicit human approval per D-004 before anyone runs
-> `prisma migrate`.
+> `AGENTS.MD` sets the priority order: P0 (stabilize truth) → P1 (fix named technical
+> risks) → P2 (Learning Loop: ReviewState/FSRS/Today) → P3 (everything else). As of this
+> update, **every remaining backlog item is blocked on one of three things this agent
+> cannot resolve unattended** — see below. This is not a stopping point chosen out of
+> laziness; it's the actual state after a systematic sweep (see `LOG.MD`'s final entry for
+> 2026-07-05).
 
 ---
 
-## Current state (2026-07-05, session 4, continued)
+## Session summary (2026-07-05, session 4 — 6 commits)
 
-Done this session, in order:
-1. MOM-035 — CodeMirror editor for DSA/coding answers (committed `4a1c1d3`).
-2. P1 fix — DSA/mission solved-heuristics no longer count `correctness: 'partial'` as
-   solved (committed `53c90ae`).
-3. MOM-026/SPIKE-003 — ReviewState migration design finalized (ADR-0002 updated with all
-   three open questions answered: migration is additive/safe, a real orphan-delete risk
-   was found and scoped into MOM-027's acceptance criteria, partial-index strategy
-   decided). **Design only, `schema.prisma` untouched.**
-4. MOM-030/SPIKE-004 — FSRS scheduling algorithm implemented as pure functions in
-   `apps/api/src/reviews/fsrs-scheduler.ts` (wraps `ts-fsrs`, verified against its real
-   `.d.ts` first). No persistence, no module/controller — nothing to wire to yet.
+1. `4a1c1d3` — MOM-035: CodeMirror editor for DSA/coding answers.
+2. `53c90ae` — P1 fix: DSA/mission solved-heuristics no longer count
+   `correctness: 'partial'` as solved.
+3. `d9c41f0` — MOM-026/SPIKE-003 (ReviewState migration design finalized) + MOM-030/
+   SPIKE-004 (FSRS scheduling algorithm, pure functions, no persistence yet).
+4. `0cb4223` — MOM-033: wired `/today` to real recommendations data.
+5. `e9cae68` — MOM-038: split `AnswerForm` into per-question-type answer panels.
+6. `390dedf` — MOM-079/080: reminders are now dismissible from the UI and surfaced on
+   `/today`; MOM-078 resolved as no-scheduler-needed.
 
-(3) and (4) are uncommitted as of this NEXT.MD update — commit them together as one PR
-(they're the same "P2 groundwork" unit) with message:
-```text
-docs+feat: finalize ReviewState migration design (SPIKE-003) and add FSRS scheduling algorithm (MOM-030/SPIKE-004)
-```
+Plus doc-only corrections for three backlog entries that were stale (already done in
+earlier sessions but not marked): MOM-061 (role tracks), MOM-081 (jobs mobile list),
+MOM-082 (career hub).
 
-## Next task
+**Full verification, all green:** `pnpm lint`/`typecheck`/`test`/`build` (3/3 projects,
+56/56 tests, 32 web routes) and `pnpm content:validate` (0 errors).
 
-**MOM-027 — Implement ReviewState migration.** This is the next item in the P2 sequence,
-but it is **blocked on explicit human approval** — per D-004, the planner/implementer may
-never author a schema migration unattended. Do not start this without the user explicitly
-saying to proceed with the migration.
+## Why there's no next task queued
 
-If the human approves MOM-027:
-- Add the `ReviewState` model to `apps/api/prisma/schema.prisma` exactly as specified in
-  ADR-0002 (polymorphic `objectType`/`objectId`, `@@unique([userId, objectType, objectId])`).
-- Run `prisma migrate dev --create-only`, then hand-edit the generated `migration.sql` to
-  append the partial index from ADR-0002's SPIKE-003 findings
-  (`CREATE INDEX ... WHERE NOT "suspended"`).
-- Add the transactional `reviewState.deleteMany()` cleanup to
-  `apps/api/src/questions/questions.service.ts`'s `remove()` in the *same* PR (the orphan
-  risk ADR-0002 identified), not as a follow-up.
-- Wire `apps/api/src/reviews/fsrs-scheduler.ts` (already built, MOM-030) into a new
-  `ReviewsModule`/`ReviewsService` with actual Prisma persistence — this becomes MOM-029.
+Every open backlog item now falls into one of three gated categories:
 
-If the human does **not** yet want to approve MOM-027, reasonable alternative next steps
-(all still P2/P3, none touch schema):
-- Run the Golden Path manually — requires the user to start Docker locally
-  (`docker compose up -d && pnpm dev`) since this sandbox has no Docker; I can then drive
-  it via curl/API calls once confirmed running.
-- MOM-033 — Recommendation reason standardization (marked READY-ish in `BACKLOG.MD`,
-  no schema change).
+**1. Needs human approval for a schema migration (D-004 — hard rule, cannot be
+self-authorized regardless of how much autonomy is otherwise granted):**
+- **MOM-027** — Implement ReviewState migration. Fully designed (ADR-0002 + SPIKE-003
+  answered), FSRS algorithm ready (MOM-030) — just needs the migration itself approved.
+  This is the single highest-value next step once approved; it unblocks MOM-029, 031, 032,
+  039, and the entire Gate 2 learning loop.
+- MOM-063 (Story schema), MOM-069 (AiUsage), MOM-075 (Task consolidation) — same gate.
 
-### Allowed files (if MOM-027 is approved)
-- `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**` (new migration only).
-- `apps/api/src/questions/questions.service.ts` (orphan cleanup only).
-- New `apps/api/src/reviews/reviews.module.ts`, `reviews.controller.ts`,
-  `reviews.service.ts`.
-- `apps/api/src/app.module.ts` (register the new module).
+**2. Needs credentials/external services this agent doesn't have:**
+MOM-021 (deploy), MOM-068+ (AI feedback engine, needs an Anthropic API key), MOM-049
+(LeetCode import), MOM-087 (backup workflow).
 
-### Forbidden changes
-- Do not touch any other existing migration file.
-- Do not change `fsrs-scheduler.ts`'s pure-function signatures without re-running its
-  existing test suite.
+**3. Needs a running Docker/Postgres instance, unavailable in this sandbox:**
+MOM-090 (final golden-path verification) — the API/web code is ready to test, there's
+just no live database here to exercise it against.
 
-### After completing
+## If the user wants to unblock more work
+
+- **Approve MOM-027** and I'll implement the ReviewState migration + wire the FSRS
+  scheduler into a real `ReviewsModule`, per ADR-0002's already-finalized plan.
+- **Start Docker locally** (`docker compose up -d && pnpm dev`) and confirm it's running,
+  and I can drive the Golden Path via curl/API calls to verify and document it.
+- **Provide an Anthropic API key** (as an env var, not pasted in chat) to unblock the AI
+  feedback engine spike (MOM-068).
+- Otherwise, flag any specific area to focus on — there may be polish-tier UI work not
+  yet catalogued as its own backlog line that's worth a closer look.
+
+### After the next task is picked
 1. Append an entry to `LOG.MD`.
-2. Set `NEXT.MD` to MOM-029 (Reviews module API, if not folded into MOM-027) or MOM-031
-   (hook answer submission into scheduling).
+2. Update this file to point at the following task.
 3. Release any locks in `LOCKS.MD`.
