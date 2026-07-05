@@ -1,5 +1,39 @@
 # LOG
 
+## 2026-07-05 - MOM-043 seed-data structure split (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Task:** MOM-043 - Seed-data structure.
+
+**Current behavior before change:** `apps/api/prisma/seed.ts` mixed the static seed corpus, metadata inference helpers, and executable Prisma upsert flow in one large file. Content validation imported from `seed.ts`, relying on a guard to avoid running the live DB seeder as an import side effect.
+
+**Files changed:**
+- `apps/api/prisma/seed-data.ts` (new)
+- `apps/api/prisma/seed.ts`
+- `apps/api/scripts/content-lib.ts`
+- `docs/agent/LOCKS.MD`
+- `docs/agent/LOG.MD`
+
+**Changes:**
+- Moved topics, companies, questions, `SeedQuestion`, and metadata inference helpers into `seed-data.ts`.
+- Kept `seed.ts` as the executable Prisma seeding entrypoint only.
+- Updated content validation/stats/sample tooling to import seed data directly from `seed-data.ts`.
+- No seed rows, IDs, question text, metadata inference behavior, schema, or migrations changed.
+
+**Verification:**
+- `pnpm content:validate` - passed (0 errors, 0 warnings)
+- `pnpm content:stats` - passed (382 total questions)
+- `pnpm --filter @momito/api build` - passed
+- `pnpm --filter @momito/api test` - passed (68 tests)
+
+**Risks / follow-ups:**
+- The seed corpus is still a large single array; this PR separates data from execution but does not split by domain yet.
+- `AGENTS.MD` remains dirty from an earlier instruction/documentation change and was not touched by this task.
+
+**Suggested commit message:** `refactor(api): split seed data from prisma seeder`
+
+---
+
 ## 2026-07-05 - Dark mode pass, final cleanup: attempts detail + study plan (CLAUDE)
 
 **Actor:** CLAUDE (implementer)

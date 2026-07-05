@@ -1,4 +1,4 @@
-import { questions, topics, inferQuestionMetadata, type SeedQuestion } from '../prisma/seed';
+import { questions, topics, inferQuestionMetadata, type SeedQuestion } from '../prisma/seed-data';
 
 export interface ContentIssue {
   severity: 'error' | 'warning';
