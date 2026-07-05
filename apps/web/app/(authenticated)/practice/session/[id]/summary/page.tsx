@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { sessionsApi, type SessionDetailResponse } from '../../../../../lib/api-client';
 import { Card, Badge, Spinner, ErrorBanner, EmptyState } from '../../../../../components/ui';
+import { MISS_TAG_LABELS } from '../../../../../components/session/ReflectionPanel';
+import type { MissTagReason } from '@momito/shared';
 
 const TYPE_LABELS: Record<string, string> = {
   dsa: 'DSA',
@@ -201,6 +203,27 @@ export default function SessionSummaryPage() {
                           </span>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  {attempt.missTags && attempt.missTags.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">What happened</p>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {attempt.missTags.map((tag: MissTagReason) => (
+                          <span
+                            key={tag}
+                            className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600"
+                          >
+                            {MISS_TAG_LABELS[tag]}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {attempt.reflectionNote && (
+                    <div className="mt-2">
+                      <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Reflection</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600">{attempt.reflectionNote}</p>
                     </div>
                   )}
                   <div className="mt-2">

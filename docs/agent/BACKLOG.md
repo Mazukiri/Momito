@@ -316,7 +316,9 @@ Global verification / forbidden-file defaults:
 - **MOM-034** Markdown renderer — READY after MOM-007 (add `react-markdown`).
 - **MOM-035** CodeMirror editor — **NEEDS_SPIKE** (bundle/SSR in Next 16).
 - **MOM-036** Timer hook — READY.
-- **MOM-037** Split session page into components — **NEEDS_REPO_INSPECTION** (`practice/session/[id]` exists).
+- **MOM-037** Split session page into components — **DONE** (verified 2026-07-05:
+  `practice/session/[id]/page.tsx` already composes `SessionHeader`/`AnswerForm`/
+  `AllAnsweredPanel`/`ReviewQuestionCard` as separate components; stale status).
 - **MOM-038** Answer panel by question type — **DONE** 2026-07-05. Split
   `AnswerForm.tsx`'s inline branching into `apps/web/app/components/session/answer-panels/`
   (`TextAnswerPanel`, `SystemDesignAnswerPanel`, `CodeAnswerPanel`); `AnswerForm` now just
@@ -329,7 +331,8 @@ Global verification / forbidden-file defaults:
   submit like `selfRating`). `sessionsApi.answer()`'s type signature extended with the
   four MOM-028 fields. The API side (persistence, DTO validation) was already verified
   live in MOM-028's commit — this is purely the UI wiring to that proven endpoint.
-- **MOM-040** Session summary — **NEEDS_REPO_INSPECTION** (`summary` route already exists).
+- **MOM-040** Session summary — **DONE** (verified 2026-07-05: `summary/page.tsx` exists
+  and now also shows the MOM-039 reflection fields per-question, not just self-rating).
 - **MOM-041** Practice hub — **DONE** (verified 2026-07-05, was already shipped in an
   earlier session; `apps/web/app/(authenticated)/practice/page.tsx` exists — stale
   BLOCKED status, not actually blocked).

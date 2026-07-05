@@ -5,6 +5,35 @@
 
 ---
 
+## 2026-07-05 — Show reflection fields back to the user (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** While checking MOM-037/040 (session page/summary split — both already done,
+just unmarked), found a real gap: MOM-039's reflection panel lets a user record
+`missTags`/`reflectionNote`, but nothing ever displayed that data back — the session
+summary and attempt-detail pages only showed `selfRating`. Reflection you can't see again
+later isn't much of a reflection loop.
+
+**Changes:**
+- `apps/web/app/components/session/ReflectionPanel.tsx` — exported `MISS_TAG_LABELS` (was
+  module-private) so other pages can reuse the same human-readable labels.
+- `apps/web/app/(authenticated)/practice/session/[id]/summary/page.tsx` — each answered
+  question's card now shows miss-tag chips and the reflection note, alongside the
+  existing self-rating stars.
+- `apps/web/app/(authenticated)/attempts/[id]/page.tsx` — same addition, as a new
+  "Reflection" card (only rendered if there's actually a miss-tag or note to show).
+
+**Verification:** `pnpm typecheck`/`lint`/`build`: green (32+ web routes). `pnpm test`:
+68/68 (no API changes — the fields were already in `AnswerAttemptResponse` from MOM-028).
+
+**Also verified (no gap found):** MOM-037 (split session page into components) and
+MOM-040 (session summary) are both already implemented — `practice/session/[id]/page.tsx`
+already composes `SessionHeader`/`AnswerForm`/`AllAnsweredPanel`/`ReviewQuestionCard`, and
+the summary route already exists at 238 lines. Both `BACKLOG.MD` entries were stale
+(marked NEEDS_REPO_INSPECTION); fixed.
+
+---
+
 ## 2026-07-05 — Unify Today into one priority-ranked queue (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

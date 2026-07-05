@@ -6,7 +6,7 @@ import { MISS_TAG_REASONS, type MissTagReason } from '@momito/shared';
 // MOM-039: optional reflection step (plan §5.4's WeaknessSignal.reason taxonomy,
 // added to AnswerAttempt by MOM-028). Collapsed by default so it never gets in
 // the way of a quick answer — most attempts won't need it.
-const MISS_TAG_LABELS: Record<MissTagReason, string> = {
+export const MISS_TAG_LABELS: Record<MissTagReason, string> = {
   misread: 'Misread the question',
   wrong_pattern: 'Used the wrong approach',
   edge_case: 'Missed an edge case',

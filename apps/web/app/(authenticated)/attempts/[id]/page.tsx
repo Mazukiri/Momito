@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { attemptsApi } from '../../../lib/api-client';
-import type { AnswerAttemptResponse } from '@momito/shared';
+import type { AnswerAttemptResponse, MissTagReason } from '@momito/shared';
 import { Card, Spinner, ErrorBanner, EmptyState } from '../../../components/ui';
+import { MISS_TAG_LABELS } from '../../../components/session/ReflectionPanel';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -122,6 +123,26 @@ export default function AttemptDetailPage() {
             ))}
           </div>
           <p className="mt-1 text-sm text-zinc-500">{attempt.selfRating} / 5</p>
+        </Card>
+      )}
+
+      {((attempt.missTags && attempt.missTags.length > 0) || attempt.reflectionNote) && (
+        <Card className="mt-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 mb-2">
+            Reflection
+          </h2>
+          {attempt.missTags && attempt.missTags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {attempt.missTags.map((tag: MissTagReason) => (
+                <span key={tag} className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
+                  {MISS_TAG_LABELS[tag]}
+                </span>
+              ))}
+            </div>
+          )}
+          {attempt.reflectionNote && (
+            <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">{attempt.reflectionNote}</p>
+          )}
         </Card>
       )}
 
