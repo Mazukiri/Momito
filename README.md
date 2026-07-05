@@ -339,6 +339,8 @@ can be added to a phone home screen; there is intentionally **no service worker 
 - Four session types: Quick Practice, Topic Practice, Company Practice, Mixed Mock
 - Configurable question count (1–100), filterable by DSA pattern
 - Question-by-question flow with text answer submission and a per-question timer
+- DSA/coding questions get a CodeMirror code editor (line numbers, syntax highlighting,
+  JS/Python/C++/Java language picker) instead of a plain textarea
 - System design questions get a 7-section template (Requirements/Estimation/API/Data
   Model/High-level Design/Deep Dives/Tradeoffs) with a markdown Edit/Preview toggle
 - Self-rating (1–5 stars) per answer

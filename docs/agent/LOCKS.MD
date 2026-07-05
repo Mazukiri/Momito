@@ -23,6 +23,7 @@
 | MOM-001 | CODEX | git snapshot refs; `docs/agent/LOG.MD`, `docs/agent/NEXT.MD`, `docs/agent/LOCKS.MD` bookkeeping | 2026-07-04T20:15:52Z |
 | MOM-002 (planning) | CLAUDE (orchestrator) | `docs/agent/*.md` | 2026-07-05 |
 | MOM-005 | CLAUDE | `docs/adr/000X-*.md`, `docs/agent/DECISIONS.MD` (cross-link only) | 2026-07-05 |
+| MOM-035 | CLAUDE | `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/app/components/CodeEditor.tsx`, `apps/web/app/components/session/AnswerForm.tsx` | 2026-07-05 |
 
 ## Standing "hands-off" zones (never claim without an explicit, human-approved task)
 

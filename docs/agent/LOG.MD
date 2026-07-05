@@ -5,6 +5,48 @@
 
 ---
 
+## 2026-07-05 — MOM-035: CodeMirror editor for DSA/coding answers (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** MOM-035 (SPIKE + implementation), the task `NEXT.MD` queued after the Gate 3
+content push.
+
+**Spike findings:**
+1. `next/dynamic(() => import(...), { ssr: false })` works cleanly under Next 16.2.9 +
+   React 19 + Turbopack — confirmed against the vendored `node_modules/next/dist/docs`
+   lazy-loading guide, no workaround needed.
+2. Bundle impact: CodeMirror + 4 language packs (`@uiw/react-codemirror`,
+   `@codemirror/lang-{javascript,python,cpp,java}`) land in their own ~684K (uncompressed)
+   chunk, only fetched when a `dsa`/`cpp` question actually renders — confirmed via
+   `grep -l codemirror .next/static/chunks/*.js` after `next build`. No other route's
+   bundle grows.
+3. Theme: shipped one dark-friendly CodeMirror theme (`theme="dark"`) for the initial cut
+   rather than wiring it to `ThemeProvider` — acceptable per the spike questions, revisit
+   if users complain in light mode.
+
+**Changes:**
+- `apps/web/package.json`, `pnpm-lock.yaml` — added `@uiw/react-codemirror` +
+  `@codemirror/lang-{javascript,python,cpp,java}`.
+- `apps/web/app/components/CodeEditor.tsx` (new) — client component wrapping
+  `@uiw/react-codemirror` with a language picker (JS/Python/C++/Java) and line
+  numbers/fold gutter enabled.
+- `apps/web/app/components/session/AnswerForm.tsx` — added a `next/dynamic(..., { ssr:
+  false })`-wrapped import of `CodeEditor`; renders it instead of the plain textarea when
+  `question.type === 'dsa' || 'cpp'`. Every other question type (including
+  `system_design`'s markdown preview) is untouched.
+
+**Checks:** `pnpm --filter @momito/web typecheck` ✅, `pnpm --filter @momito/web lint` ✅,
+`pnpm --filter @momito/web build` ✅ (31 routes, no SSR errors), `pnpm test` ✅ (51/51,
+unaffected — this task touches web only).
+
+**Risks/follow-ups:** editor theme is fixed-dark regardless of app light/dark mode; no
+per-language linting/execution (this is an interview-practice text editor, not a sandboxed
+runner, consistent with the plan's scope). MOM-038 (answer panel by question type) can now
+build on this to give DSA/system_design/other each their own dedicated component instead of
+branching inside `AnswerForm`.
+
+---
+
 ## 2026-07-05 — Gate 3 content completion + practice UI features (CLAUDE, session 3)
 
 **Actor:** CLAUDE (implementer)

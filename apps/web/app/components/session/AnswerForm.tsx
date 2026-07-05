@@ -1,12 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import type { SessionQuestionResponse } from '@momito/shared';
 import { Card, Badge, Spinner } from '../ui';
 import { Markdown } from '../Markdown';
 import { useTimer } from '../../lib/use-timer';
 import { TYPE_LABELS } from './question-type-labels';
 import { SYSTEM_DESIGN_TEMPLATE } from '../../lib/system-design-template';
+
+// MOM-035: CodeMirror depends on browser-only APIs and its language packs are
+// sizable, so it's excluded from SSR and only loaded when a code question is shown.
+const CodeEditor = dynamic(() => import('../CodeEditor'), { ssr: false });
 
 export function AnswerForm({
   currentQuestion,
@@ -46,6 +51,10 @@ export function AnswerForm({
   // (plan §7.4). A preview toggle lets the user check formatting before submit.
   const isSystemDesign = currentQuestion.question.type === 'system_design';
   const [showPreview, setShowPreview] = useState(false);
+
+  // MOM-035: DSA/coding answers get a syntax-highlighted code editor instead
+  // of a plain textarea; every other question type is unaffected.
+  const isCodeAnswer = currentQuestion.question.type === 'dsa' || currentQuestion.question.type === 'cpp';
 
   return (
     <Card className="mb-4">
@@ -113,6 +122,12 @@ export function AnswerForm({
           <div className="min-h-[12rem] rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700">
             <Markdown className="prose-sm">{answerText || '*Nothing written yet.*'}</Markdown>
           </div>
+        ) : isCodeAnswer ? (
+          <CodeEditor
+            value={answerText}
+            onChange={onAnswerTextChange}
+            placeholder="Write your code here..."
+          />
         ) : (
           <textarea
             id="answer"
