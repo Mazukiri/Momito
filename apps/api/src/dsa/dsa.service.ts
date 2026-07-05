@@ -27,28 +27,27 @@ export class DsaService {
       },
     });
 
+    // A DSA item only counts as solved on a clean/strong signal — 'partial' correctness
+    // (a valid, reachable value per CreateAnswerDto's @IsIn(['correct', 'partial',
+    // 'incorrect'])) means attempted-but-not-there-yet, not solved. Conflating the two
+    // would overstate ladder progress.
+    const isSolvedAttempt = (a: (typeof attempts)[number]) =>
+      (a.rubricScore ?? 0) >= 0.6 ||
+      (a.aiScore ?? 0) >= 0.6 ||
+      (a.selfRating ?? 0) >= 3 ||
+      ['correct', 'strong'].includes((a.correctness ?? '').toLowerCase());
+
     const bestAttemptByQuestion = new Map<string, (typeof attempts)[number]>();
     for (const attempt of attempts) {
       const existing = bestAttemptByQuestion.get(attempt.questionId);
-      const isPositive = (a: (typeof attempts)[number]) =>
-        (a.rubricScore ?? 0) >= 0.6 ||
-        (a.aiScore ?? 0) >= 0.6 ||
-        (a.selfRating ?? 0) >= 3 ||
-        ['partial', 'correct', 'strong'].includes((a.correctness ?? '').toLowerCase());
-      if (!existing || (!isPositive(existing) && isPositive(attempt))) {
+      if (!existing || (!isSolvedAttempt(existing) && isSolvedAttempt(attempt))) {
         bestAttemptByQuestion.set(attempt.questionId, attempt);
       }
     }
 
     const isSolved = (questionId: string): boolean => {
       const best = bestAttemptByQuestion.get(questionId);
-      if (!best) return false;
-      return (
-        (best.rubricScore ?? 0) >= 0.6 ||
-        (best.aiScore ?? 0) >= 0.6 ||
-        (best.selfRating ?? 0) >= 3 ||
-        ['partial', 'correct', 'strong'].includes((best.correctness ?? '').toLowerCase())
-      );
+      return best ? isSolvedAttempt(best) : false;
     };
 
     const patterns: DsaProgressResponse['patterns'] = DSA_PATTERNS.map((pattern: DsaPattern) => {

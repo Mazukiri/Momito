@@ -35,4 +35,23 @@ describe('DsaService.progress', () => {
     const unattempted = result.patterns.find((p) => p.pattern === 'trie');
     expect(unattempted).toEqual({ pattern: 'trie', totalItems: 0, attemptedItems: 0, solvedItems: 0 });
   });
+
+  it('does not count a partial-correctness attempt as solved', async () => {
+    const prisma = {
+      question: {
+        findMany: vi.fn().mockResolvedValue([{ id: 'q1', patternTags: ['two_pointers'] }]),
+      },
+      answerAttempt: {
+        findMany: vi.fn().mockResolvedValue([
+          { questionId: 'q1', selfRating: null, rubricScore: null, aiScore: null, correctness: 'partial' },
+        ]),
+      },
+    };
+    const service = new DsaService(prisma as never);
+
+    const result = await service.progress('user-1');
+
+    expect(result.totalAttempted).toBe(1);
+    expect(result.totalSolved).toBe(0);
+  });
 });

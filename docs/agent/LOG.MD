@@ -5,6 +5,61 @@
 
 ---
 
+## 2026-07-05 — P1 risk fix: DSA solved-heuristic counted 'partial' as solved (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Trigger:** `AGENTS.MD` was rewritten (by another agent/session) with a stricter
+operating protocol and a new priority order — P0 (stabilize truth), P1 (fix named
+technical risks before new features), P2 (Learning Loop), P3 (everything else). It
+explicitly calls out: "DSA solved/progress heuristics must not treat partial attempts or
+mis-scaled AI scores as clean solves," and "Do not count `partial` as solved clean."
+
+**Investigation (via Explore subagent, read-only):** audited every read/write site of
+`aiScore`/`rubricScore`/`selfRating`/`correctness`.
+- `rubricScore` (DTO: `@Min(0) @Max(1)`) and `selfRating` (DTO: `@IsInt @Min(1) @Max(5)`)
+  are read with matching thresholds (`>= 0.6`, `>= 3`) everywhere — no active mismatch.
+- `aiScore` has no writer anywhere in the codebase (AI grading is credential-gated,
+  unimplemented) — always `null` today, so its `>= 0.6` reads are inert, not wrong. This
+  remains a documented landmine for whoever implements AI grading (scale must be decided
+  and all three `>= 0.6` read-sites updated together), not a fix I could make blind today.
+- `correctness` **is** a live, reachable field: `CreateAnswerDto` validates it as
+  `@IsIn(['correct', 'partial', 'incorrect'])`. `apps/api/src/dsa/dsa.service.ts`'s
+  `isSolved`/`isPositive` heuristic included `'partial'` alongside `'correct'`/`'strong'`
+  as a solved signal — directly contradicting the new written policy, and overstating DSA
+  ladder progress for any partial attempt submitted via the API.
+
+**Fix:** `apps/api/src/dsa/dsa.service.ts` — extracted the duplicated positive/solved
+predicate into one `isSolvedAttempt` helper and dropped `'partial'` from the
+correctness-based solved signal (kept `'correct'`/`'strong'`); `rubricScore`/`selfRating`/
+`aiScore` thresholds unchanged (no evidence they're wrong today). Added a regression test
+(`test/dsa.service.spec.ts`) asserting a `correctness: 'partial'` attempt counts as
+attempted but not solved.
+
+**Follow-up (same session, user explicitly asked to extend to missions.service.ts too):**
+on reflection, `apps/api/src/missions/missions.service.ts:532`'s `matchesAttempt` has the
+identical pattern — a `positive` gate (used to count a practice attempt as meaningful
+evidence toward a mission's skill level) that included `'partial'` alongside
+`'correct'`/`'strong'`. Fixed the same way: dropped `'partial'`, matching
+`career.service.ts`'s `isPositiveAttempt` (which already excluded it) and the new
+`dsa.service.ts` behavior. No existing test covered `matchesAttempt`, so none needed
+updating; behavior change is that a partial-correctness practice attempt no longer counts
+toward a mission's `currentLevel` practice-evidence tally.
+
+**Checks:** `pnpm --filter @momito/api test` ✅ (52/52, was 51), `pnpm --filter @momito/api
+typecheck` ✅, `pnpm --filter @momito/api build` ✅ (all re-run after the
+missions.service.ts change too).
+
+**Not committed yet** — `AGENTS.MD` now says "Do not commit unless explicitly instructed,"
+so this fix (and the CodeMirror work below, which was already committed before this file
+was read) is left as an uncommitted working-tree change pending confirmation.
+
+**Follow-ups (per AGENTS.MD's P1 list, not yet done):** normalize/decide `aiScore`'s scale
+before AI grading ships; verify `DIRECT_URL` docs (checked — already correct in `.env`,
+`.env.example`, and README's env var table, no change needed); run and document the
+current Golden Path end-to-end.
+
+---
+
 ## 2026-07-05 — MOM-035: CodeMirror editor for DSA/coding answers (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

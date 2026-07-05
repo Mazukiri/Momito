@@ -529,7 +529,11 @@ export class MissionsService {
     const inMission = attempt.session?.missionId === missionId;
     const roleMatch = inMission || roleTags.length === 0 || roleTags.includes(roleTrackId) || attempt.session?.roleTrackId === roleTrackId;
     const areaMatch = areaTags.length === 0 || areaTags.includes(area) || attempt.session?.area === area;
-    const positive = (attempt.rubricScore ?? 0) >= 0.6 || (attempt.aiScore ?? 0) >= 0.6 || (attempt.selfRating ?? 0) >= 3 || ['partial', 'correct', 'strong'].includes((attempt.correctness ?? '').toLowerCase());
+    // 'partial' correctness (a valid, reachable CreateAnswerDto value) means attempted-but-
+    // not-there-yet, not a clean/strong result — excluded here to match the same
+    // solved/positive semantics as career.service.ts's isPositiveAttempt and
+    // dsa.service.ts's isSolvedAttempt.
+    const positive = (attempt.rubricScore ?? 0) >= 0.6 || (attempt.aiScore ?? 0) >= 0.6 || (attempt.selfRating ?? 0) >= 3 || ['correct', 'strong'].includes((attempt.correctness ?? '').toLowerCase());
     return roleMatch && areaMatch && positive;
   }
 
