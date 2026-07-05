@@ -5,6 +5,34 @@
 
 ---
 
+## 2026-07-05 — MOM-033: Today integration for recommendations (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Per user instruction, proceeding autonomously through the backlog without
+further per-task check-ins (still honoring the standing gates: no schema migrations
+without explicit human approval, no credential-dependent features, verify+commit each
+PR-sized unit).
+
+**Finding:** MOM-033's reason-taxonomy half was already implemented in an earlier session
+(`RECOMMENDATION_REASONS` in `apps/api/src/recommendations/recommendations.service.ts`,
+already consumed by the Dashboard's "Next Actions" card via `DashboardSummaryResponse`).
+The "Today integration" half was not: `apps/web/app/(authenticated)/today/page.tsx` was
+still the MOM-012 static stub with zero data fetching.
+
+**Change:** Rewrote `today/page.tsx` as a client component calling the existing
+`recommendationsApi.list()` (no new endpoint, no duplicate field — reused exactly what the
+Dashboard already calls), rendering the priority-sorted recommendation queue (missions,
+overdue tasks, readiness gaps, job deadlines, reading inbox) as clickable cards routing to
+each item's `targetHref`, with loading/error states matching the Dashboard's pattern.
+Explicitly noted in a comment that this is the "closest currently available path," not
+the final decision-engine queue — spaced-repetition due-reviews still can't appear here
+until MOM-027 (ReviewState migration, human-gated) and MOM-032 (Today API) land.
+
+**Checks:** `pnpm --filter @momito/web typecheck/lint/build` ✅ (32 routes, no errors),
+`pnpm test` ✅ (56/56, unaffected — web-only change).
+
+---
+
 ## 2026-07-05 — MOM-030 / SPIKE-004: FSRS scheduling algorithm (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

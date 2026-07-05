@@ -264,7 +264,13 @@ Global verification / forbidden-file defaults:
   (MOM-027, human-gated). MOM-031 wires this to Prisma once that migration lands.
 - **MOM-031** Hook answer submission into scheduling — BLOCKED on MOM-029/030.
 - **MOM-032** Today dashboard API (queue priority §6.1) — BLOCKED on MOM-031.
-- **MOM-033** Recommendation reason standardization - READY-ish (`PracticeRecommendationResponse.reason` and `RecommendationsService` reasons already exist; standardize reason taxonomy and Today integration, do not add a duplicate field).
+- **MOM-033** Recommendation reason standardization — **DONE** 2026-07-05. The reason
+  taxonomy half was already implemented in an earlier session (`RECOMMENDATION_REASONS`
+  in `recommendations.service.ts`). This pass did the remaining "Today integration" half:
+  `apps/web/app/(authenticated)/today/page.tsx` was a static MOM-012 stub with no data
+  fetching; it now calls `recommendationsApi.list()` (the same endpoint the Dashboard's
+  "Next Actions" card already used) and renders the real, priority-sorted recommendation
+  queue. Spaced-repetition due-reviews still can't appear here — that needs MOM-027/032.
 
 ### Track F — Practice Engine UI · Gate 2
 - **MOM-034** Markdown renderer — READY after MOM-007 (add `react-markdown`).
