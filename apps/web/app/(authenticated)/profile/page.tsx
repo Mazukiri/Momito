@@ -176,13 +176,13 @@ export default function ProfilePage() {
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-800">Profile</h1>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Profile</h1>
           <p className="mt-1 text-sm text-zinc-500">Your editable source for CV scoring</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => router.push('/profile/upload')}
-            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             Upload CV
           </button>
@@ -235,76 +235,76 @@ export default function ProfilePage() {
           </div>
 
           <Card>
-            <h2 className="mb-4 text-lg font-semibold text-zinc-800">Contact</h2>
+            <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">Contact</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Name"
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               />
               <input
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="Email"
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               />
               <input
                 value={githubUrl}
                 onChange={(event) => setGithubUrl(event.target.value)}
                 placeholder="GitHub URL"
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               />
               <input
                 value={linkedinUrl}
                 onChange={(event) => setLinkedinUrl(event.target.value)}
                 placeholder="LinkedIn URL"
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               />
             </div>
           </Card>
 
           <Card>
-            <label className="block text-sm font-medium text-zinc-700">Skills</label>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Skills</label>
             <textarea
               value={skillsText}
               onChange={(event) => setSkillsText(event.target.value)}
               rows={6}
               placeholder="One skill per line"
-              className="mt-2 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-2 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             />
           </Card>
 
           <Card>
-            <label className="block text-sm font-medium text-zinc-700">Experience</label>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Experience</label>
             <textarea
               value={experienceText}
               onChange={(event) => setExperienceText(event.target.value)}
               rows={6}
               placeholder="Company | Role | Years | Tier | Description"
-              className="mt-2 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-2 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             />
           </Card>
 
           <Card>
-            <label className="block text-sm font-medium text-zinc-700">Projects</label>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Projects</label>
             <textarea
               value={projectsText}
               onChange={(event) => setProjectsText(event.target.value)}
               rows={6}
               placeholder="Name | URL | Type | GitHub stars | Description"
-              className="mt-2 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-2 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             />
           </Card>
 
           <Card>
-            <label className="block text-sm font-medium text-zinc-700">Education</label>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Education</label>
             <textarea
               value={educationText}
               onChange={(event) => setEducationText(event.target.value)}
               rows={4}
               placeholder="Degree | Institution | Country | Year"
-              className="mt-2 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="mt-2 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             />
           </Card>
 
@@ -315,11 +315,11 @@ export default function ProfilePage() {
                 onClick={() => setShowRaw(!showRaw)}
                 className="flex w-full items-center justify-between text-left"
               >
-                <span className="text-sm font-semibold text-zinc-800">Extracted CV text</span>
+                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Extracted CV text</span>
                 <span className="text-sm text-zinc-400">{showRaw ? 'Hide' : 'Show'}</span>
               </button>
               {showRaw && (
-                <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 text-xs text-zinc-600">
+                <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                   {profile.rawCvText}
                 </pre>
               )}
