@@ -27,9 +27,9 @@ function ScoreBars({ score }: { score: ProfileScoreResponse }) {
           <div key={field}>
             <div className="mb-1 flex items-center justify-between">
               <span className="text-xs font-medium text-zinc-500">{label}</span>
-              <span className="text-xs font-semibold text-zinc-700">{Math.round(value * 100)}%</span>
+              <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{Math.round(value * 100)}%</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-zinc-200">
+            <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
               <div
                 className={`h-full rounded-full ${value >= 0.75 ? 'bg-green-500' : value >= 0.45 ? 'bg-amber-500' : 'bg-red-500'}`}
                 style={{ width: `${Math.round(value * 100)}%` }}
@@ -112,12 +112,12 @@ export default function ProfileScoresPage() {
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-800">Profile Scores</h1>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Profile Scores</h1>
           <p className="mt-1 text-sm text-zinc-500">Compare your profile against role templates and JDs.</p>
         </div>
         <button
           onClick={() => router.push('/profile')}
-          className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+          className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
           Edit Profile
         </button>
@@ -146,14 +146,14 @@ export default function ProfileScoresPage() {
           <Card>
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
-                <label htmlFor="role" className="block text-sm font-medium text-zinc-700">
+                <label htmlFor="role" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Role Template
                 </label>
                 <select
                   id="role"
                   value={role}
                   onChange={(event) => setRole(event.target.value as RoleTemplateId)}
-                  className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                 >
                   {ROLE_TEMPLATE_IDS.map((id) => (
                     <option key={id} value={id}>{ROLE_TEMPLATES[id].label}</option>
@@ -161,7 +161,7 @@ export default function ProfileScoresPage() {
                 </select>
               </div>
               <div>
-                <label htmlFor="jdText" className="block text-sm font-medium text-zinc-700">
+                <label htmlFor="jdText" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Job Description
                 </label>
                 <textarea
@@ -170,7 +170,7 @@ export default function ProfileScoresPage() {
                   onChange={(event) => setJdText(event.target.value)}
                   rows={7}
                   placeholder="Paste a specific JD to add its skills into the target."
-                  className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                 />
               </div>
               <button
@@ -194,7 +194,7 @@ export default function ProfileScoresPage() {
                 <Card key={score.id} onClick={() => router.push(`/profile/scores/${score.id}`)}>
                   <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h2 className="font-semibold text-zinc-800">{score.targetLabel}</h2>
+                      <h2 className="font-semibold text-zinc-800 dark:text-zinc-100">{score.targetLabel}</h2>
                       <p className="text-xs text-zinc-400">
                         {new Date(score.createdAt).toLocaleDateString('en-US', {
                           month: 'short',

@@ -29,10 +29,10 @@ function CategoryCard({
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-semibold text-zinc-800">{field.label}</h2>
-        <span className="text-sm font-bold text-zinc-700">{Math.round(value * 100)}%</span>
+        <h2 className="font-semibold text-zinc-800 dark:text-zinc-100">{field.label}</h2>
+        <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300">{Math.round(value * 100)}%</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-zinc-200">
+      <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
         <div
           className={`h-full rounded-full ${value >= 0.75 ? 'bg-green-500' : value >= 0.45 ? 'bg-amber-500' : 'bg-red-500'}`}
           style={{ width: `${Math.round(value * 100)}%` }}
@@ -41,7 +41,7 @@ function CategoryCard({
       {gaps.length > 0 ? (
         <ul className="mt-4 space-y-2">
           {gaps.map((gap) => (
-            <li key={gap} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600">
+            <li key={gap} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
               {gap}
             </li>
           ))}
@@ -130,7 +130,7 @@ export default function ProfileScoreDetailPage() {
       </button>
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-800">{score.targetLabel}</h1>
+        <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{score.targetLabel}</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Created {new Date(score.createdAt).toLocaleDateString('en-US', {
             month: 'short',
@@ -143,11 +143,11 @@ export default function ProfileScoreDetailPage() {
       </div>
 
       {score.suggestions.length > 0 && (
-        <Card className="mb-6 border-indigo-200">
-          <h2 className="mb-3 text-lg font-semibold text-zinc-800">Suggestions</h2>
+        <Card className="mb-6 border-indigo-200 dark:border-indigo-900">
+          <h2 className="mb-3 text-lg font-semibold text-zinc-800 dark:text-zinc-100">Suggestions</h2>
           <div className="space-y-2">
             {score.suggestions.map((suggestion) => (
-              <div key={suggestion} className="rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-700">
+              <div key={suggestion} className="rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400">
                 {suggestion}
               </div>
             ))}
@@ -164,7 +164,7 @@ export default function ProfileScoreDetailPage() {
       {score.jdText && (
         <Card className="mt-6">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">Job Description Used</h2>
-          <p className="whitespace-pre-wrap text-sm text-zinc-600">{score.jdText}</p>
+          <p className="whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-400">{score.jdText}</p>
         </Card>
       )}
     </div>

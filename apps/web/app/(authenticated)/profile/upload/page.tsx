@@ -38,7 +38,7 @@ export default function ProfileUploadPage() {
       </button>
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-800">Upload CV</h1>
+        <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Upload CV</h1>
         <p className="mt-1 text-sm text-zinc-500">Import a PDF and review the extracted profile fields.</p>
       </div>
 
@@ -47,7 +47,7 @@ export default function ProfileUploadPage() {
       <Card>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label htmlFor="cvFile" className="block text-sm font-medium text-zinc-700">
+            <label htmlFor="cvFile" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               CV PDF
             </label>
             <input
@@ -55,12 +55,12 @@ export default function ProfileUploadPage() {
               type="file"
               accept="application/pdf,.pdf"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              className="mt-2 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 hover:file:bg-zinc-200"
+              className="mt-2 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 hover:file:bg-zinc-200 dark:border-zinc-700 dark:text-zinc-100 dark:file:bg-zinc-800 dark:file:text-zinc-300 dark:hover:file:bg-zinc-700"
             />
           </div>
 
           {file && (
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
               <span className="font-medium">{file.name}</span>
               <span className="ml-2 text-zinc-400">{Math.round(file.size / 1024)} KB</span>
             </div>

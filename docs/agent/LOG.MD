@@ -5,6 +5,33 @@
 
 ---
 
+## 2026-07-05 — Dark mode pass, batches 5-7: dashboard, profile family (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing the dark-mode remediation (committed as three separate commits —
+`1e36c3a` dashboard, `a2682eb` profile, plus this profile-siblings pass — but only logged
+here together since the first two commits didn't get their own LOG entry at the time).
+
+**Pages fixed:**
+- `dashboard/page.tsx` — summary cards, focus mission, role readiness bars, next actions,
+  this week, topic progress bars, weak areas, suggested-topics chips, recent sessions.
+- `profile/page.tsx` — heading, action buttons, contact form, all four textarea fields
+  (skills/experience/projects/education), raw CV text toggle.
+- `profile/upload/page.tsx` — heading, file input (including its `file:` pseudo-element
+  classes), selected-file preview.
+- `profile/scores/page.tsx` — heading, edit-profile button, role-template creation form,
+  score cards, the `ScoreBars` sub-component's progress bars.
+- `profile/scores/[id]/page.tsx` — heading, the `CategoryCard` sub-component (progress
+  bars, gap chips), suggestions card, JD-used card.
+
+**Verification:** `pnpm typecheck`/`lint`/`build`: green (32+ web routes) after each
+sub-batch. `pnpm test`: 68/68 throughout (no API changes — pure CSS-class additions).
+
+**Remaining:** `settings/page.tsx` (397 lines), `study-plan/page.tsx` (540 lines) — the
+two largest remaining files, left for a final follow-up pass.
+
+---
+
 ## 2026-07-05 — Dark mode pass, batch 4: practice/new, QuestionForm (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)
