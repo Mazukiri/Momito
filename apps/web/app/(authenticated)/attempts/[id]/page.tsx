@@ -78,14 +78,14 @@ export default function AttemptDetailPage() {
         ← Back to history
       </button>
 
-      <h1 className="text-2xl font-bold text-zinc-800">Answer Detail</h1>
+      <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Answer Detail</h1>
       <p className="mt-1 text-sm text-zinc-500">{formatDate(attempt.createdAt)}</p>
 
       <Card className="mt-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 mb-2">
           Question
         </h2>
-        <p className="text-sm text-zinc-700">
+        <p className="text-sm text-zinc-700 dark:text-zinc-300">
           {attempt.questionId}
         </p>
         <div className="mt-4">
@@ -102,7 +102,7 @@ export default function AttemptDetailPage() {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 mb-2">
           Your Answer
         </h2>
-        <p className="whitespace-pre-wrap text-sm text-zinc-700">{attempt.answerText}</p>
+        <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{attempt.answerText}</p>
       </Card>
 
       {attempt.selfRating && (
@@ -115,7 +115,7 @@ export default function AttemptDetailPage() {
               <span
                 key={r}
                 className={`text-2xl ${
-                  r <= attempt.selfRating! ? 'text-indigo-500' : 'text-zinc-200'
+                  r <= attempt.selfRating! ? 'text-indigo-500' : 'text-zinc-200 dark:text-zinc-700'
                 }`}
               >
                 ★
@@ -134,14 +134,14 @@ export default function AttemptDetailPage() {
           {attempt.missTags && attempt.missTags.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {attempt.missTags.map((tag: MissTagReason) => (
-                <span key={tag} className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
+                <span key={tag} className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                   {MISS_TAG_LABELS[tag]}
                 </span>
               ))}
             </div>
           )}
           {attempt.reflectionNote && (
-            <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">{attempt.reflectionNote}</p>
+            <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{attempt.reflectionNote}</p>
           )}
         </Card>
       )}
@@ -150,7 +150,7 @@ export default function AttemptDetailPage() {
         <div className="mt-4">
           <button
             onClick={() => router.push(`/practice/session/${attempt.sessionId}/summary`)}
-            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             View Session
           </button>

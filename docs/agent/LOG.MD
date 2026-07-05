@@ -1,5 +1,34 @@
 # LOG
 
+## 2026-07-05 - Dark mode pass, final cleanup: attempts detail + study plan (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Finished the remaining dark-mode remediation surfaces left after batches 5-8.
+
+**Files changed:**
+- `apps/web/app/(authenticated)/attempts/[id]/page.tsx`
+- `apps/web/app/(authenticated)/study-plan/page.tsx`
+- `docs/agent/LOCKS.MD`
+- `docs/agent/LOG.MD`
+
+**Changes:**
+- Added dark text/border/hover variants to attempt detail question/answer/reflection surfaces and the session button.
+- Added dark-mode styling to study-plan status chips, create/edit forms, error/delete confirmations, tabs, item titles, due-date warning text, and action buttons.
+- Kept this as CSS-class-only remediation; no API, data, routing, or schema behavior changed.
+
+**Verification:**
+- `pnpm --filter @momito/web typecheck` - passed
+- `pnpm --filter @momito/web lint` - passed
+- `pnpm --filter @momito/web build` - passed (31 static/dynamic routes generated)
+
+**Risks / follow-ups:**
+- No browser screenshot/manual visual QA was run in this pass.
+- `AGENTS.MD` remains dirty from an earlier instruction/documentation change and was not touched by this task.
+
+**Suggested commit message:** `feat(web): finish dark mode pass for attempts and study plan`
+
+---
+
 > Append-only execution journal. Newest entries on top. Every implementer PR adds an entry:
 > task ID, files changed, checks run, result, risks/follow-ups.
 

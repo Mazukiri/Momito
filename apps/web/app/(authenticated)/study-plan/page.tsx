@@ -8,9 +8,9 @@ import { Card, Badge, Spinner, ErrorBanner, EmptyState } from '../../components/
 const STATUS_ORDER = ['todo', 'in_progress', 'done'] as const;
 const STATUS_LABELS: Record<string, string> = { todo: 'To Do', in_progress: 'In Progress', done: 'Done' };
 const STATUS_COLORS: Record<string, string> = {
-  todo: 'bg-zinc-100 text-zinc-700 border-zinc-200',
-  in_progress: 'bg-blue-100 text-blue-700 border-blue-200',
-  done: 'bg-green-100 text-green-700 border-green-200',
+  todo: 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700',
+  in_progress: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-900',
+  done: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-900',
 };
 
 function getDueDateInfo(targetDate: string): { label: string; className: string } | null {
@@ -23,13 +23,13 @@ function getDueDateInfo(targetDate: string): { label: string; className: string 
 
   if (diffDays < 0) {
     const days = Math.abs(diffDays);
-    return { label: `Overdue by ${days} day${days !== 1 ? 's' : ''}`, className: 'text-red-500 font-medium' };
+    return { label: `Overdue by ${days} day${days !== 1 ? 's' : ''}`, className: 'text-red-500 font-medium dark:text-red-400' };
   }
   if (diffDays === 0) {
-    return { label: 'Due today!', className: 'text-amber-600 font-medium' };
+    return { label: 'Due today!', className: 'text-amber-600 font-medium dark:text-amber-400' };
   }
   if (diffDays <= 3) {
-    return { label: `Due in ${diffDays} day${diffDays !== 1 ? 's' : ''}`, className: 'text-amber-600' };
+    return { label: `Due in ${diffDays} day${diffDays !== 1 ? 's' : ''}`, className: 'text-amber-600 dark:text-amber-400' };
   }
   return null;
 }
@@ -67,29 +67,29 @@ function EditForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 border-t border-zinc-100 pt-3 mt-3">
+    <form onSubmit={handleSubmit} className="space-y-3 border-t border-zinc-100 pt-3 mt-3 dark:border-zinc-800">
       {error && (
-        <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-600">
+        <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
           {error}
         </div>
       )}
       <div>
-        <label className="block text-xs font-medium text-zinc-500 mb-1">Title</label>
+        <label className="block text-xs font-medium text-zinc-500 mb-1 dark:text-zinc-400">Title</label>
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="block w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="block w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           maxLength={200}
         />
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label className="block text-xs font-medium text-zinc-500 mb-1">Topic</label>
+          <label className="block text-xs font-medium text-zinc-500 mb-1 dark:text-zinc-400">Topic</label>
           <select
             value={topicId}
             onChange={(e) => setTopicId(e.target.value)}
-            className="block w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="block w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           >
             <option value="">No topic</option>
             {topics.map((t) => (
@@ -98,22 +98,22 @@ function EditForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-zinc-500 mb-1">Target Date</label>
+          <label className="block text-xs font-medium text-zinc-500 mb-1 dark:text-zinc-400">Target Date</label>
           <input
             type="date"
             value={targetDate}
             onChange={(e) => setTargetDate(e.target.value)}
-            className="block w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="block w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           />
         </div>
       </div>
       <div>
-        <label className="block text-xs font-medium text-zinc-500 mb-1">Notes</label>
+        <label className="block text-xs font-medium text-zinc-500 mb-1 dark:text-zinc-400">Notes</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
-          className="block w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="block w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           placeholder="Any notes or resources..."
           maxLength={2000}
         />
@@ -129,7 +129,7 @@ function EditForm({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
           Cancel
         </button>
@@ -149,8 +149,8 @@ function DeleteConfirm({
   deleting: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 p-3 mt-2">
-      <p className="text-xs font-medium text-red-800">Delete this task? This cannot be undone.</p>
+    <div className="rounded-lg border border-red-200 bg-red-50 p-3 mt-2 dark:border-red-900 dark:bg-red-950">
+      <p className="text-xs font-medium text-red-800 dark:text-red-300">Delete this task? This cannot be undone.</p>
       <div className="mt-2 flex gap-2">
         <button
           onClick={onConfirm}
@@ -161,7 +161,7 @@ function DeleteConfirm({
         </button>
         <button
           onClick={onCancel}
-          className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+          className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
           Cancel
         </button>
@@ -300,7 +300,7 @@ export default function StudyPlanPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-800">Study Plan</h1>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Study Plan</h1>
           <p className="mt-1 text-sm text-zinc-500">Track your learning goals</p>
         </div>
         <button
@@ -314,15 +314,15 @@ export default function StudyPlanPage() {
       {/* Create form */}
       {showForm && (
         <Card className="mb-6">
-          <h2 className="text-lg font-semibold text-zinc-800 mb-4">New Study Task</h2>
+          <h2 className="text-lg font-semibold text-zinc-800 mb-4 dark:text-zinc-100">New Study Task</h2>
           {formError && (
-            <div className="mb-3 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+            <div className="mb-3 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
               {formError}
             </div>
           )}
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
-              <label htmlFor="taskTitle" className="block text-sm font-medium text-zinc-700">
+              <label htmlFor="taskTitle" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Title
               </label>
               <input
@@ -331,20 +331,20 @@ export default function StudyPlanPage() {
                 required
                 value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                 placeholder="e.g. Review Database Indexing"
                 maxLength={200}
               />
             </div>
             <div>
-              <label htmlFor="taskTopic" className="block text-sm font-medium text-zinc-700">
+              <label htmlFor="taskTopic" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Topic <span className="text-zinc-400">(optional)</span>
               </label>
               <select
                 id="taskTopic"
                 value={formTopicId}
                 onChange={(e) => setFormTopicId(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               >
                 <option value="">No topic</option>
                 {topics.map((t) => (
@@ -353,7 +353,7 @@ export default function StudyPlanPage() {
               </select>
             </div>
             <div>
-              <label htmlFor="taskNotes" className="block text-sm font-medium text-zinc-700">
+              <label htmlFor="taskNotes" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Notes <span className="text-zinc-400">(optional)</span>
               </label>
               <textarea
@@ -361,13 +361,13 @@ export default function StudyPlanPage() {
                 value={formNotes}
                 onChange={(e) => setFormNotes(e.target.value)}
                 rows={3}
-                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                 placeholder="Any notes or resources..."
                 maxLength={2000}
               />
             </div>
             <div>
-              <label htmlFor="taskTargetDate" className="block text-sm font-medium text-zinc-700">
+              <label htmlFor="taskTargetDate" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Target Date <span className="text-zinc-400">(optional)</span>
               </label>
               <input
@@ -375,7 +375,7 @@ export default function StudyPlanPage() {
                 type="date"
                 value={formTargetDate}
                 onChange={(e) => setFormTargetDate(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               />
             </div>
             <button
@@ -391,15 +391,15 @@ export default function StudyPlanPage() {
       )}
 
       {/* Tabs */}
-      <div className="mb-4 flex gap-1 rounded-lg bg-zinc-100 p-1">
+      <div className="mb-4 flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
         {STATUS_ORDER.map((status) => (
           <button
             key={status}
             onClick={() => setActiveTab(status)}
             className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === status
-                ? 'bg-white text-zinc-800 shadow-sm'
-                : 'text-zinc-500 hover:text-zinc-700'
+                ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-900 dark:text-zinc-100'
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
             }`}
           >
             {STATUS_LABELS[status]}
@@ -436,7 +436,7 @@ export default function StudyPlanPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-medium text-zinc-800">{item.title}</h3>
+                      <h3 className="font-medium text-zinc-800 dark:text-zinc-100">{item.title}</h3>
                       {item.topic && <Badge label={item.topic.name} />}
                     </div>
                     {item.notes && (
@@ -469,7 +469,7 @@ export default function StudyPlanPage() {
                     {item.status === 'todo' && (
                       <button
                         onClick={() => handleStatusUpdate(item.id, 'in_progress')}
-                        className="rounded border border-blue-300 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
+                        className="rounded border border-blue-300 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400 dark:hover:bg-blue-950"
                       >
                         Start
                       </button>
@@ -477,7 +477,7 @@ export default function StudyPlanPage() {
                     {item.status === 'in_progress' && (
                       <button
                         onClick={() => handleStatusUpdate(item.id, 'done')}
-                        className="rounded border border-green-300 px-2.5 py-1 text-xs font-medium text-green-600 hover:bg-green-50"
+                        className="rounded border border-green-300 px-2.5 py-1 text-xs font-medium text-green-600 hover:bg-green-50 dark:border-green-900 dark:text-green-400 dark:hover:bg-green-950"
                       >
                         Done
                       </button>
@@ -485,7 +485,7 @@ export default function StudyPlanPage() {
                     {item.status === 'done' && (
                       <button
                         onClick={() => handleStatusUpdate(item.id, 'todo')}
-                        className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                        className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                       >
                         Reopen
                       </button>
@@ -495,7 +495,7 @@ export default function StudyPlanPage() {
                         setEditingId(editingId === item.id ? null : item.id);
                         setConfirmDeleteId(null);
                       }}
-                      className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                      className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     >
                       Edit
                     </button>
@@ -504,7 +504,7 @@ export default function StudyPlanPage() {
                         setConfirmDeleteId(confirmDeleteId === item.id ? null : item.id);
                         setEditingId(null);
                       }}
-                      className="rounded border border-red-300 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                      className="rounded border border-red-300 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
                     >
                       Delete
                     </button>

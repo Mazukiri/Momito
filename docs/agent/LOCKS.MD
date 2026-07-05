@@ -24,6 +24,7 @@
 | MOM-002 (planning) | CLAUDE (orchestrator) | `docs/agent/*.md` | 2026-07-05 |
 | MOM-005 | CLAUDE | `docs/adr/000X-*.md`, `docs/agent/DECISIONS.MD` (cross-link only) | 2026-07-05 |
 | MOM-035 | CLAUDE | `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/app/components/CodeEditor.tsx`, `apps/web/app/components/session/AnswerForm.tsx` | 2026-07-05 |
+| Dark-mode final cleanup | CLAUDE | `apps/web/app/(authenticated)/attempts/[id]/page.tsx`, `apps/web/app/(authenticated)/study-plan/page.tsx`, `docs/agent/LOG.MD`, `docs/agent/LOCKS.MD` | 2026-07-05T10:15:34Z |
 
 ## Standing "hands-off" zones (never claim without an explicit, human-approved task)
 
