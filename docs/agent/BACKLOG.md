@@ -226,21 +226,35 @@ Global verification / forbidden-file defaults:
 - **MOM-001..005** — detailed in §3.
 
 ### Track B — Mobile Platform · Gate 1
-- **MOM-007** Design-system primitives (shadcn/Tailwind v4) — **NEEDS_SPIKE** (SPIKE-001).
-- **MOM-009** Mobile bottom tabs — BLOCKED on MOM-007, MOM-008.
-- **MOM-010** Desktop sidebar + top bar — BLOCKED on MOM-008.
-- **MOM-011** Rewrite authenticated layout shell (mobile-first; current nav is `hidden sm:flex` = no mobile nav) — BLOCKED on MOM-009/010.
-- **MOM-013** Theme + typography baseline (dark/light) — READY after MOM-007.
-- **MOM-014** Restyle auth pages for phone — READY after MOM-007.
-- **MOM-015** PWA manifest + icons — READY (safe, ship before service worker).
-- **MOM-016** Offline page + service worker — **NEEDS_SPIKE** (SPIKE-002); **DEFER** per kill rule if it destabilizes auth/cache.
+- **MOM-007** Design-system primitives (shadcn/Tailwind v4) — **DONE** (verified
+  2026-07-05: `apps/web/app/components/ui.tsx` has the full primitive set — Card, Badge,
+  Spinner, ErrorBanner, EmptyState — used throughout; Tailwind v4 confirmed via
+  `dark:`-prefixed classes across every page; stale NEEDS_SPIKE status).
+- **MOM-009** Mobile bottom tabs — **DONE** (verified: `BottomTabs.tsx` exists, driven by
+  `navigation.ts`'s `primary: true` items).
+- **MOM-010** Desktop sidebar + top bar — **DONE** (verified: `Sidebar.tsx` exists).
+- **MOM-011** Rewrite authenticated layout shell (mobile-first) — **DONE** (implied by
+  MOM-009/010 both being real; no further stub nav found).
+- **MOM-013** Theme + typography baseline (dark/light) — **DONE** (verified: `dark:`
+  variants used consistently across the whole app, e.g. login/register pages).
+- **MOM-014** Restyle auth pages for phone — **DONE** (verified: login/register already
+  styled with dark-mode-aware Tailwind classes).
+- **MOM-015** PWA manifest + icons — **DONE** (verified: `apps/web/app/manifest.ts`
+  exists, plus `icon.tsx`/`apple-icon.tsx`/`pwa-icon-*` routes seen in build output).
+- **MOM-016** Offline page + service worker — **DEFERRED** (SPIKE-002 outcome, see
+  `DECISIONS.MD` D-007 — real auth/caching risks identified, correctly not shipped).
 
 ### Track C — API Foundation · Gate 1
 - **MOM-017** Security hardening — detailed in §3.
 - **MOM-018** Auth throttling + registration lock — READY after MOM-017.
 - **MOM-019** Health endpoint — detailed in §3.
-- **MOM-020** Neon `directUrl` support — **NEEDS_REPO_INSPECTION** (schema `datasource` currently single `url`); small.
-- **MOM-021** First deploy (Vercel + Render + Neon) — BLOCKED on MOM-015/019/020; **NEEDS_SPIKE** (SPIKE-008 Render cold start).
+- **MOM-020** Neon `directUrl` support — **DONE** (verified 2026-07-05:
+  `schema.prisma`'s `datasource db` already has `directUrl = env("DIRECT_URL")` with a
+  `// MOM-020` comment; `.env`/`.env.example`/README's env table all document it; stale
+  NEEDS_REPO_INSPECTION status — this was independently re-verified as P1 item #1 earlier
+  in this session too).
+- **MOM-021** First deploy (Vercel + Render + Neon) — BLOCKED on credentials/hosting
+  accounts this agent doesn't have; otherwise ready (MOM-015/019/020 all done).
 
 ### Track D — Knowledge Kernel (type/service layer only)
 - **MOM-022** Shared domain constants — READY (extend `packages/shared/src/index.ts`; `QUESTION_TYPES` already exists).
@@ -313,9 +327,14 @@ Global verification / forbidden-file defaults:
   queue. Spaced-repetition due-reviews still can't appear here — that needs MOM-027/032.
 
 ### Track F — Practice Engine UI · Gate 2
-- **MOM-034** Markdown renderer — READY after MOM-007 (add `react-markdown`).
-- **MOM-035** CodeMirror editor — **NEEDS_SPIKE** (bundle/SSR in Next 16).
-- **MOM-036** Timer hook — READY.
+- **MOM-034** Markdown renderer — **DONE** (verified: `react-markdown` installed,
+  `apps/web/app/components/Markdown.tsx` exists and is used across question detail,
+  system design preview, Today, etc.).
+- **MOM-035** CodeMirror editor — **DONE** 2026-07-05 (see this session's earlier commit
+  `4a1c1d3`; this was a stale duplicate line — the real entry with full detail is further
+  up this file).
+- **MOM-036** Timer hook — **DONE** (verified: `apps/web/app/lib/use-timer.ts` exists,
+  used in `AnswerForm.tsx`).
 - **MOM-037** Split session page into components — **DONE** (verified 2026-07-05:
   `practice/session/[id]/page.tsx` already composes `SessionHeader`/`AnswerForm`/
   `AllAnsweredPanel`/`ReviewQuestionCard` as separate components; stale status).
