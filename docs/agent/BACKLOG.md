@@ -318,7 +318,14 @@ Global verification / forbidden-file defaults:
   `AnswerForm.tsx`'s inline branching into `apps/web/app/components/session/answer-panels/`
   (`TextAnswerPanel`, `SystemDesignAnswerPanel`, `CodeAnswerPanel`); `AnswerForm` now just
   dispatches on question type. Pure refactor — behavior unchanged for every question type.
-- **MOM-039** Reflection panel — BLOCKED on MOM-028.
+- **MOM-039** Reflection panel — **DONE** 2026-07-05. New
+  `apps/web/app/components/session/ReflectionPanel.tsx` — collapsed-by-default "+ Add
+  reflection (optional)" toggle expanding into miss-tag chips (plan §5.4 taxonomy,
+  human-readable labels) and a free-text note. Wired into `AnswerForm.tsx` and the
+  session page's submit flow (`missTags`/`reflectionNote` state, cleared after each
+  submit like `selfRating`). `sessionsApi.answer()`'s type signature extended with the
+  four MOM-028 fields. The API side (persistence, DTO validation) was already verified
+  live in MOM-028's commit — this is purely the UI wiring to that proven endpoint.
 - **MOM-040** Session summary — **NEEDS_REPO_INSPECTION** (`summary` route already exists).
 - **MOM-041** Practice hub — **DONE** (verified 2026-07-05, was already shipped in an
   earlier session; `apps/web/app/(authenticated)/practice/page.tsx` exists — stale

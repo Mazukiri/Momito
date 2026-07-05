@@ -203,6 +203,7 @@ import type {
   InterviewSessionResponse,
   SessionQuestionResponse,
   AnswerAttemptResponse,
+  MissTagReason,
 } from '@momito/shared';
 
 export interface CreateSessionResponse {
@@ -256,6 +257,11 @@ export const sessionsApi = {
     hintUsed?: boolean;
     rubricScore?: number;
     needsReview?: boolean;
+    // MOM-028/039: reflection fields.
+    missTags?: MissTagReason[];
+    reflectionNote?: string;
+    language?: string;
+    complexity?: string;
   }) =>
     request<AnswerAttemptResponse>(`/sessions/${id}/answer`, { method: 'POST', body: JSON.stringify(body) }),
 

@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect } from 'react';
-import type { SessionQuestionResponse } from '@momito/shared';
+import type { MissTagReason, SessionQuestionResponse } from '@momito/shared';
 import { Card, Badge, Spinner } from '../ui';
 import { useTimer } from '../../lib/use-timer';
 import { TYPE_LABELS } from './question-type-labels';
 import { TextAnswerPanel } from './answer-panels/TextAnswerPanel';
 import { SystemDesignAnswerPanel } from './answer-panels/SystemDesignAnswerPanel';
 import { CodeAnswerPanel } from './answer-panels/CodeAnswerPanel';
+import { ReflectionPanel } from './ReflectionPanel';
 
 export function AnswerForm({
   currentQuestion,
@@ -17,6 +18,10 @@ export function AnswerForm({
   onAnswerTextChange,
   selfRating,
   onSelfRatingChange,
+  missTags,
+  onMissTagsChange,
+  reflectionNote,
+  onReflectionNoteChange,
   submitting,
   isAlreadyAnswered,
   onPrevious,
@@ -29,6 +34,10 @@ export function AnswerForm({
   onAnswerTextChange: (value: string) => void;
   selfRating: number;
   onSelfRatingChange: (value: number) => void;
+  missTags: MissTagReason[];
+  onMissTagsChange: (tags: MissTagReason[]) => void;
+  reflectionNote: string;
+  onReflectionNoteChange: (value: string) => void;
   submitting: boolean;
   isAlreadyAnswered: boolean;
   onPrevious: () => void;
@@ -121,6 +130,13 @@ export function AnswerForm({
             <span className="ml-1 self-center text-xs text-zinc-400">1-5</span>
           </div>
         </div>
+
+        <ReflectionPanel
+          missTags={missTags}
+          onMissTagsChange={onMissTagsChange}
+          reflectionNote={reflectionNote}
+          onReflectionNoteChange={onReflectionNoteChange}
+        />
 
         <div className="mt-4 flex items-center justify-between">
           <div className="flex gap-2">

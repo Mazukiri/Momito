@@ -5,6 +5,38 @@
 
 ---
 
+## 2026-07-05 — MOM-039: reflection panel UI (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Unblocked immediately by MOM-028. Pure web UI work — the API side (schema,
+DTO validation, persistence) was already built and live-verified in the MOM-028 commit.
+
+**Changes:**
+- New `apps/web/app/components/session/ReflectionPanel.tsx` — collapsed by default
+  behind a "+ Add reflection (optional)" toggle (matches the low-friction spirit of the
+  existing optional self-rating); expands into miss-tag chips (one per
+  `MISS_TAG_REASONS` value, human-readable labels — e.g. `time_pressure` → "Ran out of
+  time") and a short free-text note.
+- `apps/web/app/components/session/AnswerForm.tsx` — added `missTags`/`onMissTagsChange`/
+  `reflectionNote`/`onReflectionNoteChange` props, renders `ReflectionPanel` between the
+  self-rating row and the submit/previous buttons.
+- `apps/web/app/(authenticated)/practice/session/[id]/page.tsx` — added
+  `missTags`/`reflectionNote` state, included in the `sessionsApi.answer()` call
+  (only sent if non-empty, mirroring how `selfRating: 0` is treated as "not set"),
+  cleared after each successful submit alongside `selfRating`.
+- `apps/web/app/lib/api-client.ts` — `sessionsApi.answer()`'s body type extended with
+  the four MOM-028 fields.
+
+**Verification:** `pnpm typecheck`/`lint`/`build`: green (32+ web routes). `pnpm test`:
+68/68 (no API changes this pass). No fresh live HTTP round trip — the exact API call
+shape (`missTags`/`reflectionNote`/`language`/`complexity` on `POST /sessions/:id/
+answer`) was already verified against a real Postgres instance in the MOM-028 commit
+moments earlier; this pass only adds the UI that constructs that same request.
+
+**This completes MOM-028→039**, the last item on tonight's approved-migration chain.
+
+---
+
 ## 2026-07-05 — MOM-028: attempt reflection fields, human-approved (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { sessionsApi, type SessionDetailResponse } from '../../../../lib/api-client';
-import type { SessionQuestionResponse } from '@momito/shared';
+import type { MissTagReason, SessionQuestionResponse } from '@momito/shared';
 import { Spinner, ErrorBanner } from '../../../../components/ui';
 import { SessionHeader } from '../../../../components/session/SessionHeader';
 import { AnswerForm } from '../../../../components/session/AnswerForm';
@@ -21,6 +21,8 @@ export default function ActiveSessionPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answerText, setAnswerText] = useState('');
   const [selfRating, setSelfRating] = useState<number>(0);
+  const [missTags, setMissTags] = useState<MissTagReason[]>([]);
+  const [reflectionNote, setReflectionNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set());
   const [completing, setCompleting] = useState(false);
@@ -70,12 +72,16 @@ export default function ActiveSessionPage() {
         answerText: answerText.trim(),
         selfRating: selfRating > 0 ? selfRating : undefined,
         timeSpentSeconds,
+        missTags: missTags.length > 0 ? missTags : undefined,
+        reflectionNote: reflectionNote.trim() || undefined,
       });
       const newAnswered = new Set(answeredQuestions);
       newAnswered.add(currentQuestion.questionId);
       setAnsweredQuestions(newAnswered);
       setAnswerText('');
       setSelfRating(0);
+      setMissTags([]);
+      setReflectionNote('');
 
       // Move to next unanswered question
       const nextUnanswered = session.sessionQuestions.findIndex((sq, i) =>
@@ -175,6 +181,10 @@ export default function ActiveSessionPage() {
           onAnswerTextChange={setAnswerText}
           selfRating={selfRating}
           onSelfRatingChange={setSelfRating}
+          missTags={missTags}
+          onMissTagsChange={setMissTags}
+          reflectionNote={reflectionNote}
+          onReflectionNoteChange={setReflectionNote}
           submitting={submitting}
           isAlreadyAnswered={answeredQuestions.has(currentQuestion.questionId)}
           onPrevious={() => setCurrentIndex(currentIndex - 1)}
