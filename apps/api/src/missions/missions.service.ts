@@ -1,6 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Mission, MissionCheckIn, MissionCompetencyState, PlanItem, Prisma, Task, WeeklyPlan } from '@prisma/client';
-import { CAREER_ROLE_TRACKS, CareerRoleTrackId, CareerRoleTrack, PlanItemResponse, WeeklyPlanResponse } from '@momito/shared';
+import {
+  CAREER_ROLE_TRACKS,
+  CareerRoleTrackId,
+  CareerRoleTrack,
+  isAttemptSolved,
+  PlanItemResponse,
+  WeeklyPlanResponse,
+} from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCheckInDto } from './dto/create-check-in.dto';
 import { CreateMissionDto } from './dto/create-mission.dto';
@@ -529,8 +536,7 @@ export class MissionsService {
     const inMission = attempt.session?.missionId === missionId;
     const roleMatch = inMission || roleTags.length === 0 || roleTags.includes(roleTrackId) || attempt.session?.roleTrackId === roleTrackId;
     const areaMatch = areaTags.length === 0 || areaTags.includes(area) || attempt.session?.area === area;
-    const positive = (attempt.rubricScore ?? 0) >= 0.6 || (attempt.aiScore ?? 0) >= 0.6 || (attempt.selfRating ?? 0) >= 3 || ['partial', 'correct', 'strong'].includes((attempt.correctness ?? '').toLowerCase());
-    return roleMatch && areaMatch && positive;
+    return roleMatch && areaMatch && isAttemptSolved(attempt);
   }
 
   private lastEvidenceAt(

@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min, MinLength } from 'class-validator';
+import { SELF_RATING_MAX, SELF_RATING_MIN } from '@momito/shared';
 
 export class CreateAnswerDto {
   @IsUUID()
@@ -12,8 +13,8 @@ export class CreateAnswerDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(1)
-  @Max(5)
+  @Min(SELF_RATING_MIN)
+  @Max(SELF_RATING_MAX)
   selfRating?: number;
 
   @IsOptional()

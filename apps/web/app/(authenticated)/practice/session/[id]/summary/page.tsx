@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { sessionsApi, type SessionDetailResponse } from '../../../../../lib/api-client';
+import { SELF_RATING_MAX, SELF_RATING_VALUES, normalizeSelfRating } from '@momito/shared';
 import { Card, Badge, Spinner, ErrorBanner, EmptyState } from '../../../../../components/ui';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -142,6 +143,7 @@ export default function SessionSummaryPage() {
       <div className="space-y-4">
         {questions.map((q, i) => {
           const attempt = attemptMap.get(q.questionId);
+          const selfRating = normalizeSelfRating(attempt?.selfRating);
           return (
             <Card key={q.id}>
               <div className="mb-3 flex items-start justify-between gap-3">
@@ -186,21 +188,22 @@ export default function SessionSummaryPage() {
                       Time spent: {Math.floor(attempt.timeSpentSeconds / 60)}m {attempt.timeSpentSeconds % 60}s
                     </p>
                   )}
-                  {attempt.selfRating && (
+                  {selfRating !== null && (
                     <div>
                       <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Self Rating</p>
                       <div className="mt-1 flex gap-0.5">
-                        {[1, 2, 3, 4, 5].map((r) => (
+                        {SELF_RATING_VALUES.map((r) => (
                           <span
                             key={r}
                             className={`text-lg ${
-                              r <= attempt.selfRating! ? 'text-indigo-500' : 'text-zinc-200'
+                              r <= selfRating ? 'text-indigo-500' : 'text-zinc-200'
                             }`}
                           >
                             ★
                           </span>
                         ))}
                       </div>
+                      <p className="mt-1 text-xs text-zinc-500">{selfRating} / {SELF_RATING_MAX}</p>
                     </div>
                   )}
                   <div className="mt-2">

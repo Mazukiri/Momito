@@ -6,6 +6,7 @@ import {
   CareerRoleAreaId,
   CareerRoleTrack,
   CareerRoleTrackId,
+  isAttemptSolved,
   RoleAreaReadiness,
   RoleChecklistItem,
   RoleReadinessResponse,
@@ -253,8 +254,9 @@ export class CareerService {
     selfRating: number | null;
     correctness: string | null;
     rubricScore: number | null;
+    aiScore?: number | null;
   }): boolean {
-    return (attempt.selfRating ?? 0) >= 3 || attempt.correctness === 'correct' || (attempt.rubricScore ?? 0) >= 0.6;
+    return isAttemptSolved(attempt);
   }
 
   private profileText(profile: { skills: Prisma.JsonValue; experience: Prisma.JsonValue; projects: Prisma.JsonValue; education: Prisma.JsonValue }): string {

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DSA_PATTERNS, type DsaPattern, type DsaProgressResponse } from '@momito/shared';
+import { DSA_PATTERNS, isAttemptSolved, type DsaPattern, type DsaProgressResponse } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
 
 // MOM-050: aggregates the DSA ladder (packages/shared's DSA_PATTERNS) against a
@@ -30,11 +30,7 @@ export class DsaService {
     const bestAttemptByQuestion = new Map<string, (typeof attempts)[number]>();
     for (const attempt of attempts) {
       const existing = bestAttemptByQuestion.get(attempt.questionId);
-      const isPositive = (a: (typeof attempts)[number]) =>
-        (a.rubricScore ?? 0) >= 0.6 ||
-        (a.aiScore ?? 0) >= 0.6 ||
-        (a.selfRating ?? 0) >= 3 ||
-        ['partial', 'correct', 'strong'].includes((a.correctness ?? '').toLowerCase());
+      const isPositive = (a: (typeof attempts)[number]) => isAttemptSolved(a);
       if (!existing || (!isPositive(existing) && isPositive(attempt))) {
         bestAttemptByQuestion.set(attempt.questionId, attempt);
       }
@@ -43,12 +39,7 @@ export class DsaService {
     const isSolved = (questionId: string): boolean => {
       const best = bestAttemptByQuestion.get(questionId);
       if (!best) return false;
-      return (
-        (best.rubricScore ?? 0) >= 0.6 ||
-        (best.aiScore ?? 0) >= 0.6 ||
-        (best.selfRating ?? 0) >= 3 ||
-        ['partial', 'correct', 'strong'].includes((best.correctness ?? '').toLowerCase())
-      );
+      return isAttemptSolved(best);
     };
 
     const patterns: DsaProgressResponse['patterns'] = DSA_PATTERNS.map((pattern: DsaPattern) => {

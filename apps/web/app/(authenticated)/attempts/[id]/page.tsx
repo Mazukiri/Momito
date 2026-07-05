@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { attemptsApi } from '../../../lib/api-client';
-import type { AnswerAttemptResponse } from '@momito/shared';
+import { SELF_RATING_MAX, SELF_RATING_VALUES, normalizeSelfRating, type AnswerAttemptResponse } from '@momito/shared';
 import { Card, Spinner, ErrorBanner, EmptyState } from '../../../components/ui';
 
 function formatDate(iso: string): string {
@@ -68,6 +68,8 @@ export default function AttemptDetailPage() {
     );
   }
 
+  const selfRating = normalizeSelfRating(attempt.selfRating);
+
   return (
     <div className="mx-auto max-w-2xl">
       <button
@@ -104,24 +106,24 @@ export default function AttemptDetailPage() {
         <p className="whitespace-pre-wrap text-sm text-zinc-700">{attempt.answerText}</p>
       </Card>
 
-      {attempt.selfRating && (
+      {selfRating !== null && (
         <Card className="mt-4">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 mb-2">
             Self Rating
           </h2>
           <div className="flex gap-0.5">
-            {[1, 2, 3, 4, 5].map((r) => (
+            {SELF_RATING_VALUES.map((r) => (
               <span
                 key={r}
                 className={`text-2xl ${
-                  r <= attempt.selfRating! ? 'text-indigo-500' : 'text-zinc-200'
+                  r <= selfRating ? 'text-indigo-500' : 'text-zinc-200'
                 }`}
               >
                 ★
               </span>
             ))}
           </div>
-          <p className="mt-1 text-sm text-zinc-500">{attempt.selfRating} / 5</p>
+          <p className="mt-1 text-sm text-zinc-500">{selfRating} / {SELF_RATING_MAX}</p>
         </Card>
       )}
 
