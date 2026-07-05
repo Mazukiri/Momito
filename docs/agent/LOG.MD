@@ -1,5 +1,40 @@
 # LOG
 
+## 2026-07-05 - Spaced review session selection (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Task:** Wire `spaced_review` sessions to due ReviewState questions.
+
+**Current behavior before change:** `spaced_review` was a valid session type, but creating that session without explicit question IDs used the generic random filtered question selector instead of the user's due review queue.
+
+**Files changed:**
+- `apps/api/src/sessions/sessions.service.ts`
+- `apps/api/test/sessions.service.spec.ts`
+- `docs/agent/LOCKS.MD`
+- `docs/agent/LOG.MD`
+- `docs/agent/NEXT.MD`
+
+**Changes:**
+- Added due-review selection for `spaced_review` session creation, ordered by `ReviewState.due`.
+- Limited selection by `questionCount`, ignored suspended/non-question/future review states, and skipped orphaned question review states.
+- Preserved explicit `questionIds` as an override for manually curated sessions.
+- Added session service tests for due ordering, orphan skipping, and explicit-ID override.
+
+**Verification:**
+- `pnpm --filter @momito/api test -- sessions.service.spec.ts` - passed (15 tests)
+- `pnpm --filter @momito/api typecheck` - passed
+- `pnpm --filter @momito/api build` - passed
+- `pnpm --filter @momito/api test` - passed (72 tests)
+
+**Risks / follow-ups:**
+- This only changes backend session question selection; frontend can already choose `spaced_review`.
+- If there are no due reviews, creation still returns the existing "No questions match the selected filters" error.
+- `AGENTS.MD` remains dirty from an earlier instruction/documentation change and was not touched by this task.
+
+**Suggested commit message:** `feat(api): create spaced review sessions from due reviews`
+
+---
+
 ## 2026-07-05 - MOM-004 root README accuracy refresh (CLAUDE)
 
 **Actor:** CLAUDE (implementer)

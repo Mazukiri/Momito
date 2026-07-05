@@ -32,7 +32,9 @@ export class SessionsService {
     if (missionId) await this.ensureMissionBelongsToUser(missionId, userId);
     const selected = questionIds
       ? await this.selectExactQuestions(questionIds)
-      : await this.selectFilteredQuestions({ topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern });
+      : sessionData.sessionType === 'spaced_review'
+        ? await this.selectDueReviewQuestions(userId, questionCount)
+        : await this.selectFilteredQuestions({ topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern });
 
     if (selected.length === 0) throw new BadRequestException('No questions match the selected filters');
 
@@ -66,6 +68,24 @@ export class SessionsService {
       throw new BadRequestException('One or more selected questions do not exist');
     }
     return uniqueQuestionIds.map((id) => ({ id }));
+  }
+
+  private async selectDueReviewQuestions(userId: string, questionCount: number) {
+    const states = await this.prisma.reviewState.findMany({
+      where: { userId, objectType: 'question', suspended: false, due: { lte: new Date() } },
+      orderBy: { due: 'asc' },
+      take: questionCount,
+      select: { objectId: true },
+    });
+    const dueQuestionIds = states.map((state) => state.objectId);
+    if (dueQuestionIds.length === 0) return [];
+
+    const existingQuestions = await this.prisma.question.findMany({
+      where: { id: { in: dueQuestionIds } },
+      select: { id: true },
+    });
+    const existingIds = new Set(existingQuestions.map((question) => question.id));
+    return dueQuestionIds.filter((id) => existingIds.has(id)).map((id) => ({ id }));
   }
 
   private async selectFilteredQuestions(filters: {

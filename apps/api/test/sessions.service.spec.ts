@@ -70,6 +70,72 @@ describe('SessionsService', () => {
     ]);
   });
 
+  it('creates spaced-review sessions from due review states in due order', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'session-1', status: 'active', sessionQuestions: [] });
+    const prisma = {
+      reviewState: {
+        findMany: vi.fn().mockResolvedValue([
+          { objectId: 'q-due-1' },
+          { objectId: 'q-due-2' },
+        ]),
+      },
+      question: {
+        findMany: vi.fn().mockResolvedValue([{ id: 'q-due-1' }, { id: 'q-due-2' }]),
+      },
+      interviewSession: { create },
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
+
+    await service.create({ sessionType: 'spaced_review', questionCount: 2 }, 'user-1');
+
+    expect(prisma.reviewState.findMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1', objectType: 'question', suspended: false, due: { lte: expect.any(Date) } },
+      orderBy: { due: 'asc' },
+      take: 2,
+      select: { objectId: true },
+    });
+    expect(create.mock.calls[0][0].data.sessionQuestions.create).toEqual([
+      { questionId: 'q-due-1', order: 1 },
+      { questionId: 'q-due-2', order: 2 },
+    ]);
+  });
+
+  it('skips due review states whose question no longer exists', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'session-1', status: 'active', sessionQuestions: [] });
+    const prisma = {
+      reviewState: { findMany: vi.fn().mockResolvedValue([{ objectId: 'q-existing' }, { objectId: 'q-orphan' }]) },
+      question: { findMany: vi.fn().mockResolvedValue([{ id: 'q-existing' }]) },
+      interviewSession: { create },
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
+
+    await service.create({ sessionType: 'spaced_review', questionCount: 5 }, 'user-1');
+
+    expect(create.mock.calls[0][0].data.sessionQuestions.create).toEqual([
+      { questionId: 'q-existing', order: 1 },
+    ]);
+  });
+
+  it('lets explicit question IDs override spaced-review due selection', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'session-1', status: 'active', sessionQuestions: [] });
+    const prisma = {
+      reviewState: { findMany: vi.fn() },
+      question: { findMany: vi.fn().mockResolvedValue([{ id: 'q-picked' }]) },
+      interviewSession: { create },
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
+
+    await service.create(
+      { sessionType: 'spaced_review', questionCount: 5, questionIds: ['q-picked'] },
+      'user-1',
+    );
+
+    expect(prisma.reviewState.findMany).not.toHaveBeenCalled();
+    expect(create.mock.calls[0][0].data.sessionQuestions.create).toEqual([
+      { questionId: 'q-picked', order: 1 },
+    ]);
+  });
+
   it('deduplicates exact question IDs while preserving first-seen order', async () => {
     const create = vi.fn().mockResolvedValue({ id: 'session-1', status: 'active', sessionQuestions: [] });
     const findMany = vi.fn().mockResolvedValue([{ id: 'q-2' }, { id: 'q-1' }]);
