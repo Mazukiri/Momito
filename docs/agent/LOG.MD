@@ -5,6 +5,33 @@
 
 ---
 
+## 2026-07-05 — Add missing (auth) error boundary + stale-doc batch fix (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing to sweep for real gaps vs. stale backlog entries.
+
+**Real gap found and fixed:** `(auth)` (login/register) had no scoped `error.tsx`, unlike
+`(authenticated)` — a render error on the login/register pages would fall all the way
+through to `global-error.tsx`, replacing the entire `<html>` instead of just the auth
+card content. Added `apps/web/app/(auth)/error.tsx`, mirroring the existing
+`(authenticated)/error.tsx` pattern (renders inside the still-mounted `AuthLayout`).
+
+**Large stale-doc batch fix (no code changes, all pre-existing):** verified against
+actual code and corrected `BACKLOG.MD` for: MOM-007 (design system — `ui.tsx` primitives
+already exist), MOM-009/010/011 (bottom tabs/sidebar/layout — `BottomTabs.tsx`/
+`Sidebar.tsx` exist), MOM-013/014 (theme/auth styling — `dark:` variants everywhere),
+MOM-015 (PWA manifest — `manifest.ts` exists), MOM-020 (Neon `directUrl` — already
+correctly configured, independently re-verified as a P1 item earlier this session too),
+MOM-034/036 (markdown renderer/timer hook — both exist), and a stale duplicate MOM-035
+line. All of these were done in earlier sessions but never marked, making the backlog
+increasingly unreliable as a picture of remaining work — worth a dedicated pass given how
+much this pattern kept recurring throughout tonight.
+
+**Verification:** `pnpm typecheck`/`lint`/`build`: green (32+ web routes). `pnpm test`:
+68/68 (no API changes).
+
+---
+
 ## 2026-07-05 — Make job-detail reminders dismissible too (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

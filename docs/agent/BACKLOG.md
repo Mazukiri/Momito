@@ -424,7 +424,11 @@ Global verification / forbidden-file defaults:
 - **MOM-083** Link jobs ↔ prep objects — BLOCKED on MOM-032.
 
 ### Track K — Operations & Hardening · Gate 6
-- **MOM-084** Error/loading boundaries — READY (Next app router `error.tsx`/`loading.tsx`).
+- **MOM-084** Error/loading boundaries — **DONE**. Already had `global-error.tsx` (root),
+  `(authenticated)/error.tsx`+`loading.tsx`, and `not-found.tsx`. Found and fixed one real
+  gap 2026-07-05: `(auth)` (login/register) had no scoped error boundary, so a render
+  error there fell through to `global-error.tsx`, replacing the whole `<html>` instead of
+  just the auth card. Added `(auth)/error.tsx` matching the `(authenticated)` pattern.
 - **MOM-085** API exception filter + request logging — READY after MOM-017.
 - **MOM-086** DB health ping — extends MOM-019.
 - **MOM-087** Backup workflow (weekly encrypted) — **NEEDS_SPIKE** (Neon backup strategy).
