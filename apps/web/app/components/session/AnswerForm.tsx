@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { SELF_RATING_MAX, SELF_RATING_VALUES, type SessionQuestionResponse } from '@momito/shared';
+import type { SessionQuestionResponse } from '@momito/shared';
 import { Card, Badge, Spinner } from '../ui';
 import { Markdown } from '../Markdown';
 import { useTimer } from '../../lib/use-timer';
@@ -129,7 +129,7 @@ export function AnswerForm({
             Self Rating <span className="text-zinc-400">(optional)</span>
           </span>
           <div className="mt-1 flex gap-2">
-            {SELF_RATING_VALUES.map((r) => (
+            {[1, 2, 3, 4, 5].map((r) => (
               <button
                 key={r}
                 type="button"
@@ -139,12 +139,12 @@ export function AnswerForm({
                     ? 'bg-indigo-600 text-white'
                     : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400'
                 }`}
-                title={`${r} / ${SELF_RATING_MAX}`}
+                title={`${r} / 5`}
               >
                 {r}
               </button>
             ))}
-            <span className="ml-1 self-center text-xs text-zinc-400">1-{SELF_RATING_MAX}</span>
+            <span className="ml-1 self-center text-xs text-zinc-400">1-5</span>
           </div>
         </div>
 

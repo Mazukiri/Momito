@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { attemptsApi } from '../../lib/api-client';
-import { SELF_RATING_MAX, normalizeSelfRating, type AnswerAttemptResponse } from '@momito/shared';
+import type { AnswerAttemptResponse } from '@momito/shared';
 import { Card, Badge, Pagination, Spinner, EmptyState, ErrorBanner } from '../../components/ui';
 
 export default function AttemptsListPage() {
@@ -63,38 +63,35 @@ export default function AttemptsListPage() {
         />
       ) : (
         <div className="space-y-3">
-          {attempts.map((a) => {
-            const selfRating = normalizeSelfRating(a.selfRating);
-            return (
-              <Card
-                key={a.id}
-                onClick={() => router.push(`/attempts/${a.id}`)}
-                className="cursor-pointer transition-shadow hover:border-zinc-300 hover:shadow-md"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-zinc-800">
-                      Attempt on {new Date(a.createdAt).toLocaleDateString('en-US', {
-                        year: 'numeric', month: 'short', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit',
-                      })}
-                    </p>
-                    <p className="mt-1 line-clamp-2 text-sm text-zinc-500">
-                      {a.answerText.slice(0, 200)}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {selfRating !== null && (
-                        <Badge label={`Rating: ${selfRating}/${SELF_RATING_MAX}`} variant="medium" />
-                      )}
-                      {a.sessionId && (
-                        <span className="text-xs text-indigo-500">From a session</span>
-                      )}
-                    </div>
+          {attempts.map((a) => (
+            <Card
+              key={a.id}
+              onClick={() => router.push(`/attempts/${a.id}`)}
+              className="cursor-pointer hover:border-zinc-300 hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-zinc-800 truncate">
+                    Attempt on {new Date(a.createdAt).toLocaleDateString('en-US', {
+                      year: 'numeric', month: 'short', day: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-500 line-clamp-2">
+                    {a.answerText.slice(0, 200)}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {a.selfRating && (
+                      <Badge label={`Rating: ${a.selfRating}/5`} variant="medium" />
+                    )}
+                    {a.sessionId && (
+                      <span className="text-xs text-indigo-500">From a session</span>
+                    )}
                   </div>
                 </div>
-              </Card>
-            );
-          })}
+              </div>
+            </Card>
+          ))}
           <Pagination page={page} limit={limit} total={total} onChange={setPage} />
         </div>
       )}

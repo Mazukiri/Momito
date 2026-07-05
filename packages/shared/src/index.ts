@@ -175,40 +175,6 @@ export interface AnswerAttemptResponse {
   updatedAt: string;
 }
 
-export const SELF_RATING_VALUES = [1, 2, 3, 4] as const;
-export const SELF_RATING_MIN = SELF_RATING_VALUES[0];
-export const SELF_RATING_MAX = SELF_RATING_VALUES[SELF_RATING_VALUES.length - 1];
-export const SOLVED_SELF_RATING_MIN = 3;
-export const RUBRIC_SCORE_SOLVED_MIN = 0.6;
-export const AI_SCORE_SOLVED_MIN = 60;
-
-export function normalizeSelfRating(value: number | null | undefined): number | null {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  const rounded = Math.round(value);
-  if (rounded < SELF_RATING_MIN) return null;
-  return Math.min(rounded, SELF_RATING_MAX);
-}
-
-export function isSolvedCorrectness(value: string | null | undefined): boolean {
-  const normalized = (value ?? '').trim().toLowerCase();
-  return normalized === 'correct' || normalized === 'strong' || normalized === 'solved_clean';
-}
-
-export function isAttemptSolved(input: {
-  selfRating?: number | null;
-  rubricScore?: number | null;
-  aiScore?: number | null;
-  correctness?: string | null;
-}): boolean {
-  const correctness = (input.correctness ?? '').trim().toLowerCase();
-  if (correctness === 'partial' || correctness === 'incorrect' || correctness === 'failed') return false;
-  if (isSolvedCorrectness(correctness)) return true;
-  if ((input.rubricScore ?? 0) >= RUBRIC_SCORE_SOLVED_MIN) return true;
-  if ((input.aiScore ?? 0) >= AI_SCORE_SOLVED_MIN) return true;
-  const selfRating = normalizeSelfRating(input.selfRating);
-  return selfRating !== null && selfRating >= SOLVED_SELF_RATING_MIN;
-}
-
 export const STUDY_PLAN_STATUSES = ['todo', 'in_progress', 'done'] as const;
 export type StudyPlanStatus = (typeof STUDY_PLAN_STATUSES)[number];
 

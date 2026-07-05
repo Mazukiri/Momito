@@ -293,47 +293,6 @@ MOM-088 Lighthouse/a11y pass, MOM-090 final golden-path verification.
 **Result:** 24 backlog tasks completed across 12 commits, full CI-equivalent pipeline
 green. `NEXT.MD` updated to the next real unblocked task.
 
-## 2026-07-05 - MOM-091 scoring semantics normalization
-
-**Actor:** CODEX
-**Task:** MOM-091 - Normalize scoring semantics and DSA solved heuristics without schema changes.
-
-**Current behavior before change:** Practice sessions accepted and displayed `selfRating` as `1..5`; DSA progress, mission evidence, and career readiness each used their own "positive attempt" heuristic; DSA progress counted `partial` and `aiScore >= 0.6` as solved signals.
-
-**Files changed:**
-- `packages/shared/src/index.ts`
-- `apps/api/src/sessions/dto/create-answer.dto.ts`
-- `apps/api/src/dsa/dsa.service.ts`
-- `apps/api/src/dashboard/dashboard.service.ts`
-- `apps/api/src/career/career.service.ts`
-- `apps/api/src/missions/missions.service.ts`
-- `apps/web/app/components/session/AnswerForm.tsx`
-- `apps/web/app/(authenticated)/attempts/page.tsx`
-- `apps/web/app/(authenticated)/attempts/[id]/page.tsx`
-- `apps/web/app/(authenticated)/practice/session/[id]/summary/page.tsx`
-
-**Behavior changed:**
-- Added shared scoring helpers/constants so current services use one solved-attempt rule.
-- `selfRating` submission is now validated as `1..4`.
-- DSA progress no longer treats `partial` as solved and no longer uses the old `aiScore >= 0.6` comparison; AI score is treated as a 0-100 scale.
-- Dashboard weak-topic averages now normalize legacy `selfRating=5` reads down to the current `1..4` display/computation scale.
-- Practice answer UI and attempt history/detail/summary now render `selfRating` as `1..4`.
-
-**Checks run:**
-- `pnpm --filter @momito/shared build` - passed
-- `pnpm --filter @momito/api test` - passed (51 tests)
-- `pnpm --filter @momito/api build` - passed
-- `pnpm --filter @momito/web typecheck` - passed
-
-**Manual test:** Not run in this pass.
-
-**Known risks / follow-ups:**
-- Historical rows can still contain `selfRating=5`; this task normalizes reads but does not migrate stored data.
-- `apps/web/app/(authenticated)/dashboard/page.tsx` still has a `/5` label string, but that file was outside MOM-091's allowed surface. The dashboard service data is normalized; the label needs a separate scoped follow-up.
-- This does not add ReviewState, outcome fields, or Today queue behavior.
-
-**Suggested commit message:** `fix(scoring): normalize self-rating scale and tighten solved heuristics`
-
 ---
 
 ## 2026-07-05 - MOM-003 archive legacy Python backend and Expo mobile

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Reminder, Task } from '@prisma/client';
-import { ReminderResponse, TaskResponse, normalizeSelfRating } from '@momito/shared';
+import { ReminderResponse, TaskResponse } from '@momito/shared';
 import { CareerService } from '../career/career.service';
 import { MissionsService } from '../missions/missions.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -63,10 +63,9 @@ export class DashboardService {
       const topicQuestions = attemptedByTopic.get(topicId) ?? new Set<string>();
       topicQuestions.add(attempt.questionId);
       attemptedByTopic.set(topicId, topicQuestions);
-      const normalizedSelfRating = normalizeSelfRating(attempt.selfRating);
-      if (normalizedSelfRating !== null) {
+      if (attempt.selfRating !== null) {
         const ratings = ratingsByTopic.get(topicId) ?? [];
-        ratings.push(normalizedSelfRating);
+        ratings.push(attempt.selfRating);
         ratingsByTopic.set(topicId, ratings);
       }
     }
