@@ -5,6 +5,51 @@
 
 ---
 
+## 2026-07-05 — MOM-079/080: reminder dismiss UI on calendar + Today (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing autonomously per user instruction (no further per-task check-ins
+required; still honoring the standing gates — no schema migrations without explicit
+approval, no credential-dependent features). Used an Explore subagent to inspect the
+Reminder feature's current state first, since `BACKLOG.MD`'s MOM-078/079/080 entries
+looked stale/speculative ("no cron infra found", "route mismatch").
+
+**Correction to the subagent's finding:** it initially claimed `apps/web/lib/api-client.ts`
+calls `/reminders` while the backend only serves `/tasks/reminders`, calling this a live
+404 bug. I verified this myself against `apps/api/src/tasks/tasks.controller.ts` before
+acting: the controller is `@Controller()` with **no base path**, so `@Get('reminders')`
+and `@Post('reminders/:id/dismiss')` really are `/reminders` and `/reminders/:id/dismiss`
+— exactly matching the frontend client. **No route mismatch exists.** Worth recording:
+always verify a subagent's specific file/line claims before acting on them, especially
+when the fix would touch working code.
+
+**Real findings, confirmed:**
+- MOM-078: due-delivery is already correctly just a query-time filter
+  (`status: 'pending' AND dueAt <= now`); no `@nestjs/schedule`/cron is installed or
+  needed, since there's no push-notification requirement — poll-on-fetch is sufficient by
+  design. Marked resolved, not a gap.
+- The actual gap: reminders were fetched and displayed read-only in two places (calendar
+  page's Reminders aside, job detail page) but **never dismissible from the UI**, and
+  never surfaced on `/today` at all.
+
+**Changes:**
+- `apps/web/app/(authenticated)/calendar/page.tsx` — added a `dismissReminder` handler
+  (mirrors the existing `complete`/`snooze` pattern) and a Dismiss button on each
+  Reminders card.
+- `apps/web/app/(authenticated)/today/page.tsx` — now fetches `remindersApi.list()`
+  alongside `recommendationsApi.list()` (parallel `Promise.all`) and renders a Reminders
+  section above the recommendation queue, with the same Dismiss action. Empty-state card
+  now checks both `items` and `reminders` are empty before showing "nothing urgent."
+
+**Checks:** `pnpm --filter @momito/web typecheck/lint/build` ✅ (32 routes), `pnpm test` ✅
+(56/56, unaffected — web-only change).
+
+**Docs updated:** `BACKLOG.MD` — MOM-078 marked resolved (no scheduler needed), MOM-079
+marked done (UI gap, not API gap), MOM-080 marked done for the Today half (top-bar
+badge/bell still open, smaller follow-up).
+
+---
+
 ## 2026-07-05 — MOM-038: split AnswerForm into per-question-type panels (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

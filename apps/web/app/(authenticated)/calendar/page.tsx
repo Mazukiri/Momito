@@ -113,6 +113,18 @@ export default function CalendarPage() {
     }
   }
 
+  async function dismissReminder(id: string) {
+    setWorking(true);
+    try {
+      await remindersApi.dismiss(id);
+      await load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to dismiss reminder');
+    } finally {
+      setWorking(false);
+    }
+  }
+
   if (loading) return <div className="flex justify-center py-20"><Spinner className="h-8 w-8" /></div>;
 
   return (
@@ -200,8 +212,19 @@ export default function CalendarPage() {
             <Card><p className="text-sm text-zinc-500">No pending reminders.</p></Card>
           ) : reminders.map((reminder) => (
             <Card key={reminder.id}>
-              <p className="text-sm font-medium text-zinc-800">{reminder.title}</p>
-              <p className="mt-1 text-xs text-zinc-400">{new Date(reminder.dueAt).toLocaleString()}</p>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-zinc-800">{reminder.title}</p>
+                  <p className="mt-1 text-xs text-zinc-400">{new Date(reminder.dueAt).toLocaleString()}</p>
+                </div>
+                <button
+                  onClick={() => dismissReminder(reminder.id)}
+                  disabled={working}
+                  className="shrink-0 rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+                >
+                  Dismiss
+                </button>
+              </div>
             </Card>
           ))}
         </aside>

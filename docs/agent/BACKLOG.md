@@ -297,7 +297,9 @@ Global verification / forbidden-file defaults:
 - **MOM-055/056** System design batches (10/25) · **MOM-057** System design editor (7-section template).
 - **MOM-058/059** Behavioral prompt batches (30/60).
 - **MOM-060** Company packs (20) — extends existing `Company` model/`companies` module.
-- **MOM-061** Role tracks (8) - **NEEDS_REPO_INSPECTION** (`CAREER_ROLE_TRACKS` constants already define 4 tracks; extend constants to 8 first unless a separate migration design proves a table is needed).
+- **MOM-061** Role tracks (8) — **DONE** (verified 2026-07-05: `CAREER_ROLE_TRACKS` in
+  `packages/shared/src/index.ts` now defines 10 tracks, covering all 8 plan categories;
+  this entry was stale, done in an earlier session but not marked here).
 - **MOM-062** Content coverage dashboard — BLOCKED on MOM-024.
 
 ### Track H — Story & Behavioral Engine · Gate 2/3
@@ -316,9 +318,21 @@ Global verification / forbidden-file defaults:
 ### Track J — Career Engine · Gate 5
 - **MOM-075** Task consolidation migration design (`StudyPlanItem`→`Task`) — **NEEDS_SPIKE** (SPIKE-007). *Migration → human-gated.*
 - **MOM-076** Merge StudyPlanItem into Task · **MOM-077** Remove old study-plan code — BLOCKED on MOM-075.
-- **MOM-078** Reminder due-delivery / scheduler semantics - **NEEDS_REPO_INSPECTION** (`Reminder` model, task/job reminder creation, `GET /reminders`, dismiss endpoint, and dashboard summary already exist; no `@nestjs/schedule`/cron infra found).
-- **MOM-079** Reminder API gap hardening - **NEEDS_REPO_INSPECTION**; do not recreate existing `GET /reminders` or `POST /reminders/:id/dismiss`; add only missing filters/status transitions/tests after inspection.
-- **MOM-080** Reminder UI (Today + top bar) — BLOCKED on MOM-079, MOM-012.
+- **MOM-078** Reminder due-delivery / scheduler semantics — **RESOLVED, no scheduler
+  needed** (2026-07-05 inspection). Due-delivery is correctly just a query-time filter
+  (`status: 'pending' AND dueAt <= now`, see `tasks.service.ts` `listReminders`) — there's
+  no push-notification requirement, so a poll-on-fetch model is sufficient by design.
+  `@nestjs/schedule`/cron would be unnecessary complexity, not a missing gap.
+- **MOM-079** Reminder API gap hardening — **DONE** 2026-07-05. Inspection found the API
+  (`GET /reminders`, `POST /reminders/:id/dismiss` — both under `TasksController`'s
+  no-prefix `@Controller()`) already matches `apps/web/app/lib/api-client.ts`'s
+  `remindersApi` exactly; no route mismatch, no missing filters needed. The real gap was
+  UI: the calendar page fetched reminders but never called `.dismiss()`. Fixed — added a
+  Dismiss button to the calendar Reminders card.
+- **MOM-080** Reminder UI (Today + top bar) — **DONE (Today half)** 2026-07-05.
+  `apps/web/app/(authenticated)/today/page.tsx` now fetches and displays pending
+  reminders alongside the recommendation queue, with a working Dismiss action. Top-bar
+  badge/bell is still not implemented — smaller follow-up, not blocking.
 - **MOM-081** Jobs page → mobile-first list (no drag-drop) — **NEEDS_REPO_INSPECTION** (`jobs/` route exists).
 - **MOM-082** Career hub — **NEEDS_REPO_INSPECTION** (`career/` route exists).
 - **MOM-083** Link jobs ↔ prep objects — BLOCKED on MOM-032.
