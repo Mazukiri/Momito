@@ -26,6 +26,7 @@
 | MOM-035 | CLAUDE | `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/app/components/CodeEditor.tsx`, `apps/web/app/components/session/AnswerForm.tsx` | 2026-07-05 |
 | Dark-mode final cleanup | CLAUDE | `apps/web/app/(authenticated)/attempts/[id]/page.tsx`, `apps/web/app/(authenticated)/study-plan/page.tsx`, `docs/agent/LOG.MD`, `docs/agent/LOCKS.MD` | 2026-07-05T10:15:34Z |
 | MOM-043 | CLAUDE | `apps/api/prisma/seed.ts`, `apps/api/prisma/seed-data.ts`, `apps/api/scripts/content-*.ts`, `docs/agent/LOG.MD`, `docs/agent/LOCKS.MD` | 2026-07-05T10:19:07Z |
+| MOM-044 | CLAUDE | `apps/api/prisma/seed.ts`, `docs/agent/LOG.MD`, `docs/agent/LOCKS.MD` | 2026-07-05T10:20:37Z |
 
 ## Standing "hands-off" zones (never claim without an explicit, human-approved task)
 

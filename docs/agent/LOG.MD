@@ -1,5 +1,36 @@
 # LOG
 
+## 2026-07-05 - MOM-044 idempotent seed upsert utilities (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Task:** MOM-044 - Idempotent seed upsert utilities.
+
+**Current behavior before change:** Seeding was already idempotent, but the user/topic/company/question upserts and question-company relinking were inline inside `main()`.
+
+**Files changed:**
+- `apps/api/prisma/seed.ts`
+- `docs/agent/LOCKS.MD`
+- `docs/agent/LOG.MD`
+
+**Changes:**
+- Extracted named helpers for demo-user, topic, company, question, stable question ID, and question-company relation seeding.
+- Preserved existing `upsert` behavior and the delete/create relinking strategy for question companies.
+- No seed data, IDs, schema, migrations, or content semantics changed.
+
+**Verification:**
+- `pnpm content:validate` - passed (0 errors, 0 warnings)
+- `pnpm content:stats` - passed (382 total questions)
+- `pnpm --filter @momito/api build` - passed
+- `pnpm --filter @momito/api test` - passed (68 tests)
+
+**Risks / follow-ups:**
+- No live `pnpm db:seed` run was performed; this was verified through TypeScript build, content tooling, and API tests.
+- `AGENTS.MD` remains dirty from an earlier instruction/documentation change and was not touched by this task.
+
+**Suggested commit message:** `refactor(api): extract idempotent seed upsert helpers`
+
+---
+
 ## 2026-07-05 - MOM-043 seed-data structure split (CLAUDE)
 
 **Actor:** CLAUDE (implementer)
