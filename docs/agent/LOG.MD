@@ -5,6 +5,90 @@
 
 ---
 
+## 2026-07-05 — MOM-027/029: ReviewState migration + Reviews module, human-approved (CLAUDE, session 4)
+
+**Actor:** CLAUDE (implementer)
+**Trigger:** The user explicitly approved crossing the D-004 human-approval gate ("do it
+as you wish but follow strictly with the plan"), unblocking MOM-027 for the first time
+this session. ADR-0002/SPIKE-003 (design) and MOM-030 (FSRS algorithm) were already done
+from earlier in this session — this closes the loop by implementing the actual migration
+and wiring it to real persistence.
+
+**Environment note:** Docker isn't available in this sandbox (established earlier in the
+session), but a Postgres instance turned out to be reachable directly on `localhost:5432`
+with the credentials already in `apps/api/.env` — confirmed via `prisma db pull` before
+proceeding. This let the whole migration be verified against a real database, not just
+mocked.
+
+**MOM-027 — schema + migration, exactly per ADR-0002:**
+- Added `model ReviewState` to `apps/api/prisma/schema.prisma` — polymorphic
+  `objectType`/`objectId` (no FK on `objectId`, by design), `@@unique([userId, objectType,
+  objectId])`, `@@index([userId, due])`. Added a `user User @relation(...)` +
+  `@@map("review_states")`, consistent with every other model's convention (ADR-0002's
+  illustrative snippet omitted the User relation, but that wasn't a deliberate design
+  choice to deviate from — followed repo convention here).
+  Also added the `reviewStates ReviewState[]` back-relation on `User`.
+- `prisma migrate dev --name add_review_state --create-only`, then hand-edited the
+  generated `migration.sql` to append the SPIKE-003 partial index:
+  `CREATE INDEX ... ON review_states(user_id, due) WHERE NOT suspended`.
+- Applied the migration (`prisma migrate dev`) — purely additive, no data loss, matching
+  ADR-0002's prediction.
+- `apps/api/src/questions/questions.service.ts`'s `remove()` now wraps the delete in
+  `prisma.$transaction([reviewState.deleteMany(...), question.delete(...)])` — the orphan
+  fix SPIKE-003 scoped into this same PR. Added a regression test in
+  `test/questions.service.spec.ts` (also had to update the existing 409-on-delete test's
+  mock shape, since `remove()` no longer calls `question.delete` directly).
+
+**MOM-029 — Reviews module, wiring MOM-030's FSRS scheduler to real persistence:**
+- `packages/shared/src/index.ts` — added `ReviewStateResponse`, reusing the *existing*
+  `ReviewableObjectType` union (found already defined for the MOM-022/023 Knowledge Kernel
+  work — `question | story | system_design_case | behavioral_prompt | cs_card` — instead
+  of declaring a conflicting duplicate, which briefly broke `@momito/shared`'s build until
+  caught and fixed).
+- New `apps/api/src/reviews/{reviews.service,reviews.controller,reviews.module}.ts` +
+  `dto/record-review.dto.ts`. `ReviewsService.record()` only allows `objectType: 'question'`
+  today (the only type with a real reviewable table so far) — get-or-creates a
+  `ReviewState`, runs it through `fsrs-scheduler.ts`, upserts. `listDue()` runs the
+  `due <= now AND NOT suspended` query the Today queue will eventually use.
+  `GET /reviews/due`, `POST /reviews/:objectType/:objectId`. Registered in `app.module.ts`.
+- New `test/reviews.service.spec.ts` (4 tests): rejects unsupported types before touching
+  the DB, creates fresh state with FSRS defaults, schedules from existing state on repeat
+  review (not resetting it), and the due-query shape.
+
+**Verification — both mocked and live:**
+- `pnpm test`: 61/61 (was 57 before this task: +1 questions.service orphan test, +4
+  reviews.service tests, -1 net from the existing delete-test's mock rewrite not adding a
+  net-new file). `pnpm typecheck`/`lint`/`build`: all green across all 3 packages.
+- **Live round-trip against real Postgres** (not just unit tests): wrote and ran a
+  throwaway script creating a `Question` + `ReviewState`, deleting the question through
+  the exact same `$transaction` shape as the service, confirming zero orphaned
+  `ReviewState` rows remained and the partial index (`review_states_user_due_active_idx
+  ... WHERE NOT suspended`) exists via `pg_indexes`.
+- **Live HTTP verification**: started the API dev server (had to `export` `.env` into the
+  shell manually first — this NestJS app doesn't auto-load `.env` itself, only the Prisma
+  CLI does that), logged in as the seeded demo user, and called the real endpoints:
+  `POST /reviews/question/:id` with `selfRating: 5` scheduled ~8 days out (Easy grade,
+  `state: 2` Review); `selfRating: 1` scheduled a ~1-minute relearning step (`state: 1`
+  Learning), matching `ts-fsrs`'s real behavior; `POST /reviews/story/:id` correctly
+  returned 400 for the unsupported type. Cleaned up all test data (`ReviewState` rows)
+  created during this manual check afterward.
+- Hit one Windows-specific hiccup: after killing the dev server, `prisma generate` failed
+  with `EPERM` renaming the query engine `.dll.node` because a second lingering process
+  was still holding port 3001 (nest's watch mode had spawned a second process beyond the
+  one first killed) — found and killed it via `netstat`/`taskkill`, then the pipeline
+  passed cleanly.
+
+**Docs updated:** `docs/adr/0002-...md` (status → Implemented), `DECISIONS.MD` (D-005
+outcome note), `BACKLOG.MD` (MOM-027/029 → done, MOM-030 note updated, MOM-031/032 → now
+READY instead of BLOCKED, since their blocker is resolved).
+
+**Explicitly not done, and why:** MOM-031 (hook answer submission into scheduling) and
+MOM-032 (Today API surfacing due reviews) are the natural next steps and are now
+genuinely unblocked, but weren't done in this same PR to keep this migration-crossing
+change reviewable on its own. Continuing to MOM-031 next.
+
+---
+
 ## 2026-07-05 — Stale-doc cleanup + final verification (CLAUDE, session 4)
 
 **Actor:** CLAUDE (implementer)

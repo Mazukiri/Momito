@@ -75,6 +75,14 @@ delete, not as a follow-up; and the Today queue's due-lookup needs a partial ind
 schema DSL can't express it directly. No open design question remains — MOM-026 is done;
 MOM-027 (the actual `prisma migrate` + service code) awaits human approval per D-004.
 
+**MOM-027/029 implemented (2026-07-05):** the user explicitly approved the migration.
+`ReviewState` is live in `schema.prisma` (migration `20260705045159_add_review_state`),
+matching this design exactly, including the partial index. The orphan-cleanup fix landed
+in `questions.service.ts`'s `remove()`. `ReviewsService`/`ReviewsController` (MOM-029)
+wire the FSRS scheduler (MOM-030) to real persistence. Verified against a real, running
+Postgres instance — not just mocked tests — including a live create→delete round-trip
+proving no orphaned rows remain.
+
 ### D-006 — The FSRS learning engine coexists with the existing Mission engine (no rewrite)
 **Context:** The repo already contains a substantial, plan-unmentioned engine: `Mission`,
 `WeeklyPlan`, `PlanItem`, `MissionCompetencyState`, `MissionCheckIn`, plus a Readwise learning-source

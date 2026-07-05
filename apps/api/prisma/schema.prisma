@@ -36,6 +36,7 @@ model User {
   jobEvents      JobEvent[]
   tasks          Task[]
   reminders      Reminder[]
+  reviewStates   ReviewState[]
   learningSources LearningSource[]
   learningHighlights LearningHighlight[]
   learningEvidence LearningEvidence[]
@@ -664,4 +665,32 @@ model ReadwiseSyncRun {
   @@index([userId])
   @@index([startedAt])
   @@map("readwise_sync_runs")
+}
+
+// MOM-027: FSRS review scheduling state, per ADR-0002/D-005. objectId is
+// intentionally polymorphic with no DB-level foreign key (it can point at a
+// Question today, and a Story/other reviewable object later) — the service
+// layer is responsible for validating objectType values and, per ADR-0002's
+// SPIKE-003 finding, deleting orphaned rows when a referenced object is
+// hard-deleted (see Question.remove() in questions.service.ts).
+model ReviewState {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  objectType     String    @map("object_type")
+  objectId       String    @map("object_id") @db.Uuid
+  stability      Float     @default(0)
+  difficulty     Float     @default(0)
+  due            DateTime  @default(now()) @db.Timestamptz(6)
+  state          Int       @default(0)
+  reps           Int       @default(0)
+  lapses         Int       @default(0)
+  suspended      Boolean   @default(false)
+  lastReviewedAt DateTime? @map("last_reviewed_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, objectType, objectId])
+  @@index([userId, due])
+  @@map("review_states")
 }

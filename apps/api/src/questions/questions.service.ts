@@ -120,7 +120,14 @@ export class QuestionsService {
   async remove(id: string) {
     await this.ensureExists(id);
     try {
-      await this.prisma.question.delete({ where: { id } });
+      // ADR-0002/SPIKE-003: ReviewState.objectId has no DB-level foreign key
+      // (it's polymorphic), so deleting a Question would otherwise silently
+      // orphan any ReviewState row pointing at it. Clean it up in the same
+      // transaction as the delete itself.
+      await this.prisma.$transaction([
+        this.prisma.reviewState.deleteMany({ where: { objectType: 'question', objectId: id } }),
+        this.prisma.question.delete({ where: { id } }),
+      ]);
     } catch (error) {
       rethrowDeleteConstraint(error, 'Question has session history and cannot be deleted.');
     }

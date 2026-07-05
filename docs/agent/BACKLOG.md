@@ -251,19 +251,35 @@ Global verification / forbidden-file defaults:
 ### Track E — Review & Learning Engine · Gate 2
 - **MOM-026** Design ReviewState migration — **DONE** (2026-07-05). SPIKE-003 answered in
   `docs/adr/0002-reviewstate-polymorphic-object-reference.md`; see `DECISIONS.MD` D-005.
-- **MOM-027** Implement ReviewState migration — READY, but **BLOCKED on human approval**
-  (D-004: planner/implementer may not author migrations unattended). Design is complete;
-  a human must explicitly greenlight running `prisma migrate dev` for this to proceed.
+- **MOM-027** Implement ReviewState migration — **DONE** 2026-07-05, human-approved.
+  Migration `20260705045159_add_review_state` applied to a real Postgres instance;
+  `ReviewState` model added to `schema.prisma` exactly per ADR-0002, including the
+  SPIKE-003 partial index (`review_states_user_due_active_idx ... WHERE NOT suspended`,
+  hand-added to the generated `migration.sql`). `questions.service.ts`'s `remove()` now
+  wraps the delete in a `$transaction` with `reviewState.deleteMany()` to prevent the
+  orphan risk ADR-0002 identified. Verified with a live create→delete round-trip against
+  Postgres (zero orphaned rows left), not just mocked unit tests.
 - **MOM-028** Attempt reflection fields — **NEEDS_REPO_INSPECTION** (most fields already exist; only miss-tags/reflection-note may be missing).
-- **MOM-029** Reviews module (API) — BLOCKED on MOM-027.
+- **MOM-029** Reviews module (API) — **DONE** 2026-07-05. New
+  `apps/api/src/reviews/{reviews.service,reviews.controller,reviews.module,dto/record-review.dto}.ts`,
+  registered in `app.module.ts`. `GET /reviews/due` lists non-suspended due reviews;
+  `POST /reviews/:objectType/:objectId` records a review (get-or-create + FSRS schedule +
+  upsert), rejecting unsupported `objectType`s with 400. Verified via unit tests (mocked
+  Prisma) **and** live HTTP calls against a running server + real Postgres — confirmed
+  correct FSRS scheduling (Easy → ~8 days out; Again → ~1min relearning step) and the
+  unsupported-type rejection.
 - **MOM-030** FSRS scheduling service — **DONE (algorithm layer only)** 2026-07-05.
   `apps/api/src/reviews/fsrs-scheduler.ts` wraps `ts-fsrs` as pure functions
   (`createInitialReviewState`, `scheduleNextReview`, `selfRatingToGrade`) operating on
-  plain `ReviewCardState` objects shaped like ADR-0002's planned `ReviewState` columns —
-  no persistence, no module/controller, since there's no `ReviewState` table yet
-  (MOM-027, human-gated). MOM-031 wires this to Prisma once that migration lands.
-- **MOM-031** Hook answer submission into scheduling — BLOCKED on MOM-029/030.
-- **MOM-032** Today dashboard API (queue priority §6.1) — BLOCKED on MOM-031.
+  plain `ReviewCardState` objects shaped like ADR-0002's planned `ReviewState` columns.
+  Now wired to real persistence by MOM-029.
+- **MOM-031** Hook answer submission into scheduling — now **READY** (MOM-029/030 done).
+  Next natural step: call `ReviewsService.record()` from `sessions.service.ts`'s answer
+  submission path so every practice attempt on a `dsa`/question-type object updates its
+  review schedule automatically, not just via the standalone `/reviews` endpoint.
+- **MOM-032** Today dashboard API (queue priority §6.1) — now **READY** (MOM-031 pending,
+  but `GET /reviews/due` already exists and could be merged into `/today` once MOM-031
+  auto-populates review state from practice sessions).
 - **MOM-033** Recommendation reason standardization — **DONE** 2026-07-05. The reason
   taxonomy half was already implemented in an earlier session (`RECOMMENDATION_REASONS`
   in `recommendations.service.ts`). This pass did the remaining "Today integration" half:

@@ -1,10 +1,14 @@
 # ADR-0002: ReviewState uses a polymorphic object reference
 
 ## Status
-Accepted (design + SPIKE-003 complete) — 2026-07-05. Schema change is **not yet
-implemented**; SPIKE-003's three open questions are now answered below. The actual
-`prisma migrate` step still requires explicit human approval per `docs/agent/DECISIONS.MD`
-D-004 — nothing in this update touches `schema.prisma`.
+**Implemented** — 2026-07-05. The user explicitly approved running the migration
+(D-004's human-approval gate). Migration `20260705045159_add_review_state` is applied;
+`ReviewState` exists in `apps/api/prisma/schema.prisma` exactly as designed below,
+including the SPIKE-003 partial index and the orphan-cleanup fix in
+`questions.service.ts`'s `remove()`. `ReviewsService`/`ReviewsController` (MOM-029) wire
+`apps/api/src/reviews/fsrs-scheduler.ts` (MOM-030) to real persistence — see the 2026-07-05
+`LOG.MD` entry for full verification detail (unit tests + live round-trip against a real
+Postgres instance).
 
 ## Context
 The Learning Engine (plan §6) needs one spaced-repetition scheduler (FSRS) that can review many

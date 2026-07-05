@@ -38,19 +38,48 @@ describe('QuestionsService', () => {
     const prisma = {
       question: {
         findUnique: vi.fn().mockResolvedValue({ id: 'question-1' }),
-        delete: vi.fn().mockRejectedValue(
-          new Prisma.PrismaClientKnownRequestError('Foreign key violation', {
-            code: 'P2003',
-            clientVersion: '6.19.0',
-          }),
-        ),
+        delete: vi.fn(),
       },
+      reviewState: {
+        deleteMany: vi.fn(),
+      },
+      $transaction: vi.fn().mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Foreign key violation', {
+          code: 'P2003',
+          clientVersion: '6.19.0',
+        }),
+      ),
     };
     const service = new QuestionsService(prisma as never);
 
     await expect(service.remove('question-1')).rejects.toEqual(
       new ConflictException('Question has session history and cannot be deleted.'),
     );
+  });
+
+  it('deletes orphaned ReviewState rows in the same transaction as the question delete', async () => {
+    const prisma = {
+      question: {
+        findUnique: vi.fn().mockResolvedValue({ id: 'question-1' }),
+        delete: vi.fn().mockReturnValue({ query: 'delete-question' }),
+      },
+      reviewState: {
+        deleteMany: vi.fn().mockReturnValue({ query: 'delete-review-states' }),
+      },
+      $transaction: vi.fn().mockResolvedValue([{ count: 1 }, { id: 'question-1' }]),
+    };
+    const service = new QuestionsService(prisma as never);
+
+    await service.remove('question-1');
+
+    expect(prisma.reviewState.deleteMany).toHaveBeenCalledWith({
+      where: { objectType: 'question', objectId: 'question-1' },
+    });
+    expect(prisma.question.delete).toHaveBeenCalledWith({ where: { id: 'question-1' } });
+    expect(prisma.$transaction).toHaveBeenCalledWith([
+      { query: 'delete-review-states' },
+      { query: 'delete-question' },
+    ]);
   });
 
   it('applies filters and pagination to list and count consistently', async () => {

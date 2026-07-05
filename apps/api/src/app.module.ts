@@ -21,6 +21,7 @@ import { RecommendationsModule } from './recommendations/recommendations.module'
 import { HealthModule } from './health/health.module';
 import { ContentModule } from './content/content.module';
 import { DsaModule } from './dsa/dsa.module';
+import { ReviewsModule } from './reviews/reviews.module';
 import { RequestLoggingMiddleware } from './common/request-logging.middleware';
 
 @Module({
@@ -34,6 +35,7 @@ import { RequestLoggingMiddleware } from './common/request-logging.middleware';
     HealthModule,
     ContentModule,
     DsaModule,
+    ReviewsModule,
     QuestionsModule,
     TopicsModule,
     CompaniesModule,

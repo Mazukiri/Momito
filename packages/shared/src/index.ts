@@ -1202,3 +1202,23 @@ export interface DsaProgressResponse {
   totalAttempted: number;
   totalSolved: number;
 }
+
+// ── FSRS Review Scheduling (MOM-027/029/030) ─────────────────────────────────
+// Mirrors apps/api/prisma/schema.prisma's ReviewState model (ADR-0002 / D-005).
+// Reuses ReviewableObjectType (defined above, from the MOM-022/023 Knowledge
+// Kernel work) rather than redeclaring it — only 'question' is actually wired
+// up to persistence so far; the other kernel-defined types become reviewable
+// as their own migrations/services land.
+export interface ReviewStateResponse {
+  id: string;
+  objectType: ReviewableObjectType;
+  objectId: string;
+  stability: number;
+  difficulty: number;
+  due: string;
+  state: number;
+  reps: number;
+  lapses: number;
+  suspended: boolean;
+  lastReviewedAt: string | null;
+}
