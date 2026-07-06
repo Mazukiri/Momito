@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Momito — User Guide</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --panel: #ffffff;
+    --ink: #18181b;
+    --sub: #52525b;
+    --border: #e4e4e7;
+    --accent: #4f46e5;
+    --accent-soft: #eef2ff;
+    --code-bg: #1e1e2e;
+    --success: #16a34a;
+    --warn: #b45309;
+    --radius: 12px;
+    --maxw: 880px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar TOC */
+  nav.toc {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 24px 16px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  nav.toc .brand {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  nav.toc .tagline { font-size: 0.8rem; color: var(--sub); margin-bottom: 20px; }
+  nav.toc a {
+    display: block;
+    padding: 6px 10px;
+    border-radius: 8px;
+    color: var(--sub);
+    text-decoration: none;
+    font-size: 0.88rem;
+    margin-bottom: 2px;
+  }
+  nav.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+  nav.toc .group-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #a1a1aa;
+    margin: 16px 0 4px 10px;
+    font-weight: 700;
+  }
+
+  main {
+    flex: 1;
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 48px 32px 120px;
+  }
+
+  h1 { font-size: 2.1rem; margin: 0 0 8px; }
+  h2 {
+    font-size: 1.5rem;
+    margin: 56px 0 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    scroll-margin-top: 20px;
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; }
+  h3 { font-size: 1.15rem; margin: 28px 0 8px; scroll-margin-top: 20px; }
+  h4 { font-size: 0.95rem; margin: 20px 0 6px; color: var(--sub); text-transform: uppercase; letter-spacing: 0.03em; }
+  p { color: #27272a; }
+  .lede { font-size: 1.05rem; color: var(--sub); max-width: 65ch; }
+
+  .badge {
+    display: inline-block;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  .callout {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 0.92rem;
+  }
+  .callout.warn { border-left-color: var(--warn); background: #fffbeb; }
+  .callout.tip { border-left-color: var(--success); background: #f0fdf4; }
+  .callout strong.label {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+  .callout.warn strong.label { color: var(--warn); }
+  .callout.tip strong.label { color: var(--success); }
+  .callout:not(.warn):not(.tip) strong.label { color: var(--accent); }
+
+  .steps { padding-left: 0; list-style: none; counter-reset: step; margin: 16px 0; }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 4px 0 4px 38px;
+    margin-bottom: 8px;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    font-size: 0.78rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  figure {
+    margin: 20px 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+  }
+  figure img {
+    width: 100%;
+    display: block;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  figure figcaption {
+    font-size: 0.82rem;
+    color: var(--sub);
+    text-align: center;
+    padding-top: 10px;
+  }
+  .shot-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .shot-row figure { flex: 1 1 260px; margin: 20px 0; }
+  .shot-row.mobile-desktop figure.mobile { flex: 0 0 220px; }
+  .shot-row.mobile-desktop figure.desktop { flex: 1 1 420px; }
+  .shot-row.mobile-desktop img { cursor: zoom-in; }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--sub); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  code {
+    background: #f1f1f4;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.87em;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  .kbd {
+    display: inline-block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 6px;
+    padding: 1px 7px;
+    font-size: 0.82rem;
+    font-family: monospace;
+  }
+
+  .pill-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .pill-list span {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+
+  .top-hero {
+    background: linear-gradient(135deg, var(--accent-soft), #ffffff);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin-bottom: 8px;
+  }
+
+  .quickstart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin: 20px 0;
+  }
+  .quickstart-grid .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .quickstart-grid .card h4 { margin-top: 0; color: var(--ink); text-transform: none; letter-spacing: 0; font-size: 0.95rem; }
+
+  .flow-chip-row { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin: 14px 0; font-size:0.88rem; }
+  .flow-chip { background: var(--panel); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-weight:600; }
+  .flow-arrow { color: #a1a1aa; }
+
+  .back-to-top {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--accent);
+    color: white;
+    border-radius: 999px;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 1.1rem;
+    box-shadow: 0 4px 14px rgba(79,70,229,0.35);
+  }
+
+  /* lightbox */
+  #lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+    padding: 30px;
+  }
+  #lightbox.open { display: flex; }
+  #lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+
+  footer {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 24px 32px 60px;
+    color: var(--sub);
+    font-size: 0.85rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0b0f;
+      --panel: #17171d;
+      --ink: #f4f4f5;
+      --sub: #a1a1aa;
+      --border: #2b2b35;
+      --accent: #818cf8;
+      --accent-soft: #1e1b3a;
+      --success: #4ade80;
+      --warn: #fbbf24;
+    }
+    .callout.warn { background: #241d0d; }
+    .callout.tip { background: #0d2417; }
+    code { background: #232330; color: #e4e4e7; }
+    .top-hero { background: linear-gradient(135deg, #1e1b3a, #17171d); }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0b0f; --panel: #17171d; --ink: #f4f4f5; --sub: #a1a1aa;
+    --border: #2b2b35; --accent: #818cf8; --accent-soft: #1e1b3a;
+    --success: #4ade80; --warn: #fbbf24;
+  }
+  :root[data-theme="light"] {
+    --bg: #f8fafc; --panel: #ffffff; --ink: #18181b; --sub: #52525b;
+    --border: #e4e4e7; --accent: #4f46e5; --accent-soft: #eef2ff;
+    --success: #16a34a; --warn: #b45309;
+  }
+
+  @media (max-width: 860px) {
+    nav.toc { display: none; }
+    main { padding: 28px 18px 100px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc">
+    <div class="brand">Momito</div>
+    <div class="tagline">User Guide &amp; Feature Reference</div>
+
+    <a href="#overview">Overview</a>
+    <a href="#quickstart">Quick Start</a>
+
+    <div class="group-label">Study Loop</div>
+    <a href="#today">Today (Home)</a>
+    <a href="#practice">Practice Sessions</a>
+    <a href="#dsa-ladder">DSA Ladder</a>
+    <a href="#questions">Questions Library</a>
+    <a href="#attempts">Answer History</a>
+    <a href="#spaced-repetition">Spaced Repetition (FSRS)</a>
+    <a href="#ai-grading">AI Grading</a>
+
+    <div class="group-label">Career &amp; Content</div>
+    <a href="#career">Career Tracks</a>
+    <a href="#jobs">Job Tracker</a>
+    <a href="#missions">Missions</a>
+    <a href="#study-plan">Study Plan</a>
+    <a href="#stories">Story Bank</a>
+    <a href="#learning">Learning Ledger</a>
+    <a href="#profile">Profile &amp; CV Scoring</a>
+
+    <div class="group-label">Overview &amp; Setup</div>
+    <a href="#dashboard">Dashboard</a>
+    <a href="#calendar">Calendar</a>
+    <a href="#settings">Settings</a>
+    <a href="#account">Account &amp; Auth</a>
+    <a href="#pwa">Installing / Offline</a>
+    <a href="#known-issues">Known Issues</a>
+  </nav>
+
+  <main>
+
+    <section id="overview">
+      <div class="top-hero">
+        <h1>Momito</h1>
+        <p class="lede">Momito is your personal, single-user interview-prep tool. It merges spaced-repetition practice, coding drills, system-design rehearsal, behavioral storytelling, career-goal tracking, and job-application management into one daily loop, so you always know exactly what to do next.</p>
+      </div>
+
+      <p>This guide walks through every screen and feature, with real screenshots taken directly from a running instance. Use the left-hand menu to jump to any section, or just read top to bottom for a full walkthrough of a typical week of use.</p>
+
+      <div class="callout tip">
+        <strong class="label">Core idea</strong>
+        Almost everything in Momito eventually funnels into one screen: <strong>Today</strong>. Reviews that are due, tasks that are overdue, job deadlines, and career-readiness gaps all show up there, ranked by urgency, so you never have to remember to check five different tabs.
+      </div>
+    </section>
+
+    <section id="quickstart">
+      <h2>Quick Start</h2>
+      <p>Momito runs as two local servers: an API (NestJS) on port <code>3001</code> and a web app (Next.js) on port <code>3000</code>.</p>
+
+      <div class="quickstart-grid">
+        <div class="card">
+          <h4>1. Start the servers</h4>
+          <code>pnpm --filter @momito/api dev</code><br><br>
+          <code>pnpm --filter @momito/web dev</code>
+        </div>
+        <div class="card">
+          <h4>2. Open the app</h4>
+          Visit <code>http://localhost:3000</code> in your browser.
+        </div>
+        <div class="card">
+          <h4>3. Log in</h4>
+          Email: <code>demo@momito.local</code><br>
+          Password: <code>MomitoDemo123!</code>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <strong class="label">Single-user by design</strong>
+        Momito is built as a personal tool, not multi-tenant SaaS. Once one account exists, new registrations are refused by default — this stops a stranger from signing up if you ever deploy the app publicly. Set <code>ALLOW_MULTI_USER_REGISTRATION=true</code> on the API if you want to allow more accounts.
+      </div>
+
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/00-login-mobile.png" alt="Login screen on mobile" loading="lazy">
+          <figcaption>Login — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/25-register-desktop.png" alt="Register screen on desktop" loading="lazy">
+          <figcaption>Registration screen — used only for the very first account</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ================= TODAY ================= -->
+    <section id="today">
+      <h2>Today (Home Screen) <span class="badge">Start here every day</span></h2>
+      <p>Today is the screen you land on after logging in. It shows a <strong>single priority-ranked queue</strong> that merges everything that needs your attention right now:</p>
+      <ul>
+        <li><strong>Due spaced-repetition reviews</strong> — questions or Story Bank entries whose schedule says "review now," ranked highest (and higher still the longer they've been overdue).</li>
+        <li><strong>Recommendations</strong> — active missions, overdue tasks, career-readiness gaps, job deadlines, and unread learning highlights, each with a plain-English reason ("3 tasks overdue") and a badge showing where it will take you.</li>
+        <li><strong>Reminders</strong> — dated nudges tied to tasks. Overdue ones rank near the top; future ones sink to the bottom but stay visible.</li>
+      </ul>
+
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/01-today-mobile.png" alt="Today screen on mobile showing priority queue" loading="lazy">
+          <figcaption>Today — mobile, showing the 🔥 streak badge and mixed queue</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/01-today-desktop.png" alt="Today screen on desktop" loading="lazy">
+          <figcaption>Today — desktop with full sidebar navigation</figcaption>
+        </figure>
+      </div>
+
+      <h3>The streak badge</h3>
+      <p>The 🔥 badge in the top-right counts <strong>consecutive days with at least one submitted answer</strong>. It doesn't break at midnight — if you haven't answered anything yet today, it still shows yesterday's count, giving you the rest of the day to keep it alive.</p>
+
+      <h3>How to use it</h3>
+      <ol class="steps">
+        <li>Open the app — you land on Today automatically.</li>
+        <li>Work the queue top to bottom; it's already sorted by urgency.</li>
+        <li>For a due review card, tap <strong>"Review now"</strong> — an inline 1–5 star strip appears. Rate your recall and it reschedules automatically, no need to open a full session.</li>
+        <li>For anything else, tap the card to jump straight to the relevant screen (a job, a mission, the reading inbox, etc).</li>
+        <li>Dismiss reminders you no longer need with the <strong>Dismiss</strong> button.</li>
+      </ol>
+    </section>
+
+    <!-- ================= PRACTICE ================= -->
+    <section id="practice">
+      <h2>Practice Sessions</h2>
+      <p>The Practice tab is where actual studying happens: answering questions, writing code, and rehearsing system designs, one question at a time inside a timed session.</p>
+
+      <h3>The Practice Hub</h3>
+      <p>Landing screen for the tab. Shows any session you already have in progress (tap to resume) plus four quick-start cards, and a link to your full answer history.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/03-practice-hub-mobile.png" alt="Practice hub on mobile" loading="lazy">
+          <figcaption>Practice hub — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/03-practice-hub-desktop.png" alt="Practice hub on desktop" loading="lazy">
+          <figcaption>Practice hub — desktop, with an active session to resume</figcaption>
+        </figure>
+      </div>
+
+      <h3>Starting a new session</h3>
+      <p>Pick a <strong>Session Type</strong> — each has a different question-selection strategy:</p>
+      <table>
+        <tr><th>Type</th><th>What it pulls</th></tr>
+        <tr><td>Quick Practice</td><td>Random questions across all topics</td></tr>
+        <tr><td>Topic Practice</td><td>All from one topic you pick</td></tr>
+        <tr><td>Company Practice</td><td>Questions tagged with one company</td></tr>
+        <tr><td>Mixed Mock</td><td>Mixed types and difficulties, like a real loop</td></tr>
+        <tr><td>Role Drill</td><td>Filtered by career role track + focus area (+ optional pattern like "graph" or "dp")</td></tr>
+        <tr><td>Weak Area Review</td><td>Topics where your self-ratings are lowest</td></tr>
+        <tr><td>Daily Mixed Set</td><td>A small, balanced daily set</td></tr>
+        <tr><td>Job Prep</td><td>Practice tied to one target job</td></tr>
+        <tr><td><strong>Spaced Review</strong></td><td>The exact set of items currently due for FSRS review (not random) — the form shows a live due-count and preview titles; disabled if nothing is due</td></tr>
+      </table>
+      <p>You also choose optional difficulty and the number of questions (1–100, default 5).</p>
+
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/04-practice-new-mobile.png" alt="New session form" loading="lazy">
+          <figcaption>New Session form — mobile</figcaption>
+        </figure>
+      </div>
+
+      <h3>Running a session</h3>
+      <p>One question per screen, with a progress bar, a per-question timer, and an <strong>Abandon</strong> button if you need to bail (answers you already gave are kept). The answer input changes shape by question type:</p>
+
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/26-session-dsa-coding-mobile.png" alt="DSA coding question with code editor" loading="lazy">
+          <figcaption>DSA/coding question — syntax-highlighted code editor</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/26-session-dsa-coding-desktop.png" alt="DSA coding question desktop" loading="lazy">
+          <figcaption>Same screen on desktop</figcaption>
+        </figure>
+      </div>
+
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/27-session-sysdesign-template-mobile.png" alt="System design question with inserted template" loading="lazy">
+          <figcaption>System-design question — the "Insert 7-section template" button drops in a structured outline (Requirements, Estimation, API, Data Model, High-Level Design, Deep Dives, Trade-offs) to fill in</figcaption>
+        </figure>
+      </div>
+
+      <p>Below the answer box:</p>
+      <ul>
+        <li><strong>Self Rating</strong> (optional, 1–5) — how well you think you did on this particular answer.</li>
+        <li><strong>Reflection</strong> — collapsed by default behind "+ Add reflection." Expanding it reveals toggleable miss-tags (misread the question, wrong approach, missed edge case, ran out of time, didn't know where to start, implementation bug, didn't know the concept, struggled to explain it, missed a trade-off) plus a free-text note.</li>
+      </ul>
+
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/28-session-reflection-mobile.png" alt="Reflection panel expanded with miss tags" loading="lazy">
+          <figcaption>Reflection panel expanded — tag exactly why an answer went wrong so patterns show up over time</figcaption>
+        </figure>
+      </div>
+
+      <p><strong>Submit Answer</strong> saves the attempt and auto-advances. A <strong>← Previous</strong> button lets you step back and revisit ("Update Answer" replaces the label once a question already has an answer). Once every question is answered, a numbered-pip row lets you jump back to review any of them, and <strong>Complete Session</strong> finalizes it.</p>
+
+      <div class="callout">
+        <strong class="label">Session summary</strong>
+        After completing, you land on a summary page listing every question with its status, your answer (truncated), time spent, self-rating, and reflection tags — with a link back into each question's full detail page.
+      </div>
+    </section>
+
+    <!-- ================= DSA LADDER ================= -->
+    <section id="dsa-ladder">
+      <h2>DSA Ladder</h2>
+      <p>A dedicated progress tracker across ~20 named coding-interview patterns (two pointers, sliding window, graph traversal, dynamic programming, and so on). Each pattern card teaches, not just labels:</p>
+      <ul>
+        <li>Solved/total count with a color-coded progress bar (gray → amber → green).</li>
+        <li>A <strong>"When to use"</strong> one-liner explaining when that pattern actually applies.</li>
+        <li>A <strong>Practice →</strong> link that jumps straight into a quick session pre-filtered to that one pattern.</li>
+      </ul>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/05-dsa-ladder-mobile.png" alt="DSA ladder pattern list" loading="lazy">
+          <figcaption>DSA Ladder — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/05-dsa-ladder-desktop.png" alt="DSA ladder desktop" loading="lazy">
+          <figcaption>DSA Ladder — desktop</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ================= QUESTIONS ================= -->
+    <section id="questions">
+      <h2>Questions Library</h2>
+      <p>A searchable, filterable list of every question in your bank (search by title; filter by type, difficulty, topic), with pagination.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/06-questions-mobile.png" alt="Questions library list" loading="lazy">
+          <figcaption>Questions library — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/06-questions-desktop.png" alt="Questions library desktop" loading="lazy">
+          <figcaption>Questions library — desktop</figcaption>
+        </figure>
+      </div>
+
+      <h3>Question detail</h3>
+      <p>Opening a question shows the full prompt with type/difficulty/topic/company badges, a collapsible <strong>Reference Answer</strong> rendered as formatted markdown (including syntax-highlighted code and tables), a one-click <strong>Start Practice</strong> button that spins up a 1-question session just for it, and — for behavioral questions — a panel to link Story Bank entries as prepared answers.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="desktop">
+          <img src="assets/22b-question-reference-answer-desktop.png" alt="Question detail with reference answer expanded" loading="lazy">
+          <figcaption>Question detail with the reference answer expanded — markdown with code highlighting</figcaption>
+        </figure>
+      </div>
+      <p>You can also <strong>Edit</strong> or <strong>Delete</strong> a question, or add a brand-new one (title, prompt, type, difficulty, topic, companies, reference answer, notes, source URL).</p>
+    </section>
+
+    <!-- ================= ATTEMPTS ================= -->
+    <section id="attempts">
+      <h2>Answer History</h2>
+      <p>Every answer you've ever submitted, newest first, with a snippet of the text, your self-rating, and whether it came from a session.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/07-attempts-mobile.png" alt="Answer history list" loading="lazy">
+          <figcaption>Answer History — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/07-attempts-desktop.png" alt="Answer history desktop" loading="lazy">
+          <figcaption>Answer History — desktop</figcaption>
+        </figure>
+      </div>
+      <p>Opening one shows the original question, your full answer, your self-rating stars, your reflection tags/note if any, an <strong>AI Feedback</strong> card (see below), and a link back to the session it came from.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="desktop">
+          <img src="assets/21-attempt-detail-desktop.png" alt="Attempt detail page" loading="lazy">
+          <figcaption>Attempt detail — self-rating shown; the AI Feedback card only appears when AI grading is configured (see below)</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ================= FSRS ================= -->
+    <section id="spaced-repetition">
+      <h2>Spaced Repetition (FSRS)</h2>
+      <p>Momito schedules reviews using <strong>FSRS</strong>, the same algorithm family used by flashcard apps like Anki. Every question or Story Bank entry you rate gets a "review state" tracking memory stability/difficulty and a computed <strong>due date</strong>.</p>
+
+      <div class="flow-chip-row">
+        <span class="flow-chip">Rate 1 → Again</span><span class="flow-arrow">·</span>
+        <span class="flow-chip">Rate 2 → Hard</span><span class="flow-arrow">·</span>
+        <span class="flow-chip">Rate 3–4 → Good</span><span class="flow-arrow">·</span>
+        <span class="flow-chip">Rate 5 → Easy</span>
+      </div>
+
+      <p>Rating something low reschedules it sooner; rating it high pushes the next review further out. This is a <em>separate</em> rating channel from the practice-session self-rating — only ratings given through <strong>Today's "Review now"</strong> or a <strong>Spaced Review</strong> session actually reschedule anything. Both Questions and Story Bank entries share the same due-review queue, so they show up together on Today.</p>
+
+      <div class="callout tip">
+        <strong class="label">Practical effect</strong>
+        You never have to decide what to re-study. If it's due, it appears on Today. If you keep rating something Easy, it fades from view for longer and longer stretches; if you keep struggling, it comes back fast until it sticks.
+      </div>
+    </section>
+
+    <!-- ================= AI GRADING ================= -->
+    <section id="ai-grading">
+      <h2>AI Grading <span class="badge">Optional</span></h2>
+      <p>An optional feature that only appears if whoever runs the API has configured an <code>ANTHROPIC_API_KEY</code>. If it's not configured, the feature is completely invisible — nothing breaks, no error shows, the app just works entirely on self-rating.</p>
+
+      <p>When available, an <strong>"AI Feedback" card</strong> appears on an attempt's detail page:</p>
+      <ul>
+        <li>A <strong>"Grade with AI"</strong> button, if not yet graded.</li>
+        <li>Once graded: an overall score out of 100, a per-criterion breakdown against the question's rubric (if it has one), a <strong>Strengths</strong> list, a <strong>Gaps</strong> list, and likely interviewer follow-up questions based on your specific answer.</li>
+        <li>A <strong>Regrade</strong> link to re-run grading (bypassing the cache) — useful after editing your answer.</li>
+      </ul>
+
+      <div class="callout">
+        <strong class="label">Behind the scenes</strong>
+        Grading is idempotent (repeat requests return the cached result unless you force a regrade) and subject to a per-user daily USD budget — if exceeded, further requests fail cleanly with a budget message rather than erroring. The model compares your answer against the question's prompt, type, rubric, and reference answer.
+      </div>
+    </section>
+
+    <!-- ================= CAREER ================= -->
+    <section id="career">
+      <h2>Career Tracks</h2>
+      <p>Pick a target <strong>role track</strong> (e.g. "Big Tech SWE," "Quant SWE," "HPC/GPU Engineer") from the dropdown and click <strong>Activate</strong>. Every track renders as a card with a checklist-item count and an Active/Inactive badge.</p>
+      <p>Each active track then shows a live <strong>readiness panel</strong>: an overall percentage bar, a per-area breakdown (DSA, system design, behavioral, etc. — each with its own bar), computed from your actual practice/review/mission activity, plus a "Top gaps" list of specific next actions.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/09-career-mobile.png" alt="Career tracks screen" loading="lazy">
+          <figcaption>Career — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/09-career-desktop.png" alt="Career tracks desktop" loading="lazy">
+          <figcaption>Career — desktop, with readiness bars per active track</figcaption>
+        </figure>
+      </div>
+      <div class="callout">
+        <strong class="label">How to use it</strong>
+        Pick your target role → Activate it → check back periodically to watch your readiness score climb (and your top-gaps list shrink) as you practice.
+      </div>
+    </section>
+
+    <!-- ================= JOBS ================= -->
+    <section id="jobs">
+      <h2>Job Tracker</h2>
+      <p>A filterable card list (not a kanban board) for tracking real applications. <strong>Add Job</strong> captures company, role, role track, deadline, URL, and a pasted job description. A status pill-bar filters by pipeline stage with live counts.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/10-jobs-mobile.png" alt="Jobs list" loading="lazy">
+          <figcaption>Jobs — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/10-jobs-desktop.png" alt="Jobs list desktop" loading="lazy">
+          <figcaption>Jobs — desktop</figcaption>
+        </figure>
+      </div>
+
+      <h3>Job detail — three key actions</h3>
+      <div class="shot-row mobile-desktop">
+        <figure class="desktop">
+          <img src="assets/24-job-detail-desktop.png" alt="Job detail page" loading="lazy">
+          <figcaption>Job detail — Create Mission, Generate Prep, and Score Profile buttons</figcaption>
+        </figure>
+      </div>
+      <table>
+        <tr><th>Button</th><th>What it does</th></tr>
+        <tr><td><strong>Create/Open Mission</strong></td><td>Spins up (or jumps to) a Mission tied to this job, sharing its role track and context.</td></tr>
+        <tr><td><strong>Generate Prep</strong></td><td>Auto-generates prep tasks from the job description, which then surface on Calendar/Today.</td></tr>
+        <tr><td><strong>Score Profile</strong></td><td>Scores your Profile against this specific job's JD and role track, then opens the resulting score breakdown.</td></tr>
+      </table>
+      <p>The detail page also has a manual <strong>Timeline</strong> (interviews, notes, offers with timestamps), a status selector, and a Reminders list scoped to this job.</p>
+    </section>
+
+    <!-- ================= MISSIONS ================= -->
+    <section id="missions">
+      <h2>Missions <span class="badge">The execution engine</span></h2>
+      <p>Missions tie together diagnosis, a weekly plan, evidence, and review into one execution loop for a target role or job. Create one directly, or spin it off from a Job (auto-linking the job application).</p>
+
+      <div class="shot-row mobile-desktop">
+        <figure class="desktop">
+          <img src="assets/23-mission-detail-desktop.png" alt="Mission detail page with competency state and weekly plan" loading="lazy">
+          <figcaption>Mission detail — competency state, weekly plan, Today panel, and check-in form, all in one place</figcaption>
+        </figure>
+      </div>
+
+      <div class="flow-chip-row">
+        <span class="flow-chip">Diagnose</span><span class="flow-arrow">→</span>
+        <span class="flow-chip">Generate weekly plan</span><span class="flow-arrow">→</span>
+        <span class="flow-chip">Work the plan (Practice / Learning / Calendar)</span><span class="flow-arrow">→</span>
+        <span class="flow-chip">Weekly Check-in</span><span class="flow-arrow">→</span>
+        <span class="flow-chip">Review latest plan</span>
+      </div>
+
+      <ol class="steps">
+        <li><strong>Diagnose</strong> analyzes your current state against the mission's target, producing a diagnosis summary and a per-competency status (ready / building / gap), each with an evidence count and progress bar.</li>
+        <li><strong>Generate weekly plan</strong> produces a dated, typed task list (practice, learning, etc.) each with estimated minutes and an "expected artifact" to produce.</li>
+        <li>Work through the plan using the mission's own quick links into Practice (pre-filtered to its role track), Learning (pre-filtered to this mission), and Calendar.</li>
+        <li>Log a <strong>Check-in</strong> each week — summary, wins, blockers, adjustments — building a running history.</li>
+        <li><strong>Review latest plan</strong> closes out the cycle so the next Diagnose reflects what you actually did.</li>
+      </ol>
+    </section>
+
+    <!-- ================= STUDY PLAN ================= -->
+    <section id="study-plan">
+      <h2>Study Plan</h2>
+      <p>A simple personal to-do list for study tasks (backed by the same Task model used on Calendar). Three tabs — To Do / In Progress / Done — with live counts. <strong>+ Add Task</strong> creates one with a title, optional topic tag, notes, and target date (overdue dates highlight red, due-soon highlights amber).</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/12-study-plan-mobile.png" alt="Study plan tabs" loading="lazy">
+          <figcaption>Study Plan — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/12-study-plan-desktop.png" alt="Study plan desktop" loading="lazy">
+          <figcaption>Study Plan — desktop</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ================= STORIES ================= -->
+    <section id="stories">
+      <h2>Story Bank <span class="badge">Behavioral prep</span></h2>
+      <p>Stores STAR-formatted stories (Situation / Task / Action / Result + optional Metrics) for behavioral interviews.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/13-stories-mobile.png" alt="Story bank list" loading="lazy">
+          <figcaption>Story Bank — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/29-stories-list-desktop.png" alt="Story bank desktop with a story card" loading="lazy">
+          <figcaption>Story Bank — desktop, with competency chips and Rehearse/Edit/Delete actions</figcaption>
+        </figure>
+      </div>
+      <p>When creating or editing a story, tag it via a <strong>competency chip picker</strong> (ownership, leadership, conflict, ambiguity, etc.) and a <strong>company chip picker</strong>, plus optional anticipated <strong>follow-up questions</strong>.</p>
+
+      <h3>Rehearsing a story</h3>
+      <p>Click <strong>Rehearse</strong> — a 1–5 rating row appears. Recall the story out loud, then rate how it went.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="desktop">
+          <img src="assets/30-stories-rehearse-desktop.png" alt="Story rehearse rating row" loading="lazy">
+          <figcaption>Rehearse mode — rate your recall 1–5</figcaption>
+        </figure>
+      </div>
+      <div class="callout tip">
+        <strong class="label">This feeds FSRS too</strong>
+        Rehearsal submissions call the same spaced-repetition endpoint used for practice questions, so rehearsed stories get scheduled and resurface automatically on Today when they're due — exactly like a coding or behavioral question review.
+      </div>
+    </section>
+
+    <!-- ================= LEARNING ================= -->
+    <section id="learning">
+      <h2>Learning Ledger</h2>
+      <p>A permanent record of everything you've read or learned, optionally scoped to a Mission. Two ways to add evidence:</p>
+      <ol class="steps">
+        <li><strong>Readwise integration</strong> — paste a Readwise access token to connect, then <strong>Sync Now</strong> pulls in your highlights.</li>
+        <li><strong>Manual evidence</strong> — a direct form (title, role track, area, notes) for logging any learning event.</li>
+      </ol>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/14-learning-mobile.png" alt="Learning ledger" loading="lazy">
+          <figcaption>Learning Ledger — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/14-learning-desktop.png" alt="Learning ledger desktop" loading="lazy">
+          <figcaption>Learning Ledger — desktop</figcaption>
+        </figure>
+      </div>
+
+      <h3>Reading Inbox</h3>
+      <p>The triage view for freshly-synced Readwise highlights. Pick a role track + area, then either <strong>Review</strong> (turns it into ledger evidence) or <strong>Ignore</strong> it. Once triaged, it disappears from the inbox.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/15-learning-inbox-mobile.png" alt="Reading inbox" loading="lazy">
+          <figcaption>Reading Inbox — mobile</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ================= PROFILE ================= -->
+    <section id="profile">
+      <h2>Profile &amp; CV Scoring</h2>
+      <p><strong>Profile</strong> is your structured, editable CV data: contact info, skills, experience/projects/education. Stat cards up top show entry counts.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/16-profile-mobile.png" alt="Profile screen" loading="lazy">
+          <figcaption>Profile — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/16-profile-desktop.png" alt="Profile screen desktop" loading="lazy">
+          <figcaption>Profile — desktop</figcaption>
+        </figure>
+      </div>
+
+      <h3>Profile Scores</h3>
+      <p>Runs your Profile against a role template or a pasted job description, producing four progress bars: <strong>Skills Match, Project Quality, Experience Depth, Presentation</strong>. Clicking into a score shows a breakdown per category with specific gaps and top-level suggestions.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="desktop">
+          <img src="assets/17-profile-scores-desktop.png" alt="Profile scores list" loading="lazy">
+          <figcaption>Profile Scores — desktop</figcaption>
+        </figure>
+      </div>
+
+      <div class="callout">
+        <strong class="label">How to use it</strong>
+        Upload your CV PDF once (auto-extracts into the structured fields above — review and Save), then go to Profile Scores → pick a role template or paste a specific JD → review the four-category breakdown to know exactly what to strengthen. A Job's own "Score Profile" button does this same scoring pre-targeted at that job.
+      </div>
+    </section>
+
+    <!-- ================= DASHBOARD ================= -->
+    <section id="dashboard">
+      <h2>Dashboard <span class="badge">Read-only overview</span></h2>
+      <p>An analytics view, separate from the action-oriented Today screen — nothing here is editable, it's purely for checking in on trends.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/02-dashboard-mobile.png" alt="Dashboard screen" loading="lazy">
+          <figcaption>Dashboard — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/02-dashboard-desktop.png" alt="Dashboard desktop" loading="lazy">
+          <figcaption>Dashboard — desktop</figcaption>
+        </figure>
+      </div>
+      <p>Includes stat cards (questions practiced, sessions completed, weak topics, topics covered), a Focus Mission card, Role Readiness bars, Next Actions, This Week's tasks, Topic Progress bars, Weak Areas, and Recent Sessions.</p>
+    </section>
+
+    <!-- ================= CALENDAR ================= -->
+    <section id="calendar">
+      <h2>Calendar</h2>
+      <p>All scheduled tasks and reminders in one place, filterable by Today / This Week / Overdue / All. <strong>Add Task</strong> lets you set type, priority, role track, area, and due date.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/08-calendar-mobile.png" alt="Calendar screen" loading="lazy">
+          <figcaption>Calendar — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/08-calendar-desktop.png" alt="Calendar desktop" loading="lazy">
+          <figcaption>Calendar — desktop, with the reminders sidebar</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ================= SETTINGS ================= -->
+    <section id="settings">
+      <h2>Settings</h2>
+      <p>Manages the two shared taxonomies used to tag questions:</p>
+      <ul>
+        <li><strong>Topics manager</strong> — add/edit/delete topics (e.g. "System Design," "Dynamic Programming"). Deleting a topic still linked to questions fails safely rather than orphaning data.</li>
+        <li><strong>Companies manager</strong> — add/edit/delete companies (name, region, notes) used to tag questions by employer.</li>
+      </ul>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/18-settings-mobile.png" alt="Settings screen" loading="lazy">
+          <figcaption>Settings — mobile</figcaption>
+        </figure>
+        <figure class="desktop">
+          <img src="assets/18-settings-desktop.png" alt="Settings desktop" loading="lazy">
+          <figcaption>Settings — desktop</figcaption>
+        </figure>
+      </div>
+
+      <h3>Content Coverage</h3>
+      <p>A read-only report comparing your question bank against target content goals: total questions, company/role-track counts against targets, per-domain progress bars, and breakdowns by type and difficulty.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="desktop">
+          <img src="assets/19-settings-content-desktop.png" alt="Content coverage report" loading="lazy">
+          <figcaption>Content Coverage — desktop</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ================= ACCOUNT ================= -->
+    <section id="account">
+      <h2>Account, Auth &amp; Navigation</h2>
+      <p>Login and registration are plain email + password (6+ characters). A shared top header always shows your name, a 🔔 reminder bell, a ☀️/🌙 dark-mode toggle, and Sign out.</p>
+
+      <h3>Navigation: mobile vs. desktop</h3>
+      <p>The same set of screens is presented two ways depending on viewport width:</p>
+      <table>
+        <tr><th>Viewport</th><th>Navigation</th></tr>
+        <tr><td>Mobile / narrow</td><td>Fixed bottom tab bar with 5 primary items: Today, Practice, Jobs, Learning, Profile</td></tr>
+        <tr><td>Desktop / wide</td><td>Persistent left sidebar with all 14 items, including Dashboard, Mission, Career, Calendar, Questions, History, Study Plan, Story Bank, and Settings</td></tr>
+      </table>
+      <p>Compare the mobile bottom-tabs visible in the Today screenshot above against the full desktop sidebar visible in the Practice Hub screenshot — same app, two layouts.</p>
+    </section>
+
+    <!-- ================= PWA ================= -->
+    <section id="pwa">
+      <h2>Installing &amp; Offline Use</h2>
+      <p>Momito is installable as a Progressive Web App. On a phone browser, use "Add to Home Screen" to install it like a native app.</p>
+      <p>A production-only service worker precaches the app shell. Navigation always tries the network first (your data must stay fresh) and only falls back to a friendly <strong>offline page</strong> if the network request fails entirely. Your actual study data is <em>never</em> cached — only the static app shell — so nothing appears out of date.</p>
+      <div class="shot-row mobile-desktop">
+        <figure class="mobile">
+          <img src="assets/32-offline-mobile.png" alt="Offline fallback page" loading="lazy">
+          <figcaption>Offline fallback page — shown only when the network request truly fails</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ================= KNOWN ISSUES ================= -->
+    <section id="known-issues">
+      <h2>Known Issues</h2>
+      <div class="callout warn">
+        <strong class="label">Dark mode toggle doesn't restyle the page</strong>
+        Clicking the ☀️/🌙 toggle correctly flips internal state and saves it to <code>localStorage</code> (confirmed via the <code>dark</code> class being applied to <code>&lt;html&gt;</code>), but the page's colors don't actually change — background stays light even after reloading. This looks like a CSS cascade/specificity issue with the custom Tailwind v4 <code>dark</code> variant rather than a state bug. Worth a follow-up fix; not covered in this guide since it was discovered while writing it, not requested as something to repair.
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="lightbox" onclick="this.classList.remove('open')">
+  <img id="lightbox-img" src="" alt="Enlarged screenshot">
+</div>
+
+<a href="#overview" class="back-to-top" title="Back to top">↑</a>
+
+<script>
+  document.querySelectorAll('.shot-row img').forEach(function (img) {
+    img.addEventListener('click', function () {
+      var lb = document.getElementById('lightbox');
+      var lbImg = document.getElementById('lightbox-img');
+      lbImg.src = img.src;
+      lb.classList.add('open');
+    });
+  });
+</script>
+
+</body>
+</html>
