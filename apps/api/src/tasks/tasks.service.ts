@@ -111,6 +111,13 @@ export class TasksService {
     return this.serializeTask(task);
   }
 
+  async remove(id: string, userId: string): Promise<void> {
+    // Reminder.task is onDelete: Cascade (schema.prisma), so a hard delete here also
+    // removes any reminder tied to this task in the same statement.
+    const result = await this.prisma.task.deleteMany({ where: { id, userId } });
+    if (result.count === 0) throw new NotFoundException('Task not found');
+  }
+
   async snooze(id: string, dto: SnoozeTaskDto, userId: string): Promise<TaskResponse> {
     const result = await this.prisma.task.updateMany({
       where: { id, userId },

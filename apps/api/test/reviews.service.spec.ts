@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { ReviewsService } from '../src/reviews/reviews.service';
 
@@ -7,8 +7,51 @@ describe('ReviewsService', () => {
     const prisma = { reviewState: { findUnique: vi.fn(), upsert: vi.fn() } };
     const service = new ReviewsService(prisma as never);
 
-    await expect(service.record('user-1', 'story', 'obj-1', 3)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.record('user-1', 'behavioral_prompt', 'obj-1', 3)).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.reviewState.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('MOM-067: schedules a review for a story the user owns', async () => {
+    const upsert = vi.fn().mockImplementation(({ create }) => ({ id: 'rs-1', ...create }));
+    const prisma = {
+      story: { findFirst: vi.fn().mockResolvedValue({ id: 'story-1' }) },
+      reviewState: { findUnique: vi.fn().mockResolvedValue(null), upsert },
+    };
+    const service = new ReviewsService(prisma as never);
+
+    const result = await service.record('user-1', 'story', 'story-1', 5, new Date('2026-07-05T00:00:00.000Z'));
+
+    expect(prisma.story.findFirst).toHaveBeenCalledWith({ where: { id: 'story-1', userId: 'user-1' }, select: { id: true } });
+    expect(result.objectType).toBe('story');
+  });
+
+  it('MOM-067: rejects scheduling a review for a story the user does not own', async () => {
+    const prisma = {
+      story: { findFirst: vi.fn().mockResolvedValue(null) },
+      reviewState: { findUnique: vi.fn(), upsert: vi.fn() },
+    };
+    const service = new ReviewsService(prisma as never);
+
+    await expect(service.record('user-2', 'story', 'story-1', 5)).rejects.toEqual(new NotFoundException('Story not found'));
+    expect(prisma.reviewState.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('MOM-067: enriches due story reviews with the story title', async () => {
+    const prisma = {
+      reviewState: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'rs-2', objectType: 'story', objectId: 's-1', stability: 1, difficulty: 1, due: new Date(), state: 2, reps: 1, lapses: 0, suspended: false, lastReviewedAt: null },
+        ]),
+      },
+      question: { findMany: vi.fn().mockResolvedValue([]) },
+      story: { findMany: vi.fn().mockResolvedValue([{ id: 's-1', title: 'Led a zero-downtime migration' }]) },
+    };
+    const service = new ReviewsService(prisma as never);
+
+    const result = await service.listDue('user-1');
+
+    expect(prisma.story.findMany).toHaveBeenCalledWith({ where: { id: { in: ['s-1'] } }, select: { id: true, title: true } });
+    expect(result[0].title).toBe('Led a zero-downtime migration');
   });
 
   it('creates a new review state with FSRS defaults on first review', async () => {

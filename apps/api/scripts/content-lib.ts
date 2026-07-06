@@ -25,9 +25,18 @@ function looksCopied(text: string, hasSourceUrl: boolean): boolean {
   return markerHits >= 2 || (hasSourceUrl && text.length > SUSPICIOUS_LENGTH_THRESHOLD);
 }
 
+// A2: the rubric's objectId doesn't matter for a structural validity check —
+// only used at seed time to tie a rubric to its real question row.
+const VALIDATION_QUESTION_ID = 'content-validate';
+
 function hasUsableRubric(question: SeedQuestion): boolean {
-  const rubric = inferQuestionMetadata(question).rubric as { strong?: unknown; weak?: unknown };
-  return Array.isArray(rubric.strong) && rubric.strong.length > 0;
+  const rubric = inferQuestionMetadata(question, VALIDATION_QUESTION_ID).rubric;
+  if (!Array.isArray(rubric.criteria) || rubric.criteria.length < 3) return false;
+  const weightSum = rubric.criteria.reduce((sum, c) => sum + c.weight, 0);
+  return (
+    rubric.criteria.every((c) => c.title.trim().length > 0 && c.description.trim().length > 0 && c.weight > 0) &&
+    weightSum === rubric.maxScore
+  );
 }
 
 export function validateContent(): ContentIssue[] {
@@ -49,15 +58,26 @@ export function validateContent(): ContentIssue[] {
     }
 
     const hasReferenceAnswer = Boolean(question.answer?.trim());
-    if (!hasReferenceAnswer && !hasUsableRubric(question)) {
+    const usableRubric = hasUsableRubric(question);
+    if (!hasReferenceAnswer && !usableRubric) {
       issues.push({
         severity: 'error',
         questionTitle: question.title,
         message: 'No reference answer and no usable rubric — not safe to publish (plan §8.1).',
       });
     }
+    // A2: every question — not just ones missing a reference answer — must
+    // have a well-formed rubric (REDESIGN_PLAN.MD's headline content
+    // requirement: "every question gets a 3-5-criterion rubric").
+    if (!usableRubric) {
+      issues.push({
+        severity: 'error',
+        questionTitle: question.title,
+        message: 'Rubric is missing or malformed (expected >=3 criteria with weights summing to maxScore).',
+      });
+    }
 
-    const metadata = inferQuestionMetadata(question);
+    const metadata = inferQuestionMetadata(question, VALIDATION_QUESTION_ID);
     const hasTags = metadata.roleTags.length > 0 || metadata.areaTags.length > 0 || metadata.patternTags.length > 0;
     if (!hasTags) {
       issues.push({ severity: 'warning', questionTitle: question.title, message: 'No role/area/pattern tags.' });

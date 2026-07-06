@@ -23,7 +23,7 @@ model User {
   questions      Question[]
   sessions       InterviewSession[]
   answerAttempts AnswerAttempt[]
-  studyPlanItems StudyPlanItem[]
+  stories        Story[]
   profile        Profile?
   profileScores  ProfileScore[]
   careerGoals    CareerGoal[]
@@ -42,8 +42,27 @@ model User {
   learningEvidence LearningEvidence[]
   readwiseConnection ReadwiseConnection?
   readwiseSyncRuns ReadwiseSyncRun[]
+  aiUsage        AiUsage[]
 
   @@map("users")
+}
+
+// Workstream C: per-user daily token/cost tallies for the AI grading feature
+// (docs/adr/0007-ai-grading-scaffold.md). One row per user per day.
+model AiUsage {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  day          DateTime @db.Date
+  requests     Int      @default(0)
+  inputTokens  Int      @default(0) @map("input_tokens")
+  outputTokens Int      @default(0) @map("output_tokens")
+  costUsd      Float    @default(0) @map("cost_usd")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+  @@map("ai_usage")
 }
 
 model Topic {
@@ -56,7 +75,6 @@ model Topic {
   parentTopic    Topic?          @relation("TopicHierarchy", fields: [parentTopicId], references: [id], onDelete: SetNull)
   childTopics    Topic[]         @relation("TopicHierarchy")
   questions      Question[]
-  studyPlanItems StudyPlanItem[]
   tasks          Task[]
   learningHighlights LearningHighlight[]
   learningEvidence LearningEvidence[]
@@ -73,6 +91,7 @@ model Company {
   createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
   questions QuestionCompany[]
+  stories   StoryCompany[]
 
   @@map("companies")
 }
@@ -103,6 +122,7 @@ model Question {
   sessionQuestions SessionQuestion[]
   answerAttempts   AnswerAttempt[]
   learningEvidence LearningEvidence[]
+  storyPrompts     StoryPrompt[]
 
   @@index([topicId])
   @@index([createdByUserId])
@@ -121,6 +141,59 @@ model QuestionCompany {
   @@id([questionId, companyId])
   @@index([companyId])
   @@map("question_companies")
+}
+
+// MOM-063 (ADR-0003): Story Bank, plan §7.5/§8.2. STAR-shaped, user-authored,
+// reviewable via ADR-0002's polymorphic ReviewState (objectType='story') —
+// no FK from ReviewState.objectId to this table, by the same design already
+// used for Question.
+model Story {
+  id                String        @id @default(uuid()) @db.Uuid
+  userId            String        @map("user_id") @db.Uuid
+  title             String
+  situation         String
+  task              String
+  action            String
+  result            String
+  metrics           String?
+  competencyTags    String[]      @default([]) @map("competency_tags")
+  followUpQuestions String[]      @default([]) @map("follow_up_questions")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companies         StoryCompany[]
+  prompts           StoryPrompt[]
+
+  @@index([userId])
+  @@map("stories")
+}
+
+model StoryCompany {
+  storyId   String  @map("story_id") @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  story     Story   @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([storyId, companyId])
+  @@index([companyId])
+  @@map("story_companies")
+}
+
+// MOM-066: links a Story to a behavioral Question it can answer. Many-to-many
+// (a story can support multiple prompts; a prompt can be answered by multiple
+// stories) — deliberately not 1:1, since the whole point of a story bank is
+// reusing one strong story across several prompts.
+model StoryPrompt {
+  id         String   @id @default(uuid()) @db.Uuid
+  storyId    String   @map("story_id") @db.Uuid
+  questionId String   @map("question_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  story      Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, questionId])
+  @@index([questionId])
+  @@map("story_prompts")
 }
 
 model InterviewSession {
@@ -200,25 +273,6 @@ model AnswerAttempt {
   @@index([questionId])
   @@index([needsReview])
   @@map("answer_attempts")
-}
-
-model StudyPlanItem {
-  id         String    @id @default(uuid()) @db.Uuid
-  userId     String    @map("user_id") @db.Uuid
-  topicId    String?   @map("topic_id") @db.Uuid
-  title      String
-  notes      String?
-  targetDate DateTime? @map("target_date") @db.Date
-  status     String    @default("todo")
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topic      Topic?    @relation(fields: [topicId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@index([topicId])
-  @@index([status])
-  @@map("study_plan_items")
 }
 
 model Profile {

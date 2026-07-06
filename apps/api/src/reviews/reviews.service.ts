@@ -1,9 +1,12 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { ReviewableObjectType, ReviewStateResponse } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { createInitialReviewState, scheduleNextReview } from './fsrs-scheduler';
 
-const SUPPORTED_OBJECT_TYPES: ReviewableObjectType[] = ['question'];
+// MOM-067: 'story' added alongside 'question'. Unlike Question (a shared/global
+// bank), Story is per-user private data — record() must additionally verify
+// story ownership before scheduling a review from it (see ensureAccessible).
+const SUPPORTED_OBJECT_TYPES: ReviewableObjectType[] = ['question', 'story'];
 
 // MOM-029: persistence layer for the FSRS review loop. objectId has no DB-level
 // foreign key (ADR-0002 — polymorphic across future reviewable types), so this
@@ -27,14 +30,23 @@ export class ReviewsService {
     });
 
     const questionIds = states.filter((s) => s.objectType === 'question').map((s) => s.objectId);
-    const questions = questionIds.length
-      ? await this.prisma.question.findMany({ where: { id: { in: questionIds } }, select: { id: true, title: true } })
-      : [];
+    const storyIds = states.filter((s) => s.objectType === 'story').map((s) => s.objectId);
+    const [questions, stories] = await Promise.all([
+      questionIds.length
+        ? this.prisma.question.findMany({ where: { id: { in: questionIds } }, select: { id: true, title: true } })
+        : Promise.resolve([]),
+      storyIds.length
+        ? this.prisma.story.findMany({ where: { id: { in: storyIds } }, select: { id: true, title: true } })
+        : Promise.resolve([]),
+    ]);
     const titleByQuestionId = new Map(questions.map((q) => [q.id, q.title]));
+    const titleByStoryId = new Map(stories.map((s) => [s.id, s.title]));
 
-    return states.map((state) =>
-      serialize(state, state.objectType === 'question' ? (titleByQuestionId.get(state.objectId) ?? null) : null),
-    );
+    return states.map((state) => {
+      if (state.objectType === 'question') return serialize(state, titleByQuestionId.get(state.objectId) ?? null);
+      if (state.objectType === 'story') return serialize(state, titleByStoryId.get(state.objectId) ?? null);
+      return serialize(state);
+    });
   }
 
   async record(
@@ -45,6 +57,7 @@ export class ReviewsService {
     now: Date = new Date(),
   ): Promise<ReviewStateResponse> {
     this.assertSupportedType(objectType);
+    await this.ensureAccessible(userId, objectType, objectId);
 
     const existing = await this.prisma.reviewState.findUnique({
       where: { userId_objectType_objectId: { userId, objectType, objectId } },
@@ -59,6 +72,16 @@ export class ReviewsService {
       update: next,
     });
     return serialize(state);
+  }
+
+  // Question is a shared/global bank — any authenticated user may schedule a
+  // review from any question. Story is per-user private data (ADR-0003) — a
+  // user must own the story to review it, otherwise this would let user A
+  // read/rate user B's private story indirectly via review state.
+  private async ensureAccessible(userId: string, objectType: ReviewableObjectType, objectId: string): Promise<void> {
+    if (objectType !== 'story') return;
+    const story = await this.prisma.story.findFirst({ where: { id: objectId, userId }, select: { id: true } });
+    if (!story) throw new NotFoundException('Story not found');
   }
 }
 

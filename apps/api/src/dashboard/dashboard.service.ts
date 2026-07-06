@@ -20,7 +20,7 @@ export class DashboardService {
     const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     const taskClient = (this.prisma as PrismaService & { task?: { findMany: (args: unknown) => Promise<Task[]> } }).task;
     const reminderClient = (this.prisma as PrismaService & { reminder?: { findMany: (args: unknown) => Promise<Reminder[]> } }).reminder;
-    const [topics, attempts, totalSessions, recentSessions, activeGoals, activeMissions, roleReadiness, dueTasks, reminders, recommendations] = await Promise.all([
+    const [topics, attempts, attemptDates, totalSessions, recentSessions, activeGoals, activeMissions, roleReadiness, dueTasks, reminders, recommendations] = await Promise.all([
       this.prisma.topic.findMany({
         include: { _count: { select: { questions: true } } },
         orderBy: { name: 'asc' },
@@ -28,6 +28,12 @@ export class DashboardService {
       this.prisma.answerAttempt.findMany({
         where: { userId },
         select: { questionId: true, selfRating: true, question: { select: { topicId: true } } },
+      }),
+      this.prisma.answerAttempt.findMany({
+        where: { userId },
+        select: { createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 2000,
       }),
       this.prisma.interviewSession.count({ where: { userId, status: 'completed' } }),
       this.prisma.interviewSession.findMany({
@@ -108,6 +114,7 @@ export class DashboardService {
     return {
       totalQuestionsPracticed: attemptedQuestions.size,
       totalSessions,
+      streak: this.computeStreak(attemptDates.map((a) => a.createdAt)),
       topicProgress,
       recentSessions,
       weakTopics,
@@ -121,6 +128,35 @@ export class DashboardService {
       reminders: reminders.map((reminder) => this.serializeReminder(reminder)),
       recommendations,
     };
+  }
+
+  // A3: consecutive-day study streak. Default tz Asia/Ho_Chi_Minh (fixed UTC+7,
+  // no DST) since there's no per-user tz preference yet — a reasonable single-user
+  // default, not a hardcoded regression, since the plan itself names this as the
+  // default. Uses Intl.DateTimeFormat (no extra date-library dependency) to turn
+  // each attempt's instant into a calendar-day key in that tz, then walks
+  // backward from today counting consecutive days present. If today has no
+  // attempt yet the streak isn't broken — it's computed from yesterday backward,
+  // matching how most streak UIs give the user the rest of the day to keep it alive.
+  private computeStreak(attemptTimestamps: Date[], timeZone = 'Asia/Ho_Chi_Minh'): number {
+    if (attemptTimestamps.length === 0) return 0;
+    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+    const dateKeys = new Set(attemptTimestamps.map((d) => fmt.format(d)));
+
+    const todayKey = fmt.format(new Date());
+    let cursor = dateKeys.has(todayKey) ? todayKey : this.shiftDateKey(todayKey, -1);
+    let streak = 0;
+    while (dateKeys.has(cursor)) {
+      streak++;
+      cursor = this.shiftDateKey(cursor, -1);
+    }
+    return streak;
+  }
+
+  private shiftDateKey(key: string, days: number): string {
+    const date = new Date(`${key}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
   }
 
   private serializeTask(task: Task): TaskResponse {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '../common/current-user.decorator';
 import { AuthenticatedUser } from '../common/jwt-auth.guard';
 import { CreateTaskDto } from './dto/create-task.dto';
@@ -24,6 +24,12 @@ export class TasksController {
   @Patch('tasks/:id')
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateTaskDto, @CurrentUser() user: AuthenticatedUser) {
     return this.tasks.update(id, dto, user.id);
+  }
+
+  @Delete('tasks/:id')
+  @HttpCode(204)
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.tasks.remove(id, user.id);
   }
 
   @Post('tasks/:id/complete')

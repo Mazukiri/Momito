@@ -1,3 +1,5 @@
+import type { Rubric, RubricCriterion } from '@momito/shared';
+
 export const topics = [
   ['00000000-0000-4000-8001-000000000001', 'Backend Engineering', 'APIs, distributed services, reliability, and server-side design'],
   ['00000000-0000-4000-8001-000000000002', 'JavaScript & TypeScript', 'JavaScript runtime behavior and practical TypeScript'],
@@ -494,9 +496,76 @@ export const questions: SeedQuestion[] = [
   { title: 'Sliding Window Median', prompt: 'Solve "Sliding Window Median" (LeetCode #480). Implement the two-heap (or balanced multiset) solution and explain the extra bookkeeping this problem needs versus Find Median from Data Stream.', type: 'dsa', difficulty: 'hard', topic: 8, sourceUrl: 'https://leetcode.com/problems/sliding-window-median/', answer: 'Same two-heap idea as Find Median from Data Stream, but now elements must also be *removed* as the window slides — since heaps don\'t support efficient arbitrary removal, track "lazily deleted" counts per value and clean up heap tops when they match a pending deletion, rebalancing heap sizes accounting for pending deletions too. O(n log k) time, O(k) space.', patternTags: ['heap_priority_queue', 'sliding_window'] },
   { title: 'Hamming Distance', prompt: 'Solve "Hamming Distance" (LeetCode #461). Implement the XOR-then-popcount solution.', type: 'dsa', difficulty: 'easy', topic: 8, sourceUrl: 'https://leetcode.com/problems/hamming-distance/', answer: 'XOR the two numbers — every differing bit position becomes a 1 in the result. Count the set bits in that XOR result (e.g. via Brian Kernighan\'s n & (n-1) trick) to get the Hamming distance directly. O(bit width) time, O(1) space.', patternTags: ['bit_manipulation'] },
   { title: 'Course Schedule IV', prompt: 'Solve "Course Schedule IV" (LeetCode #1462). Implement a prerequisite reachability solution and explain when you would choose Floyd-Warshall versus DFS memoization.', type: 'dsa', difficulty: 'medium', topic: 8, sourceUrl: 'https://leetcode.com/problems/course-schedule-iv/', answer: 'Model courses as a directed graph from prerequisite to dependent course. For many reachability queries, either precompute transitive closure with Floyd-Warshall/bitsets, or run DFS with memoization from each queried prerequisite to cache what it can reach. Floyd-Warshall is simple when n is small and query volume is high; DFS memoization is often leaner on sparse graphs. After precomputation, each query is an O(1) lookup.', patternTags: ['graph_traversal', 'topological_sort'] },
+  // MOM-052/053/054: final CS Fundamentals seed item, bringing the total from 149 to
+  // the plan §8.2 target of 150.
+  { title: 'Backpressure in a Node.js readable stream pipeline', prompt: 'A Node.js service pipes a fast-producing readable stream into a slower writable destination and memory usage climbs unbounded under load. Explain what backpressure means here, why `.pipe()` alone might not be enough if you fan out to multiple writables, and how you would fix it.', type: 'nodejs', difficulty: 'medium', topic: 0, answer: 'Backpressure is the signal a writable stream gives (via `write()` returning false, or the drain event) that its internal buffer is full and the producer should pause. `.pipe()` already respects backpressure for a single writable — it pauses the readable until drain fires. The bug case is usually manual writes (calling `.write()` in a data handler without checking the return value) or fanning out to N writables where one is slow: you must pause the readable (or use `pipeline()`/manual write()-return-value checks) and resume only once *all* destinations have drained, not just the fastest one. Using Node\'s `stream.pipeline()` (or `pipeline` from `stream/promises`) instead of manual `.on(\'data\')` handling gets correct backpressure and error propagation for free.', companies: [0] },
 ];
 
-export function inferQuestionMetadata(question: SeedQuestion) {
+// A2: type-level rubric templates (packages/shared's Rubric/RubricCriterion
+// shape — MOM-023), replacing the single generic {strong,weak} object every
+// question previously shared regardless of type. One template per question
+// "family" — not 385 bespoke rubrics, which would be authoring effort with no
+// principled per-question weight differences — but each family's criteria are
+// genuinely different, matching how that family is actually assessed:
+// - dsa: correctness/complexity/edge-cases/communication (how a coding answer
+//   is judged).
+// - system_design: the same 7 sections SystemDesignAnswerPanel's fixed
+//   template already asks the user to fill in (Requirements/Estimation/API/
+//   Data model/High-level design/Deep dives/Tradeoffs), so the rubric
+//   literally scores what the answer form structures.
+// - behavioral: STAR completeness/specificity/ownership/reflection.
+// - everything else (backend, js/ts/nodejs, db, os, networking, oop, cpp,
+//   concurrency, computer_architecture, machine_learning, hpc, quant): a
+//   conceptual-accuracy/depth/tradeoffs template — these are all "explain a
+//   CS concept" questions at heart, differing in topic, not in how a good
+//   answer is judged.
+// All criteria weights sum to 100 (maxScore) so scoring is a plain percentage.
+const RUBRIC_TEMPLATES: Record<'dsa' | 'system_design' | 'behavioral' | 'cs_fundamentals', RubricCriterion[]> = {
+  dsa: [
+    { id: 'correctness', title: 'Correctness', description: 'Produces a correct solution that satisfies the stated constraints.', weight: 45 },
+    { id: 'complexity', title: 'Complexity analysis', description: 'States and justifies the time and space complexity of the approach.', weight: 20 },
+    { id: 'edge_cases', title: 'Edge cases', description: 'Explicitly identifies and handles edge cases (empty input, duplicates, boundaries, overflow).', weight: 15 },
+    { id: 'communication', title: 'Communication', description: 'Explains the approach clearly, including why simpler/alternative approaches were rejected.', weight: 20 },
+  ],
+  system_design: [
+    { id: 'requirements', title: 'Requirements', description: 'Clarifies functional and non-functional requirements before designing.', weight: 10 },
+    { id: 'estimation', title: 'Estimation', description: 'Sizes the problem (traffic, storage, throughput) with reasonable back-of-envelope numbers.', weight: 10 },
+    { id: 'api', title: 'API design', description: 'Defines a clear, minimal API surface matching the requirements.', weight: 15 },
+    { id: 'data_model', title: 'Data model', description: 'Chooses a data model/storage approach that fits the access patterns and scale.', weight: 15 },
+    { id: 'high_level_design', title: 'High-level design', description: 'Describes a coherent architecture connecting the major components end to end.', weight: 20 },
+    { id: 'deep_dives', title: 'Deep dives', description: 'Goes deep on at least one hard sub-problem (a bottleneck, failure mode, or tricky invariant).', weight: 20 },
+    { id: 'tradeoffs', title: 'Tradeoffs', description: 'Names real tradeoffs made and what was given up for them, not just what was chosen.', weight: 10 },
+  ],
+  behavioral: [
+    { id: 'star_completeness', title: 'STAR completeness', description: 'Covers Situation, Task, Action, and Result concretely — not just a summary.', weight: 30 },
+    { id: 'specificity', title: 'Specificity', description: 'Uses specific details (numbers, tools, decisions) rather than generic claims.', weight: 25 },
+    { id: 'ownership_impact', title: 'Ownership & impact', description: 'Clearly attributes the actions and their outcome to the candidate specifically, with a measurable or concrete result.', weight: 25 },
+    { id: 'reflection', title: 'Reflection', description: 'Shows what was learned or what would be done differently.', weight: 20 },
+  ],
+  cs_fundamentals: [
+    { id: 'conceptual_accuracy', title: 'Conceptual accuracy', description: 'States the core concept correctly with no factual errors.', weight: 40 },
+    { id: 'depth', title: 'Depth', description: 'Goes beyond a surface-level definition into mechanism or implementation detail.', weight: 30 },
+    { id: 'tradeoffs', title: 'Tradeoffs', description: 'Discusses tradeoffs, alternatives, or the boundaries of when the concept applies.', weight: 30 },
+  ],
+};
+
+function rubricTemplateKey(type: string): keyof typeof RUBRIC_TEMPLATES {
+  if (type === 'dsa') return 'dsa';
+  if (type === 'system_design') return 'system_design';
+  if (type === 'behavioral') return 'behavioral';
+  return 'cs_fundamentals';
+}
+
+function inferRubric(question: SeedQuestion, questionId: string): Rubric {
+  return {
+    id: `${questionId}-rubric`,
+    objectId: questionId,
+    criteria: RUBRIC_TEMPLATES[rubricTemplateKey(question.type)],
+    maxScore: 100,
+  };
+}
+
+export function inferQuestionMetadata(question: SeedQuestion, questionId: string) {
   const roleTags = question.roleTags ?? inferRoleTags(question.type);
   const areaTags = question.areaTags ?? inferAreaTags(question.type);
   const patternTags = question.patternTags ?? inferPatternTags(question);
@@ -508,10 +577,7 @@ export function inferQuestionMetadata(question: SeedQuestion) {
     patternTags,
     estimatedMinutes,
     importance,
-    rubric: {
-      strong: ['Correct core concept', 'Explains tradeoffs', 'Mentions failure modes or edge cases'],
-      weak: ['Vague definitions only', 'No concrete example', 'Ignores constraints'],
-    },
+    rubric: inferRubric(question, questionId),
   };
 }
 
