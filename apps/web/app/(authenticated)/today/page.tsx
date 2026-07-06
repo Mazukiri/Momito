@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { dashboardApi, recommendationsApi, remindersApi, reviewsApi } from '../../lib/api-client';
 import type { PracticeRecommendationResponse, ReminderResponse, ReviewStateResponse } from '@momito/shared';
-import { Card, Badge, Spinner, ErrorBanner } from '../../components/ui';
+import { Card, Badge, ErrorBanner, ListSkeleton } from '../../components/ui';
 
 // MOM-032/033 (Today integration): a single priority-ranked queue (plan §6.1)
 // merging due FSRS reviews (MOM-027/029/030/031), real recommendations (active
@@ -51,7 +51,6 @@ export default function TodayPage() {
   const [dueReviews, setDueReviews] = useState<ReviewStateResponse[]>([]);
   const [streak, setStreak] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
 
   const fetchAll = useCallback(async () => {
@@ -89,15 +88,18 @@ export default function TodayPage() {
     return entries.sort((a, b) => b.priority - a.priority);
   }, [dueReviews, items, reminders]);
 
+  // Removes the item from the queue immediately rather than waiting on a
+  // full fetchAll() (recommendations + reminders + due reviews + dashboard
+  // summary — four endpoints) round trip before the tap has any visible
+  // effect. Rolls back and surfaces an error if the request actually fails.
   async function dismissReminder(id: string) {
-    setWorking(true);
+    const previous = reminders;
+    setReminders((current) => current.filter((r) => r.id !== id));
     try {
       await remindersApi.dismiss(id);
-      await fetchAll();
     } catch (err: unknown) {
+      setReminders(previous);
       setError(err instanceof Error ? err.message : 'Failed to dismiss reminder');
-    } finally {
-      setWorking(false);
     }
   }
 
@@ -108,15 +110,14 @@ export default function TodayPage() {
   const [expandedReviewId, setExpandedReviewId] = useState<string | null>(null);
 
   async function submitReview(review: ReviewStateResponse, selfRating: number) {
-    setWorking(true);
+    const previous = dueReviews;
+    setExpandedReviewId(null);
+    setDueReviews((current) => current.filter((r) => r.objectId !== review.objectId));
     try {
       await reviewsApi.record(review.objectType, review.objectId, selfRating);
-      setExpandedReviewId(null);
-      await fetchAll();
     } catch (err: unknown) {
+      setDueReviews(previous);
       setError(err instanceof Error ? err.message : 'Failed to record review');
-    } finally {
-      setWorking(false);
     }
   }
 
@@ -142,11 +143,7 @@ export default function TodayPage() {
         )}
       </div>
 
-      {loading && (
-        <div className="flex justify-center py-16">
-          <Spinner className="h-8 w-8" />
-        </div>
-      )}
+      {loading && <ListSkeleton count={5} />}
 
       {!loading && error && <ErrorBanner message={error} onRetry={fetchAll} />}
 
@@ -194,7 +191,6 @@ export default function TodayPage() {
                       <Badge label={review.objectType === 'story' ? 'Story' : 'Review'} />
                       <button
                         onClick={() => setExpandedReviewId((current) => (current === review.id ? null : review.id))}
-                        disabled={working}
                         className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                       >
                         Review now
@@ -208,7 +204,6 @@ export default function TodayPage() {
                         <button
                           key={rating}
                           onClick={() => submitReview(review, rating)}
-                          disabled={working}
                           className="h-8 w-8 rounded-full bg-zinc-100 text-sm font-medium text-zinc-500 hover:bg-indigo-600 hover:text-white disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-400"
                           title={`${rating} / 5`}
                         >
@@ -234,7 +229,6 @@ export default function TodayPage() {
                       <Badge label="Reminder" />
                       <button
                         onClick={() => dismissReminder(reminder.id)}
-                        disabled={working}
                         className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                       >
                         Dismiss

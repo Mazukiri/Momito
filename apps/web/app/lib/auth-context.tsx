@@ -39,6 +39,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [refresh]);
 
+  // Fired by api-client.ts on any mid-session 401 (expired or revoked token).
+  // Clearing user here is what makes (authenticated)/layout.tsx's existing
+  // "no user → redirect to /login" effect fire immediately, instead of the
+  // stale UI sitting there until the next manual navigation/reload.
+  useEffect(() => {
+    const onUnauthorized = () => setUser(null);
+    window.addEventListener('momito:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('momito:unauthorized', onUnauthorized);
+  }, []);
+
   const login = useCallback(async (email: string, password: string) => {
     const res = await authApi.login({ email, password });
     setToken(res.accessToken);

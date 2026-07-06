@@ -34,6 +34,22 @@ export function clearToken() {
   localStorage.removeItem('momito_token');
 }
 
+// A 401 mid-session (token expired, or revoked by logout on another device —
+// see JwtAuthGuard's tokenVersion check) used to just silently clearToken()
+// here with nothing downstream reacting to it: the UI kept rendering whatever
+// it last had until the user happened to navigate or reload. AuthProvider
+// listens for this event and sets its user to null, which
+// (authenticated)/layout.tsx's existing "no user → redirect to /login" effect
+// then picks up immediately. Login/register calls are excluded (see
+// callers below) since a wrong-password 401 there is a normal inline form
+// error, not a revoked session.
+function notifyUnauthorized() {
+  clearToken();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('momito:unauthorized'));
+  }
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -51,7 +67,9 @@ async function request<T>(
   });
 
   if (!res.ok) {
-    if (res.status === 401) clearToken();
+    if (res.status === 401 && !path.startsWith('/auth/login') && !path.startsWith('/auth/register')) {
+      notifyUnauthorized();
+    }
     let body: ApiError;
     try {
       body = await res.json();
@@ -77,7 +95,7 @@ async function requestForm<T>(path: string, body: FormData): Promise<T> {
   });
 
   if (!res.ok) {
-    if (res.status === 401) clearToken();
+    if (res.status === 401) notifyUnauthorized();
     let errorBody: ApiError;
     try {
       errorBody = await res.json();

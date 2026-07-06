@@ -89,39 +89,42 @@ export default function CalendarPage() {
     }
   }
 
+  // These three all follow the same shape: remove the item from view right
+  // away (a tap should feel instant, not wait on a round trip to re-fetch the
+  // whole list) and restore it if the request actually fails. `load()` is
+  // deliberately NOT called on success — the optimistic removal already
+  // reflects the end state, so a background refetch here would just be a
+  // wasted request.
   async function complete(id: string) {
-    setWorking(true);
+    const previous = tasks;
+    setTasks((current) => current.filter((t) => t.id !== id));
     try {
       await tasksApi.complete(id);
-      await load();
     } catch (err: unknown) {
+      setTasks(previous);
       setError(err instanceof Error ? err.message : 'Failed to complete task');
-    } finally {
-      setWorking(false);
     }
   }
 
   async function snooze(id: string) {
-    setWorking(true);
+    const previous = tasks;
+    setTasks((current) => current.filter((t) => t.id !== id));
     try {
       await tasksApi.snooze(id, tomorrowIso());
-      await load();
     } catch (err: unknown) {
+      setTasks(previous);
       setError(err instanceof Error ? err.message : 'Failed to snooze task');
-    } finally {
-      setWorking(false);
     }
   }
 
   async function dismissReminder(id: string) {
-    setWorking(true);
+    const previous = reminders;
+    setReminders((current) => current.filter((r) => r.id !== id));
     try {
       await remindersApi.dismiss(id);
-      await load();
     } catch (err: unknown) {
+      setReminders(previous);
       setError(err instanceof Error ? err.message : 'Failed to dismiss reminder');
-    } finally {
-      setWorking(false);
     }
   }
 
@@ -158,20 +161,20 @@ export default function CalendarPage() {
       {showForm && (
         <Card>
           <form onSubmit={createTask} className="grid gap-3 sm:grid-cols-2">
-            <input value={title} onChange={(event) => setTitle(event.target.value)} required placeholder="Task title" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm sm:col-span-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
-            <select value={type} onChange={(event) => setType(event.target.value as TaskType)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+            <input aria-label="Task title" value={title} onChange={(event) => setTitle(event.target.value)} required placeholder="Task title" className="rounded-lg border border-zinc-300 px-3 py-2 text-sm sm:col-span-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+            <select aria-label="Task type" value={type} onChange={(event) => setType(event.target.value as TaskType)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
               {TASK_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-            <select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+            <select aria-label="Task priority" value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
               {TASK_PRIORITIES.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-            <select value={roleTrackId} onChange={(event) => setRoleTrackId(event.target.value as CareerRoleTrackId)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+            <select aria-label="Career role track" value={roleTrackId} onChange={(event) => setRoleTrackId(event.target.value as CareerRoleTrackId)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
               {Object.values(CAREER_ROLE_TRACKS).map((track) => <option key={track.id} value={track.id}>{track.label}</option>)}
             </select>
-            <select value={area} onChange={(event) => setArea(event.target.value as CareerRoleAreaId)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+            <select aria-label="Focus area" value={area} onChange={(event) => setArea(event.target.value as CareerRoleAreaId)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
               {CAREER_ROLE_AREA_IDS.map((item) => <option key={item} value={item}>{item.replaceAll('_', ' ')}</option>)}
             </select>
-            <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+            <input aria-label="Due date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
             <button disabled={working || !title.trim()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Save</button>
           </form>
         </Card>
@@ -195,8 +198,8 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => snooze(task.id)} disabled={working || task.status === 'done'} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Snooze</button>
-                  <button onClick={() => complete(task.id)} disabled={working || task.status === 'done'} className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">Done</button>
+                  <button onClick={() => snooze(task.id)} disabled={task.status === 'done'} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Snooze</button>
+                  <button onClick={() => complete(task.id)} disabled={task.status === 'done'} className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">Done</button>
                 </div>
               </div>
               <p className="mt-3 text-xs text-zinc-400">

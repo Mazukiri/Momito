@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { questionsApi, topicsApi, type ListQuestionsParams } from '../../lib/api-client';
 import type { QuestionResponse, TopicSummary } from '@momito/shared';
-import { Card, Badge, Pagination, Spinner, EmptyState, ErrorBanner } from '../../components/ui';
+import { Card, Badge, Pagination, ListSkeleton, EmptyState, ErrorBanner } from '../../components/ui';
 
 const TYPE_LABELS: Record<string, string> = {
   dsa: 'DSA',
@@ -24,20 +24,46 @@ export default function QuestionsListPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Filters
-  const [search, setSearch] = useState('');
+  // Filters — seeded from the URL so filters survive back/forward navigation
+  // and relaunching the installed PWA, instead of always resetting to blank.
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [typeFilter, setTypeFilter] = useState(searchParams.get('type') || '');
-  const [difficultyFilter, setDifficultyFilter] = useState('');
-  const [topicFilter, setTopicFilter] = useState('');
+  const [difficultyFilter, setDifficultyFilter] = useState(searchParams.get('difficulty') || '');
+  const [topicFilter, setTopicFilter] = useState(searchParams.get('topic') || '');
   const [topics, setTopics] = useState<TopicSummary[]>([]);
 
   // Data
   const [questions, setQuestions] = useState<QuestionResponse[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(Number(searchParams.get('page')) || 1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const limit = 20;
+
+  // Without this, every keystroke fired its own /questions request — typing
+  // a 10-character search term meant 10 network round-trips instead of one.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    const qs = new URLSearchParams();
+    if (debouncedSearch) qs.set('search', debouncedSearch);
+    if (typeFilter) qs.set('type', typeFilter);
+    if (difficultyFilter) qs.set('difficulty', difficultyFilter);
+    if (topicFilter) qs.set('topic', topicFilter);
+    if (page > 1) qs.set('page', String(page));
+    const queryString = qs.toString();
+    router.replace(queryString ? `/questions?${queryString}` : '/questions', { scroll: false });
+    // router intentionally excluded — Next's router identity isn't stable
+    // across renders and including it would re-trigger this on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, typeFilter, difficultyFilter, topicFilter, page]);
 
   const fetchQuestions = useCallback(async (params: ListQuestionsParams) => {
     setLoading(true);
@@ -71,14 +97,14 @@ export default function QuestionsListPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard data-fetching on mount/filter change
     fetchQuestions({
-      search: search || undefined,
+      search: debouncedSearch || undefined,
       type: typeFilter || undefined,
       difficulty: difficultyFilter || undefined,
       topic: topicFilter || undefined,
       page,
       limit,
     });
-  }, [search, typeFilter, difficultyFilter, topicFilter, page, fetchQuestions]);
+  }, [debouncedSearch, typeFilter, difficultyFilter, topicFilter, page, fetchQuestions]);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -101,12 +127,14 @@ export default function QuestionsListPage() {
       <form onSubmit={handleSearch} className="mb-6 flex flex-wrap gap-3">
         <input
           type="text"
+          aria-label="Search questions by title"
           placeholder="Search by title..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
         />
         <select
+          aria-label="Filter by question type"
           value={typeFilter}
           onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
           className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
@@ -117,6 +145,7 @@ export default function QuestionsListPage() {
           ))}
         </select>
         <select
+          aria-label="Filter by difficulty"
           value={difficultyFilter}
           onChange={(e) => { setDifficultyFilter(e.target.value); setPage(1); }}
           className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
@@ -127,6 +156,7 @@ export default function QuestionsListPage() {
           <option value="hard">Hard</option>
         </select>
         <select
+          aria-label="Filter by topic"
           value={topicFilter}
           onChange={(e) => { setTopicFilter(e.target.value); setPage(1); }}
           className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
@@ -148,9 +178,7 @@ export default function QuestionsListPage() {
       {error && <ErrorBanner message={error} onRetry={() => fetchQuestions({ page, limit })} />}
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Spinner className="h-8 w-8" />
-        </div>
+        <ListSkeleton count={6} />
       ) : questions.length === 0 ? (
         <EmptyState
           icon="📋"

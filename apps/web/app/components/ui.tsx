@@ -1,6 +1,6 @@
 'use client';
 
-import { type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, forwardRef } from 'react';
+import { type ButtonHTMLAttributes, type InputHTMLAttributes, type KeyboardEvent, type ReactNode, forwardRef } from 'react';
 import { cn } from '../lib/cn';
 
 // ── Button ───────────────────────────────────────
@@ -94,6 +94,33 @@ export function LoadingPage() {
   );
 }
 
+// ── Skeleton ─────────────────────────────────────
+// A full-page centered spinner on every list/queue load reads as "the app
+// just froze" on a phone, and gives no sense of the page's actual shape.
+// These render a placeholder matching the real content's layout instead.
+export function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={cn('animate-pulse rounded bg-zinc-200 dark:bg-zinc-800', className)} />;
+}
+
+export function CardSkeleton() {
+  return (
+    <Card>
+      <Skeleton className="h-4 w-2/3" />
+      <Skeleton className="mt-3 h-3 w-1/3" />
+    </Card>
+  );
+}
+
+export function ListSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: count }).map((_, i) => (
+        <CardSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
 // ── Error Banner ─────────────────────────────────
 export function ErrorBanner({
   message,
@@ -149,20 +176,20 @@ export function EmptyState({
 
 // ── Badge ────────────────────────────────────────
 const BADGE_COLORS: Record<string, string> = {
-  easy: 'bg-green-100 text-green-700 border-green-200',
-  medium: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  hard: 'bg-red-100 text-red-700 border-red-200',
-  dsa: 'bg-blue-100 text-blue-700 border-blue-200',
-  backend: 'bg-purple-100 text-purple-700 border-purple-200',
-  javascript: 'bg-amber-100 text-amber-700 border-amber-200',
-  typescript: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-  nodejs: 'bg-lime-100 text-lime-700 border-lime-200',
-  database: 'bg-cyan-100 text-cyan-700 border-cyan-200',
-  os: 'bg-slate-100 text-slate-700 border-slate-200',
-  networking: 'bg-teal-100 text-teal-700 border-teal-200',
-  oop: 'bg-violet-100 text-violet-700 border-violet-200',
-  system_design: 'bg-rose-100 text-rose-700 border-rose-200',
-  behavioral: 'bg-orange-100 text-orange-700 border-orange-200',
+  easy: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-900',
+  medium: 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-400 dark:border-yellow-900',
+  hard: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-400 dark:border-red-900',
+  dsa: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-900',
+  backend: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-900',
+  javascript: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-900',
+  typescript: 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-400 dark:border-indigo-900',
+  nodejs: 'bg-lime-100 text-lime-700 border-lime-200 dark:bg-lime-950 dark:text-lime-400 dark:border-lime-900',
+  database: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-400 dark:border-cyan-900',
+  os: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+  networking: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-950 dark:text-teal-400 dark:border-teal-900',
+  oop: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-400 dark:border-violet-900',
+  system_design: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-400 dark:border-rose-900',
+  behavioral: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-900',
 };
 
 export function Badge({
@@ -172,7 +199,9 @@ export function Badge({
   label: string;
   variant?: string;
 }) {
-  const colorClass = BADGE_COLORS[variant ?? label] ?? 'bg-zinc-100 text-zinc-700 border-zinc-200';
+  const colorClass =
+    BADGE_COLORS[variant ?? label] ??
+    'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700';
   return (
     <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium ${colorClass}`}>
       {label}
@@ -190,14 +219,31 @@ export function Card({
   className?: string;
   onClick?: () => void;
 }) {
+  // Clickable cards need to be reachable and activatable from the keyboard —
+  // a bare onClick on a <div> is invisible to Tab/Enter/Space.
+  const interactiveProps = onClick
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onClick();
+          }
+        },
+      }
+    : {};
+
   return (
     <div
       className={cn(
         'rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900',
-        onClick && 'cursor-pointer hover:border-zinc-300 hover:shadow-md transition-shadow dark:hover:border-zinc-700',
+        onClick &&
+          'cursor-pointer hover:border-zinc-300 hover:shadow-md transition-shadow dark:hover:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500',
         className,
       )}
       onClick={onClick}
+      {...interactiveProps}
     >
       {children}
     </div>
@@ -224,7 +270,7 @@ export function Pagination({
       <button
         disabled={page <= 1}
         onClick={() => onChange(page - 1)}
-        className="rounded border border-zinc-300 px-3 py-1 text-sm disabled:opacity-40 hover:bg-zinc-50"
+        className="rounded border border-zinc-300 px-3 py-1 text-sm disabled:opacity-40 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
       >
         ← Prev
       </button>
@@ -234,7 +280,7 @@ export function Pagination({
       <button
         disabled={page >= totalPages}
         onClick={() => onChange(page + 1)}
-        className="rounded border border-zinc-300 px-3 py-1 text-sm disabled:opacity-40 hover:bg-zinc-50"
+        className="rounded border border-zinc-300 px-3 py-1 text-sm disabled:opacity-40 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
       >
         Next →
       </button>
