@@ -5,13 +5,15 @@ import { usePathname } from 'next/navigation';
 import { NAV_ITEMS, isNavItemActive } from '../lib/navigation';
 import { cn } from '../lib/cn';
 
-// MOM-010: persistent left sidebar for tablet/desktop viewports (`sm` and up). On
-// phone widths the bottom tab bar (MOM-009) is the primary navigation instead.
+// MOM-010: persistent left sidebar for desktop viewports (`lg` and up, matching
+// BottomTabs' breakpoint so landscape phones/tablets get the bottom bar instead of
+// a cramped ~224px sidebar). On narrower widths the bottom tab bar (MOM-009) is the
+// primary navigation instead.
 export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-zinc-200 bg-white sm:flex dark:border-zinc-800 dark:bg-zinc-900">
+    <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-zinc-200 bg-white lg:flex dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex h-14 items-center px-5">
         <Link href="/today" className="text-lg font-bold text-indigo-600">
           Momito

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { recommendationsApi, remindersApi, reviewsApi } from '../../lib/api-client';
+import { dashboardApi, recommendationsApi, remindersApi, reviewsApi } from '../../lib/api-client';
 import type { PracticeRecommendationResponse, ReminderResponse, ReviewStateResponse } from '@momito/shared';
 import { Card, Badge, Spinner, ErrorBanner } from '../../components/ui';
 
@@ -49,6 +49,7 @@ export default function TodayPage() {
   const [items, setItems] = useState<PracticeRecommendationResponse[]>([]);
   const [reminders, setReminders] = useState<ReminderResponse[]>([]);
   const [dueReviews, setDueReviews] = useState<ReviewStateResponse[]>([]);
+  const [streak, setStreak] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
@@ -57,14 +58,16 @@ export default function TodayPage() {
     setLoading(true);
     setError('');
     try {
-      const [recommendations, reminderList, due] = await Promise.all([
+      const [recommendations, reminderList, due, summary] = await Promise.all([
         recommendationsApi.list(),
         remindersApi.list(),
         reviewsApi.due(),
+        dashboardApi.summary(),
       ]);
       setItems(recommendations);
       setReminders(reminderList);
       setDueReviews(due);
+      setStreak(summary.streak);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load today');
     } finally {
@@ -119,12 +122,24 @@ export default function TodayPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Today</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Your single priority queue: due reviews, missions, tasks, readiness gaps, career
-          deadlines, and reminders, ranked by urgency.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Today</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Your single priority queue: due reviews, missions, tasks, readiness gaps, career
+            deadlines, and reminders, ranked by urgency.
+          </p>
+        </div>
+        {/* A3: consistency streak — consecutive days with >=1 answer attempt.
+            Only rendered once loaded so it never flashes 0 before the real value. */}
+        {!loading && streak !== null && streak > 0 && (
+          <span
+            className="flex shrink-0 items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400"
+            title={`${streak} day streak`}
+          >
+            🔥 {streak}
+          </span>
+        )}
       </div>
 
       {loading && (
@@ -156,11 +171,18 @@ export default function TodayPage() {
           {queue.map((entry) => {
             if (entry.kind === 'review') {
               const review = entry.data;
+              // MOM-067: due reviews now include Story rehearsals, not just
+              // Questions — objectId is only meaningful within its own
+              // objectType's table, so the navigate target must branch on it.
+              // There's no per-story detail route yet (MOM-065 shipped list +
+              // inline expand only), so a story review links to the Story
+              // Bank list rather than a route that doesn't exist.
+              const reviewHref = review.objectType === 'story' ? '/stories' : `/questions/${review.objectId}`;
               return (
                 <Card key={`review:${review.id}`}>
                   <div className="flex items-start justify-between gap-3">
                     <button
-                      onClick={() => router.push(`/questions/${review.objectId}`)}
+                      onClick={() => router.push(reviewHref)}
                       className="min-w-0 flex-1 text-left"
                     >
                       <p className="font-medium text-zinc-800 hover:underline dark:text-zinc-100">
@@ -169,7 +191,7 @@ export default function TodayPage() {
                       <p className="mt-1 text-xs text-zinc-400">Due {new Date(review.due).toLocaleString()}</p>
                     </button>
                     <div className="flex shrink-0 items-center gap-2">
-                      <Badge label="Review" />
+                      <Badge label={review.objectType === 'story' ? 'Story' : 'Review'} />
                       <button
                         onClick={() => setExpandedReviewId((current) => (current === review.id ? null : review.id))}
                         disabled={working}

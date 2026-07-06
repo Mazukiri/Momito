@@ -19,6 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/questions', label: 'Questions', icon: '❓' },
   { href: '/attempts', label: 'History', icon: '🕓' },
   { href: '/study-plan', label: 'Study Plan', icon: '🗂️' },
+  { href: '/stories', label: 'Story Bank', icon: '⭐' },
   { href: '/settings', label: 'Settings', icon: '⚙️' },
 ];
 

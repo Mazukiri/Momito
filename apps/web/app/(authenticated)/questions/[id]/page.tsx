@@ -2,10 +2,135 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { questionsApi } from '../../../lib/api-client';
-import type { QuestionResponse } from '@momito/shared';
+import { questionsApi, storiesApi } from '../../../lib/api-client';
+import type { QuestionResponse, StoryResponse } from '@momito/shared';
 import { Card, Badge, Spinner, ErrorBanner, EmptyState } from '../../../components/ui';
 import { Markdown } from '../../../components/Markdown';
+
+// MOM-066: lets a behavioral question be linked to one or more Story Bank
+// entries the user could answer it with. Fetches the user's full story list
+// once and derives linked/unlinked from each story's own `prompts` array
+// (StoryPrompt is stored many-to-many from the Story side) rather than adding
+// a separate "stories for this question" endpoint.
+function LinkedStories({ questionId }: { questionId: string }) {
+  const [stories, setStories] = useState<StoryResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedId, setSelectedId] = useState('');
+  const [linking, setLinking] = useState(false);
+  const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
+
+  const fetchStories = useCallback(async () => {
+    setLoading(true);
+    try {
+      setStories(await storiesApi.list());
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load stories');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- standard data-fetching on mount
+  useEffect(() => { fetchStories(); }, [fetchStories]);
+
+  const linked = stories.filter((s) => s.prompts.some((p) => p.questionId === questionId));
+  const unlinked = stories.filter((s) => !s.prompts.some((p) => p.questionId === questionId));
+
+  async function handleLink() {
+    if (!selectedId) return;
+    setLinking(true);
+    setError('');
+    try {
+      const updated = await storiesApi.linkPrompt(selectedId, questionId);
+      setStories((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      setSelectedId('');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to link story');
+    } finally {
+      setLinking(false);
+    }
+  }
+
+  async function handleUnlink(storyId: string) {
+    setUnlinkingId(storyId);
+    try {
+      const updated = await storiesApi.unlinkPrompt(storyId, questionId);
+      setStories((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to unlink story');
+    } finally {
+      setUnlinkingId(null);
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card className="mt-4">
+        <div className="flex justify-center py-4"><Spinner className="h-5 w-5" /></div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="mt-4">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-500">
+        Answer with a Story
+      </h2>
+      {error && (
+        <div className="mb-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          {error}
+        </div>
+      )}
+      {stories.length === 0 ? (
+        <p className="text-sm text-zinc-500">
+          No stories yet. Add one in the{' '}
+          <a href="/stories" className="text-indigo-600 hover:text-indigo-500 underline">Story Bank</a>.
+        </p>
+      ) : (
+        <>
+          {linked.length > 0 && (
+            <ul className="mb-3 space-y-2">
+              {linked.map((story) => (
+                <li key={story.id} className="flex items-center justify-between gap-2 rounded border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700">
+                  <span className="text-zinc-700 dark:text-zinc-300">{story.title}</span>
+                  <button
+                    onClick={() => handleUnlink(story.id)}
+                    disabled={unlinkingId === story.id}
+                    className="shrink-0 rounded border border-red-300 px-2 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+                  >
+                    {unlinkingId === story.id ? 'Removing...' : 'Unlink'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {unlinked.length > 0 && (
+            <div className="flex gap-2">
+              <select
+                value={selectedId}
+                onChange={(e) => setSelectedId(e.target.value)}
+                className="block flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              >
+                <option value="">Select a story to link...</option>
+                {unlinked.map((story) => (
+                  <option key={story.id} value={story.id}>{story.title}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleLink}
+                disabled={!selectedId || linking}
+                className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {linking ? 'Linking...' : 'Link'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
 
 const TYPE_LABELS: Record<string, string> = {
   dsa: 'DSA',
@@ -231,6 +356,9 @@ export default function QuestionDetailPage() {
           </button>
         </div>
       </Card>
+
+      {/* Story linking (behavioral prompts only, MOM-066) */}
+      {question.type === 'behavioral' && <LinkedStories questionId={id} />}
 
       {/* Notes / Source */}
       {question.notes && (

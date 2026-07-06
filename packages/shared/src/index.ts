@@ -46,6 +46,120 @@ export const DSA_PATTERNS = [
 ] as const;
 export type DsaPattern = (typeof DSA_PATTERNS)[number];
 
+// A4: pattern pedagogy — REDESIGN_PLAN.MD's DSA_PATTERNS spec asks for
+// {id,name,description,whenToUse} per pattern so the ladder teaches *when* to
+// reach for each pattern, not just a bare id. Kept separate from DSA_PATTERNS
+// (rather than replacing it) since patternTags/dsa.service key on the plain
+// string ids already stored on seeded questions.
+export interface DsaPatternMeta {
+  name: string;
+  description: string;
+  whenToUse: string;
+}
+
+export const DSA_PATTERN_META: Record<DsaPattern, DsaPatternMeta> = {
+  two_pointers: {
+    name: 'Two Pointers',
+    description: 'Walk two indices through a sequence (from ends inward, or both forward at different speeds) to avoid nested loops.',
+    whenToUse: 'Sorted array/string problems asking for pairs, palindromes, or in-place partitioning — anywhere a nested O(n²) scan can collapse to one linear pass.',
+  },
+  sliding_window: {
+    name: 'Sliding Window',
+    description: 'Maintain a contiguous window over an array/string, expanding and shrinking its bounds incrementally instead of recomputing from scratch.',
+    whenToUse: 'Contiguous-subarray/substring problems with a size, sum, or character constraint (longest/shortest/count of subarrays satisfying a condition).',
+  },
+  fast_slow_pointers: {
+    name: 'Fast & Slow Pointers',
+    description: 'Two pointers advancing at different speeds through a linked structure or implicit sequence to detect cycles or find midpoints.',
+    whenToUse: 'Linked-list cycle detection, finding the middle node, or detecting a cycle in a functional graph (e.g. array-as-next-pointer problems).',
+  },
+  merge_intervals: {
+    name: 'Merge Intervals',
+    description: 'Sort intervals by start time, then sweep once merging/comparing overlapping ranges.',
+    whenToUse: 'Any problem about overlapping ranges: merging, inserting, finding free/busy time, or counting overlaps.',
+  },
+  cyclic_sort: {
+    name: 'Cyclic Sort',
+    description: 'Place each value at its "correct" index in one pass when values are a known bounded range (e.g. 1..n) — exploits the range as a free hash.',
+    whenToUse: 'Finding missing/duplicate numbers in an array of 1..n without extra space, in-place.',
+  },
+  binary_search: {
+    name: 'Binary Search',
+    description: 'Halve the search space each step using a monotonic predicate, not just on plain sorted arrays — also "search on the answer".',
+    whenToUse: 'Sorted-array lookup/insertion-point problems, or any problem where you can binary-search over a range of possible answers and check feasibility.',
+  },
+  tree_bfs: {
+    name: 'Tree BFS',
+    description: 'Level-order traversal using a queue, processing one full level at a time.',
+    whenToUse: 'Level-by-level tree output, shortest path in an unweighted tree/graph, or "minimum steps" problems.',
+  },
+  tree_dfs: {
+    name: 'Tree DFS',
+    description: 'Recursive (or explicit-stack) pre/in/post-order traversal exploring one branch fully before backtracking.',
+    whenToUse: 'Path-sum problems, tree validation/construction, or anything needing a full root-to-leaf path before deciding.',
+  },
+  graph_traversal: {
+    name: 'Graph Traversal',
+    description: 'General BFS/DFS over an explicit or implicit graph, tracking visited nodes to avoid revisiting.',
+    whenToUse: 'Connectivity, shortest path in unweighted graphs, flood-fill, or exploring an implicit graph (grid, state space).',
+  },
+  topological_sort: {
+    name: 'Topological Sort',
+    description: 'Order nodes of a DAG so every edge points forward, via Kahn\'s algorithm (in-degree queue) or DFS post-order.',
+    whenToUse: 'Task/course scheduling with prerequisites, build-dependency ordering, or detecting a cycle in a directed graph.',
+  },
+  union_find: {
+    name: 'Union Find',
+    description: 'Disjoint-set structure with union-by-rank and path compression to track connectivity incrementally.',
+    whenToUse: 'Dynamic connectivity queries, detecting cycles while building a graph edge-by-edge, or grouping into connected components.',
+  },
+  backtracking: {
+    name: 'Backtracking',
+    description: 'Recursively build a partial solution, prune branches that can\'t work, and undo choices to try the next option.',
+    whenToUse: 'Combinatorial search — permutations, combinations, subsets, constraint-satisfaction (N-Queens, Sudoku), or "generate all valid X".',
+  },
+  dynamic_programming: {
+    name: 'Dynamic Programming',
+    description: 'Break a problem into overlapping subproblems, cache results (memoization or a bottom-up table), and build the answer from smaller answers.',
+    whenToUse: 'Optimization/counting problems with overlapping subproblems and optimal substructure — often signaled by "min/max/count ways to reach X".',
+  },
+  greedy: {
+    name: 'Greedy',
+    description: 'Make the locally-best choice at each step and prove (or trust) it leads to a globally optimal solution, with no backtracking.',
+    whenToUse: 'Interval scheduling, when sorting by one criterion makes the optimal choice obvious at each step, and exchange-argument proofs apply.',
+  },
+  heap_priority_queue: {
+    name: 'Heap / Priority Queue',
+    description: 'Maintain a min/max-heap to always access the smallest/largest remaining element in O(log n).',
+    whenToUse: '"Top/kth largest/smallest", merging k sorted lists, or scheduling problems needing repeated access to an extremum.',
+  },
+  monotonic_stack: {
+    name: 'Monotonic Stack',
+    description: 'Maintain a stack that\'s always increasing or decreasing, popping elements that violate the invariant as you scan.',
+    whenToUse: '"Next greater/smaller element", histogram/rectangle-area problems, or anywhere you need each element\'s nearest larger/smaller neighbor in O(n).',
+  },
+  prefix_sum: {
+    name: 'Prefix Sum',
+    description: 'Precompute cumulative sums so any range-sum query becomes an O(1) subtraction instead of a re-scan.',
+    whenToUse: 'Repeated range-sum queries, subarray-sum-equals-k counting, or 2D range-sum problems.',
+  },
+  bit_manipulation: {
+    name: 'Bit Manipulation',
+    description: 'Use bitwise operators (XOR, AND, shifts, masks) to solve problems in O(1) space or spot bit-level invariants.',
+    whenToUse: 'Finding a unique/missing element via XOR, counting set bits, or any problem hinting at a bitmask state space.',
+  },
+  trie: {
+    name: 'Trie',
+    description: 'A prefix tree storing strings character-by-character so shared prefixes share storage and lookups.',
+    whenToUse: 'Prefix search/autocomplete, word search in a dictionary, or any problem needing fast "does this prefix exist" queries.',
+  },
+  linked_list_reversal: {
+    name: 'Linked List Reversal',
+    description: 'Reverse (all or part of) a singly-linked list in place by walking pointers and flipping next-references as you go.',
+    whenToUse: 'Reverse-a-list variants (full, k-group, between positions) and problems that reduce to reversing part of a list to simplify a comparison.',
+  },
+};
+
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 export type QuestionDifficulty = (typeof QUESTION_DIFFICULTIES)[number];
 
@@ -179,22 +293,6 @@ export interface AnswerAttemptResponse {
   updatedAt: string;
 }
 
-export const STUDY_PLAN_STATUSES = ['todo', 'in_progress', 'done'] as const;
-export type StudyPlanStatus = (typeof STUDY_PLAN_STATUSES)[number];
-
-export interface StudyPlanItemResponse {
-  id: string;
-  userId: string;
-  topicId: string | null;
-  topic: TopicSummary | null;
-  title: string;
-  notes: string | null;
-  targetDate: string | null;
-  status: StudyPlanStatus;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface TopicProgress {
   topicId: string;
   topicName: string;
@@ -212,6 +310,10 @@ export interface WeakTopic {
 export interface DashboardSummaryResponse {
   totalQuestionsPracticed: number;
   totalSessions: number;
+  // Consecutive days (up to and including today, or yesterday if today has no
+  // attempt yet — the streak isn't broken until a full day passes with none) with
+  // >=1 AnswerAttempt, computed server-side in Asia/Ho_Chi_Minh.
+  streak: number;
   topicProgress: TopicProgress[];
   recentSessions: InterviewSessionResponse[];
   weakTopics: WeakTopic[];
@@ -1247,3 +1349,71 @@ export interface ReviewStateResponse {
   // (ADR-0002), so this is looked up separately, not joined.
   title: string | null;
 }
+
+// ── Story competencies (A5) ──────────────────────────────────────────────────
+// REDESIGN_PLAN.MD's STORY_COMPETENCIES: a fixed taxonomy of behavioral
+// competencies a STAR story can demonstrate, with Amazon Leadership Principle
+// mappings since Amazon is a named target company (seed data already has an
+// Amazon focus-area note). Story.competencyTags stays a free-form string[] at
+// the DB/DTO layer (ADR-0003) — this is the frontend's structured picker over
+// that field, not a schema constraint, so a user can still add a custom tag
+// beyond this list.
+export interface StoryCompetency {
+  id: string;
+  name: string;
+  description: string;
+  amazonLps?: string[];
+}
+
+export const STORY_COMPETENCIES: StoryCompetency[] = [
+  { id: 'ownership', name: 'Ownership', description: 'Took responsibility for an outcome beyond your immediate role, including its long-term consequences.', amazonLps: ['Ownership', 'Deliver Results'] },
+  { id: 'conflict', name: 'Conflict resolution', description: 'Navigated disagreement with a peer, manager, or stakeholder to reach a workable outcome.', amazonLps: ['Have Backbone; Disagree and Commit', 'Earn Trust'] },
+  { id: 'failure', name: 'Failure & recovery', description: 'Something went wrong (a bug, a missed deadline, a bad call) — what happened and what you changed afterward.', amazonLps: ['Learn and Be Curious', 'Insist on the Highest Standards'] },
+  { id: 'leadership', name: 'Leadership', description: 'Influenced or directed the work of others without necessarily having formal authority over them.', amazonLps: ['Hire and Develop the Best', 'Think Big'] },
+  { id: 'ambiguity', name: 'Ambiguity', description: 'Made progress on a problem with incomplete information, unclear requirements, or no established playbook.', amazonLps: ['Invent and Simplify', 'Bias for Action'] },
+  { id: 'delivery', name: 'Delivery under pressure', description: 'Shipped something real under a real constraint — a deadline, limited resources, or competing priorities.', amazonLps: ['Deliver Results', 'Bias for Action'] },
+  { id: 'growth', name: 'Growth & learning', description: 'Picked up a new skill, technology, or domain specifically to get the job done.', amazonLps: ['Learn and Be Curious'] },
+  { id: 'teamwork', name: 'Teamwork & collaboration', description: 'Worked effectively with others across a team or organizational boundary toward a shared goal.', amazonLps: ['Earn Trust', 'Hire and Develop the Best'] },
+];
+
+// ── Story Bank (MOM-063/064) ─────────────────────────────────────────────────
+// STAR-shaped, user-authored (ADR-0003). Reviewable via ReviewState with
+// objectType: 'story' (ReviewableObjectType, defined above) once MOM-067 wires
+// rehearsal sessions to it — no separate review type needed here.
+// MOM-066: a behavioral prompt (Question) a story can answer. questionTitle is
+// denormalized for display — StoryPrompt only stores questionId at the DB level.
+export interface StoryPromptLink {
+  questionId: string;
+  questionTitle: string;
+}
+
+export interface StoryResponse {
+  id: string;
+  userId: string;
+  title: string;
+  situation: string;
+  task: string;
+  action: string;
+  result: string;
+  metrics: string | null;
+  competencyTags: string[];
+  followUpQuestions: string[];
+  companies: CompanySummary[];
+  prompts: StoryPromptLink[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateStoryRequest {
+  title: string;
+  situation: string;
+  task: string;
+  action: string;
+  result: string;
+  metrics?: string | null;
+  competencyTags?: string[];
+  followUpQuestions?: string[];
+  companyIds?: string[];
+}
+
+export type UpdateStoryRequest = Partial<CreateStoryRequest>;

@@ -7,6 +7,7 @@ import { LoadingPage } from '../components/ui';
 import { Sidebar } from '../components/Sidebar';
 import { BottomTabs } from '../components/BottomTabs';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { ReminderBell } from '../components/ReminderBell';
 import Link from 'next/link';
 
 export default function AuthenticatedLayout({
@@ -32,11 +33,12 @@ export default function AuthenticatedLayout({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex min-h-14 items-center justify-between gap-4 px-4 py-2">
-            <Link href="/today" className="text-lg font-bold text-indigo-600 sm:hidden">
+            <Link href="/today" className="text-lg font-bold text-indigo-600 lg:hidden">
               Momito
             </Link>
             <div className="flex flex-1 items-center justify-end gap-4">
               <span className="text-sm text-zinc-500 dark:text-zinc-400">{user.name}</span>
+              <ReminderBell />
               <ThemeToggle />
               <button
                 onClick={async () => {
@@ -50,8 +52,8 @@ export default function AuthenticatedLayout({
             </div>
           </div>
         </header>
-        {/* pb-20 keeps content clear of the fixed BottomTabs on phone widths (UX invariant §2.3.6) */}
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20 pt-6 sm:pb-8">{children}</main>
+        {/* pb-20 keeps content clear of the fixed BottomTabs on phone/tablet widths (UX invariant §2.3.6) */}
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20 pt-6 lg:pb-8">{children}</main>
       </div>
       <BottomTabs />
     </div>

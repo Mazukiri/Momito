@@ -1,0 +1,54 @@
+# B4: Render Blueprint for the NestJS API (apps/api). Dormant until you connect
+# this repo in the Render dashboard (New > Blueprint) — committing this file
+# does not deploy anything by itself. See README.md's Deploy section for the
+# full walkthrough (Neon + Render + Vercel).
+#
+# NOTE: uses the actual env var name this codebase reads
+# (ALLOW_MULTI_USER_REGISTRATION), not REGISTRATION_ENABLED — see
+# apps/api/src/common/config.ts.
+services:
+  - type: web
+    name: momito-api
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: .
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @momito/shared build &&
+      pnpm --filter @momito/api exec prisma generate &&
+      pnpm --filter @momito/api build
+    startCommand: >-
+      bash -c "cd apps/api && pnpm exec prisma migrate deploy && node dist/main.js"
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: TZ
+        value: UTC
+      - key: PORT
+        value: "3001"
+      # Secrets — set these in the Render dashboard, never commit real values:
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 30d
+      - key: CORS_ORIGIN
+        sync: false # set to https://<your-app>.vercel.app once Vercel is deployed
+      - key: ALLOW_MULTI_USER_REGISTRATION
+        value: "false"
+      # Workstream C (AI grading) — optional; omit entirely to run without AI
+      # feedback. See apps/api/.env.example.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-opus-4-8
+      - key: AI_DAILY_BUDGET_USD
+        value: "1.00"

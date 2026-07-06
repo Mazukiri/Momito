@@ -13,12 +13,19 @@
 
 | Task | Owner | Files / globs | Claimed (UTC) | Notes |
 |------|-------|---------------|---------------|-------|
-| _none_ | - | - | - | No active implementation locks. |
 
 ## Released locks
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-065 | CLAUDE | `apps/web/app/(authenticated)/stories/page.tsx` (new), `apps/web/app/lib/navigation.ts`, `docs/agent/*.MD` | 2026-07-06T02:35:00Z |
+| MOM-066 | CLAUDE | `packages/shared/src/index.ts`, `apps/api/src/stories/**`, `apps/api/test/stories.service.spec.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/(authenticated)/questions/[id]/page.tsx`, `docs/agent/*.MD` | 2026-07-06T02:50:00Z |
+| MOM-067 | CLAUDE | `apps/api/src/reviews/reviews.service.ts`, `apps/api/test/reviews.service.spec.ts`, `apps/web/app/(authenticated)/stories/page.tsx`, `apps/web/app/(authenticated)/today/page.tsx`, `docs/agent/*.MD` | 2026-07-06T03:10:00Z |
+| Content gap fill + stale-backlog sweep | CLAUDE | `apps/api/prisma/seed-data.ts`, `README.md`, `docs/agent/BACKLOG.md` | 2026-07-06T03:20:00Z |
+| MOM-087 | CLAUDE | `.github/workflows/backup.yml` (new), `docs/adr/0006-backup-strategy.md` (new), `docs/runbooks/backup-restore.md` (new), `docs/agent/BACKLOG.md` | 2026-07-06T03:35:00Z |
+| MOM-063/064 | CLAUDE | `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**`, `apps/api/src/stories/**` (new), `apps/api/src/app.module.ts`, `packages/shared/src/index.ts`, `docs/adr/0005-story-bank-schema.md`, `apps/web/app/lib/api-client.ts`, `docs/agent/*.MD` | 2026-07-06T02:10:00Z |
+| MOM-075/076/077 | CLAUDE | `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**`, `apps/api/src/tasks/**`, `apps/api/src/study-plan/**` (removed), `apps/api/src/app.module.ts`, `packages/shared/src/index.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/(authenticated)/study-plan/page.tsx`, `docs/agent/*.MD` | 2026-07-06T01:15:00Z |
+| Backlog reality cleanup + MOM-080 top-bar bell | CLAUDE | `docs/agent/BACKLOG.md`, `docs/agent/LOG.MD`, `docs/agent/NEXT.MD`, `docs/agent/LOCKS.MD`, `apps/web/app/(authenticated)/layout.tsx`, `apps/web/app/components/ReminderBell.tsx` | 2026-07-06T00:20:00Z |
 | MOM-003 | CODEX | `backend/**`, `mobile/**`, `archive/**`, `docs/agent/LOG.MD`, `docs/agent/NEXT.MD`, `docs/agent/LOCKS.MD` | 2026-07-04T20:20:58Z |
 | MOM-001 | CODEX | git snapshot refs; `docs/agent/LOG.MD`, `docs/agent/NEXT.MD`, `docs/agent/LOCKS.MD` bookkeeping | 2026-07-04T20:15:52Z |
 | MOM-002 (planning) | CLAUDE (orchestrator) | `docs/agent/*.md` | 2026-07-05 |

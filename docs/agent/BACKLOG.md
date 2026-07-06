@@ -77,7 +77,7 @@ Global verification / forbidden-file defaults:
 
 > Ordered for safety and unblocking value. Each is one PR. `NEXT.MD` always mirrors the top **READY** task not yet started. Task template per plan §14.
 
-### MOM-001 — Snapshot current repo state · READY · EITHER
+### MOM-001 — Snapshot current repo state · **DONE** (verified 2026-07-06: `git tag --list` shows `pre-redesign-v2`, `git branch --list "safety/*"` shows `safety/pre-redesign-v2`, both present; stale READY status) · EITHER
 - **Goal:** Establish a clean, recoverable git baseline before any redesign work.
 - **User-visible outcome:** None directly; guarantees every later change is revertable.
 - **Allowed files:** git only - `git add -A`, commit, annotated tag/branch. No file *content* edits before the snapshot except an optional `.gitignore` touch-up if build artifacts are staged. After the snapshot, `docs/agent/LOG.MD`, `docs/agent/NEXT.MD`, and `docs/agent/LOCKS.MD` may be updated for bookkeeping only.
@@ -105,7 +105,7 @@ Global verification / forbidden-file defaults:
 - **Rollback:** `git checkout -- docs/agent`.
 - **Commit message:** `docs(agent): add execution backlog and orchestration docs`
 
-### MOM-003 — Archive legacy Python backend & Expo mobile · READY · EITHER
+### MOM-003 — Archive legacy Python backend & Expo mobile · **DONE** (verified 2026-07-06: `archive/` exists at repo root; `backend/`/`mobile/` no longer present at root; stale READY status) · EITHER
 - **Goal:** Move abandoned `backend/` (Python) and `mobile/` (Expo) out of the active build path without deleting history.
 - **User-visible outcome:** Cleaner repo; `pnpm install`/`build` no longer touches dead apps.
 - **Allowed files:** `git mv backend/ archive/backend/`, `git mv mobile/ archive/mobile/`; `pnpm-workspace.yaml` (already only globs `apps/*`,`packages/*` — confirm no reference); a short `archive/README.md` explaining status.
@@ -120,7 +120,7 @@ Global verification / forbidden-file defaults:
 - **Rollback:** `git mv archive/backend backend && git mv archive/mobile mobile`.
 - **Commit message:** `chore(repo): archive legacy python backend and expo mobile`
 
-### MOM-019 - Add health endpoint - READY - CODEX
+### MOM-019 - Add health endpoint - **DONE** (verified 2026-07-06: `apps/api/src/health/health.{controller,module}.ts` exist, registered in `app.module.ts`; `GET /api/v1/health` is `@Public()` + `@SkipThrottle()`, dependency-free; a `GET /api/v1/health/db` DB-ping probe also exists for MOM-086, kept separate so a DB outage can't fail liveness) - CODEX
 - **Goal:** Public, unauthenticated `GET /api/v1/health` returning liveness (DB ping deferred to MOM-086).
 - **User-visible outcome:** Deploy platforms and uptime checks get a stable health URL.
 - **Allowed files:** new `apps/api/src/health/health.module.ts`, `health.controller.ts`; register in `apps/api/src/app.module.ts`; one spec in `apps/api/test/`.
@@ -135,7 +135,7 @@ Global verification / forbidden-file defaults:
 - **Rollback:** Remove module + revert `app.module.ts` import.
 - **Commit message:** `feat(api): add unauthenticated health endpoint`
 
-### MOM-017 - API security hardening (helmet + throttling) - READY - NEEDS_REPO_INSPECTION - CODEX
+### MOM-017 - API security hardening (helmet + throttling) - **DONE** (verified 2026-07-06: `main.ts` applies `helmet()` globally; `app.module.ts` registers a global `ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }])` + `APP_GUARD: ThrottlerGuard`; health endpoint carries `@SkipThrottle()` so liveness checks are unaffected) - CODEX
 - **Goal:** Add HTTP hardening headers and global rate limiting. **Not** validation/prefix/CORS — those already exist in `main.ts`.
 - **User-visible outcome:** App is safer to expose on the public internet (single-user).
 - **Allowed files:** `apps/api/src/main.ts`, `apps/api/src/app.module.ts`, `apps/api/package.json` (add `helmet`, `@nestjs/throttler`), `pnpm-lock.yaml`, `apps/api/src/common/*` for config; a spec.
@@ -151,7 +151,7 @@ Global verification / forbidden-file defaults:
 - **Rollback:** Revert `main.ts`/`app.module.ts`, drop the two deps.
 - **Commit message:** `feat(api): add helmet and global rate limiting`
 
-### MOM-006 - Frontend utility foundation - READY - CODEX
+### MOM-006 - Frontend utility foundation - **DONE** (verified 2026-07-06: `apps/web/app/lib/cn.ts` exists and is used throughout `ui.tsx` and every page touched this session; stale READY status) - CODEX
 - **Goal:** Introduce shared FE utilities (`cn()` class merger + minimal helpers) as the base for the design system, without adding a component library yet.
 - **User-visible outcome:** None; unblocks MOM-007/009/011.
 - **Allowed files:** `apps/web/app/lib/` (new `cn.ts`/`utils.ts`), `apps/web/package.json` (add `clsx` + `tailwind-merge` only), `pnpm-lock.yaml`.
@@ -163,7 +163,7 @@ Global verification / forbidden-file defaults:
 - **Rollback:** Delete files, drop the two deps.
 - **Commit message:** `feat(web): add cn() and frontend utility foundation`
 
-### MOM-008 - Navigation model - READY - CODEX
+### MOM-008 - Navigation model - **DONE** (verified 2026-07-06: `apps/web/app/lib/navigation.ts` exists, extended this session for MOM-065's Story Bank entry; stale READY status) - CODEX
 - **Goal:** Single source of truth for app navigation (labels, hrefs, icons, mobile-primary flag) as data — no UI change yet.
 - **User-visible outcome:** None yet; MOM-009/011 consume it.
 - **Allowed files:** new `apps/web/app/lib/navigation.ts` (or `nav-config.ts`).
@@ -177,7 +177,7 @@ Global verification / forbidden-file defaults:
 - **Rollback:** Delete the file.
 - **Commit message:** `feat(web): add central navigation model`
 
-### MOM-012 - `/today` stub route and redirect - READY - CODEX
+### MOM-012 - `/today` stub route and redirect - **DONE** (verified 2026-07-06: `/today` has been the live, fully-wired priority queue — not a stub — for most of this session's history; stale READY status) - CODEX
 - **Goal:** Create a real `/today` route (stub content) and make it the post-login landing target.
 - **User-visible outcome:** After login the user lands on **Today** (even if it's a placeholder), matching the North Star loop.
 - **Allowed files:** new `apps/web/app/(authenticated)/today/page.tsx`; `apps/web/app/page.tsx`; `apps/web/app/(auth)/login/page.tsx`; `apps/web/app/(auth)/register/page.tsx`; `apps/web/app/(authenticated)/layout.tsx` for brand/nav target only.
@@ -192,7 +192,7 @@ Global verification / forbidden-file defaults:
 - **Rollback:** Delete `today/`, revert redirect.
 - **Commit message:** `feat(web): add /today stub route and post-login redirect`
 
-### MOM-004 - Rewrite root project docs - READY - CLAUDE
+### MOM-004 - Rewrite root project docs - **DONE** (see 2026-07-05 LOG entry — README refreshed; stale READY status) - CLAUDE
 - **Goal:** Replace the outdated root `README.md` with accurate setup/run/deploy instructions reflecting the pnpm monorepo (api/web/shared) and the archive of legacy apps.
 - **User-visible outcome:** A new contributor (or future agent) can bootstrap the app from the README alone.
 - **Allowed files:** `README.md`, optional `docs/` supporting pages. No `CLAUDE.md`/plan edits.
@@ -204,7 +204,7 @@ Global verification / forbidden-file defaults:
 - **Rollback:** `git checkout -- README.md`.
 - **Commit message:** `docs: rewrite root README for pnpm monorepo`
 
-### MOM-005 — Architecture doctrine ADRs · READY · CLAUDE
+### MOM-005 — Architecture doctrine ADRs · **DONE** (verified 2026-07-06: all four required ADRs exist — `0001-nestjs-api-is-backend-of-record.md`, `0002-reviewstate-polymorphic-object-reference.md`, `0003-learning-engine-coexists-with-mission-engine.md`, `0004-no-copyrighted-problem-statements-in-seeds.md` — plus 0005-0007 added by later work (Story Bank schema, backup strategy, AI grading scaffold); stale READY status) · CLAUDE
 - **Goal:** Capture the load-bearing decisions from this planning pass as ADRs so implementers don't re-litigate them.
 - **User-visible outcome:** None; reduces future churn/regressions.
 - **Allowed files:** `docs/adr/000X-*.md` (new). Cross-link from `DECISIONS.md`.
@@ -235,40 +235,60 @@ Global verification / forbidden-file defaults:
 - **MOM-010** Desktop sidebar + top bar — **DONE** (verified: `Sidebar.tsx` exists).
 - **MOM-011** Rewrite authenticated layout shell (mobile-first) — **DONE** (implied by
   MOM-009/010 both being real; no further stub nav found).
-- **MOM-013** Theme + typography baseline (dark/light) — **PARTIALLY DONE**, corrected
-  2026-07-05 after an overclaim earlier the same session: the design-system primitives
-  (`ui.tsx`'s Card/Badge/Spinner/ErrorBanner/EmptyState) and auth pages
-  (login/register) do support dark mode, and `/practice`+`/today` (touched heavily this
-  session) do too, but a census of every `(authenticated)/*/page.tsx` found **zero**
-  `dark:` classes on 11 other top-level pages (attempts, calendar, career, dashboard,
-  jobs, learning, missions, profile, questions, settings, study-plan) — their headings,
-  labels, and custom form elements are light-only, even though the `Card`/`Badge`
-  components they use already flip correctly. Fixing this page-by-page, starting with
-  the smaller/higher-traffic ones.
+- **MOM-013** Theme + typography baseline (dark/light) — **DONE**, re-audited 2026-07-06.
+  The 2026-07-05 "zero `dark:` classes on 11 pages" finding was stale — later
+  session work (not reflected back into this backlog at the time) had already added
+  `dark:` coverage to all 11 (attempts 3, calendar 13, career 11, dashboard 23, jobs 16,
+  learning 12, missions 12, profile 17, questions 6, settings 26, study-plan 40 `dark:`
+  occurrences, re-counted 2026-07-06). Re-audit found one genuine remaining gap —
+  `calendar/page.tsx`'s reminder-dismiss button (`border-zinc-300`/`text-zinc-600`/
+  `hover:bg-zinc-50` with no `dark:` variants) — fixed. A repo-wide grep for the classic
+  light-only patterns (`text-gray-*`, `bg-white`, `border-gray-*`, `text-black`, unpaired
+  `text-zinc-{700,800,900}`, unpaired `border-zinc-300`/`bg-zinc-50`/`bg-zinc-100`) across
+  all 11 pages now returns no further hits.
 - **MOM-014** Restyle auth pages for phone — **DONE** (verified: login/register already
   styled with dark-mode-aware Tailwind classes).
 - **MOM-015** PWA manifest + icons — **DONE** (verified: `apps/web/app/manifest.ts`
   exists, plus `icon.tsx`/`apple-icon.tsx`/`pwa-icon-*` routes seen in build output).
-- **MOM-016** Offline page + service worker — **DEFERRED** (SPIKE-002 outcome, see
-  `DECISIONS.MD` D-007 — real auth/caching risks identified, correctly not shipped).
+- **MOM-016** Offline page + service worker — **DONE** 2026-07-06, reversing the earlier
+  DEFER (see SPIKE-002 above for rationale). `apps/web/public/sw.js`,
+  `app/offline/page.tsx`, `app/components/sw-register.tsx` (production-only registration,
+  mounted in `layout.tsx`), `app/components/offline-banner.tsx` (connectivity banner).
 
 ### Track C — API Foundation · Gate 1
-- **MOM-017** Security hardening — detailed in §3.
-- **MOM-018** Auth throttling + registration lock — READY after MOM-017.
-- **MOM-019** Health endpoint — detailed in §3.
+- **MOM-017** Security hardening — **DONE**, detailed in §3.
+- **MOM-018** Auth throttling + registration lock — **DONE** (verified 2026-07-06:
+  `auth.controller.ts`'s login/register handlers both carry `@Throttle(AUTH_THROTTLE)`,
+  a tighter limit than the global default; stale READY status).
+- **MOM-019** Health endpoint — **DONE**, detailed in §3.
 - **MOM-020** Neon `directUrl` support — **DONE** (verified 2026-07-05:
   `schema.prisma`'s `datasource db` already has `directUrl = env("DIRECT_URL")` with a
   `// MOM-020` comment; `.env`/`.env.example`/README's env table all document it; stale
   NEEDS_REPO_INSPECTION status — this was independently re-verified as P1 item #1 earlier
   in this session too).
-- **MOM-021** First deploy (Vercel + Render + Neon) — BLOCKED on credentials/hosting
-  accounts this agent doesn't have; otherwise ready (MOM-015/019/020 all done).
+- **MOM-021** First deploy (Vercel + Render + Neon) — **BLOCKED on credentials/hosting
+  accounts this agent doesn't have** (real accounts, real secrets — never something an
+  agent should self-provision). **Scaffolded dormant** 2026-07-06 so the actual deploy is
+  a config-only, no-code-change action once the user has accounts: `render.yaml` (API
+  Blueprint — build/start/health/env, secrets marked `sync: false`), `apps/web/vercel.json`
+  (build command), `.github/workflows/keepwarm.yml` (SPIKE-008). README's new "Deploy"
+  section documents the 7-step walkthrough.
 
 ### Track D — Knowledge Kernel (type/service layer only)
-- **MOM-022** Shared domain constants — READY (extend `packages/shared/src/index.ts`; `QUESTION_TYPES` already exists).
-- **MOM-023** Rubric type definitions — READY (Question.rubric Json already present; formalize the shape).
-- **MOM-024** Content validation framework (`content:validate/stats/sample`) — READY.
-- **MOM-025** KnowledgeObject response helpers — BLOCKED on MOM-022/023.
+- **MOM-022** Shared domain constants — **DONE** (verified 2026-07-06:
+  `KnowledgeDomain`/`KnowledgeProvenance`/`KnowledgeQualityStatus`/`ReviewableObjectType`
+  all defined in `packages/shared/src/index.ts`; stale READY status).
+- **MOM-023** Rubric type definitions — **DONE** (verified 2026-07-06: `Rubric`/
+  `RubricCriterion`/`RubricCriterionLevel` + `isRubric()` type guard exist, matching
+  `Question.rubric`'s Json shape; stale READY status).
+- **MOM-024** Content validation framework (`content:validate/stats/sample`) — **DONE**
+  (verified 2026-07-06: `apps/api/scripts/content-{validate,stats,sample,lib}.ts` exist
+  and are wired to `package.json`'s `content:validate/stats/sample` scripts; stale READY
+  status).
+- **MOM-025** KnowledgeObject response helpers — **DONE** (verified 2026-07-06:
+  `questionToKnowledgeObject()` in `packages/shared/src/index.ts` maps a `QuestionResponse`
+  to the shared `KnowledgeObject` shape; stale BLOCKED status, blockers were already
+  resolved).
 
 ### Track E — Review & Learning Engine · Gate 2
 - **MOM-026** Design ReviewState migration — **DONE** (2026-07-05). SPIKE-003 answered in
@@ -378,37 +398,167 @@ Global verification / forbidden-file defaults:
   makes, confirmed both questions were included in order.
 
 ### Track G — Content Factory · Gate 3
-- **MOM-043** Seed-data structure — READY (`prisma/seed.ts` exists; restructure).
-- **MOM-044** Idempotent seed upsert utilities — READY.
-- **MOM-045** Seed DSA patterns — BLOCKED on MOM-044.
-- **MOM-046/047/048** DSA ladder batches (50/100/150) — BLOCKED chain; each gated by `content:validate` (kill rule: defer batch 3 if batch 1/2 fails).
-- **MOM-049** LeetCode import service — **NEEDS_SPIKE** (SPIKE-006 GraphQL shape); links/metadata only, no copyrighted statements.
-- **MOM-050** DSA progress API · **MOM-051** DSA ladder UI — BLOCKED on seeds.
-- **MOM-052/053/054** CS fundamentals batches (50/100/150).
-- **MOM-055/056** System design batches (10/25) · **MOM-057** System design editor (7-section template).
-- **MOM-058/059** Behavioral prompt batches (30/60).
-- **MOM-060** Company packs (20) — extends existing `Company` model/`companies` module.
+- **MOM-043** Seed-data structure — **DONE** (see 2026-07-05 LOG entry — split into
+  `seed-data.ts`).
+- **MOM-044** Idempotent seed upsert utilities — **DONE** (see 2026-07-05 LOG entry).
+- **MOM-045** Seed DSA patterns — **DONE** (150/150 DSA items seeded, all with pattern
+  tags — verified via `content:stats`/`content:validate`; stale BLOCKED status).
+- **MOM-046/047/048** DSA ladder batches (50/100/150) — **DONE** (150/150, verified via
+  `content:stats`; MOM-048's specific "final item" was logged 2026-07-05).
+- **MOM-049** LeetCode import service — **NEEDS_SPIKE** (SPIKE-006 GraphQL shape), still
+  genuinely open. Deliberately not attempted autonomously: scraping/calling a third-party
+  API's GraphQL endpoint without an explicit go-ahead is a different risk class than
+  writing original seed content, even though the plan scopes it to links/metadata only.
+- **MOM-050** DSA progress API · **MOM-051** DSA ladder UI — **DONE** (verified 2026-07-06:
+  `apps/api/src/dsa/{dsa.service,dsa.controller,dsa.module}.ts` registered in
+  `app.module.ts` with test coverage; `apps/web/app/(authenticated)/practice/dsa-ladder/
+  page.tsx` exists and is linked from `/practice`; stale BLOCKED status, blockers
+  (seed batches) were already resolved).
+- **MOM-052/053/054** CS fundamentals batches (50/100/150) — **DONE** 2026-07-06.
+  `pnpm content:stats` was at 149/150 (one short) when checked this session; added one
+  original (non-LeetCode, conceptual) `nodejs`-type seed item on backpressure in stream
+  pipelines, bringing the total to exactly 150. `content:validate` — 0 errors, 0 warnings.
+- **MOM-055/056** System design batches (10/25) — **DONE** (25/25, verified earlier this
+  session via `content:stats`) · **MOM-057** System design editor (7-section template) —
+  **DONE** (verified: `SYSTEM_DESIGN_TEMPLATE` used in `SystemDesignAnswerPanel.tsx`, per
+  MOM-038's log entry).
+- **MOM-058/059** Behavioral prompt batches (30/60) — **DONE** (60/60, verified via
+  `content:stats`).
+- **MOM-060** Company packs (20) — **DONE** (verified 2026-07-06: `companies` array in
+  `apps/api/prisma/seed-data.ts` has exactly 20 entries with focus-area/linked-track notes
+  per plan §8.2; stale unmarked status).
 - **MOM-061** Role tracks (8) — **DONE** (verified 2026-07-05: `CAREER_ROLE_TRACKS` in
   `packages/shared/src/index.ts` now defines 10 tracks, covering all 8 plan categories;
   this entry was stale, done in an earlier session but not marked here).
-- **MOM-062** Content coverage dashboard — BLOCKED on MOM-024.
+- **MOM-062** Content coverage dashboard — **DONE** (verified 2026-07-06:
+  `CONTENT_COVERAGE_TARGETS`/`ContentCoverageResponse` in `packages/shared`, backed by
+  `apps/api/src/content/content.service.ts` and rendered at
+  `apps/web/app/(authenticated)/settings/content/page.tsx`; stale BLOCKED status, blocker
+  already resolved).
 
 ### Track H — Story & Behavioral Engine · Gate 2/3
-- **MOM-063** Story schema + review integration — **NEEDS_SPIKE** (no `Story` model exists yet;
-  SPIKE-003's ReviewState-reuse findings apply directly once `Story` exists, but `Story`'s own
-  schema — fields, columns, indexes — is not yet designed and needs its own short spike).
-  *Migration → human-gated.*
-- **MOM-064** Story CRUD API · **MOM-065** Story frontend · **MOM-066** Link stories↔prompts · **MOM-067** Rehearsal sessions — BLOCKED chain on MOM-063.
+- **MOM-063** Story schema + review integration — **DONE** 2026-07-06, human-approved. See
+  `docs/adr/0005-story-bank-schema.md`. Three new tables (`stories`, `story_companies`,
+  `story_prompts`), purely additive migration `20260705174649_add_story_bank`. Reuses
+  ADR-0002's polymorphic `ReviewState` (`objectType: 'story'`) — no `ReviewState` schema
+  change needed.
+- **MOM-064** Story CRUD API — **DONE** 2026-07-06. New
+  `apps/api/src/stories/{stories.service,stories.controller,stories.module}.ts` + 2 DTOs,
+  registered in `app.module.ts`. `GET/POST /stories`, `GET/PATCH/DELETE /stories/:id`, all
+  scoped to the authenticated user (`findFirst`/`updateMany`-style ownership checks, same
+  pattern as `TasksService`). Company tagging mirrors `QuestionsService`'s
+  delete-then-recreate join-table pattern. Delete cleans up any `ReviewState` row in the
+  same transaction (ADR-0002/0003 orphan-prevention pattern, same as
+  `questions.service.ts`). `apps/web/app/lib/api-client.ts` gained a `storiesApi` client;
+  no page consumes it yet (that's MOM-065). Verified via 5 unit tests + full
+  build/lint/typecheck/test + a live round trip (create with a company link, get, list,
+  update, delete → 404, unauthenticated → 401).
+- **MOM-065** Story frontend — **DONE** 2026-07-06. New
+  `apps/web/app/(authenticated)/stories/page.tsx` — list + inline STAR create/edit form
+  (Situation/Task/Action/Result/Metrics as separate fields), comma-separated competency-tag
+  and follow-up-question inputs, a toggle-chip company multi-select reusing `companiesApi`,
+  expand/collapse per-story detail view, and delete-with-confirm — same conventions as
+  `/study-plan`/`/questions`. Added a "Story Bank" nav entry
+  (`apps/web/app/lib/navigation.ts`, non-primary — all 5 mobile bottom-tab slots already
+  used). No backend changes; consumes the `storiesApi` client MOM-064 already added.
+  Verified via lint/typecheck/build (`/stories` now a 32nd static route) and an HTTP smoke
+  test (both the compiled API and a production web server started locally; `GET /stories`
+  returned 200 with no server-side render crash — full interactive/auth-gated behavior not
+  visually verified since no browser tool is available in this environment).
+- **MOM-066** Link stories↔prompts — **DONE** 2026-07-06. `StoriesService` gained
+  `linkPrompt`/`unlinkPrompt` (idempotent link — re-linking an existing pair is a no-op,
+  not a conflict error; only `type: 'behavioral'` questions are linkable, enforced with a
+  400 otherwise). `POST/DELETE /stories/:id/prompts[/:questionId]`. `StoryResponse` gained
+  `prompts: StoryPromptLink[]` (denormalized `questionTitle` for display, no join needed
+  client-side). Frontend: `apps/web/app/(authenticated)/questions/[id]/page.tsx` gained an
+  "Answer with a Story" card, shown only for behavioral questions — lists linked stories
+  with an unlink button and a select+link control for the user's unlinked stories. Verified
+  via 5 new unit tests (10 total in `stories.service.spec.ts`) + full build/lint/typecheck
+  + a live round trip (link → idempotent re-link (still 201) → unlink → cleanup, against a
+  real behavioral question from the seed data).
+- **MOM-067** Rehearsal sessions — **DONE** 2026-07-06. This closes Track H
+  (MOM-063→064→065→066→067) end to end in one session.
+  `ReviewsService`'s `objectType` allow-list now includes `'story'` alongside
+  `'question'`; `record()` additionally verifies story ownership before scheduling
+  (`ensureAccessible` — Story is per-user private data, unlike the shared `Question`
+  bank, so this prevents user A from reviewing/reading user B's story indirectly via
+  review state). `listDue()` enriches story-type due rows with the story's title,
+  mirroring the existing question-title enrichment. Frontend: the Story Bank page
+  gained a "Rehearse" action (self-rate 1-5, calling the same `reviewsApi.record()`
+  Today already uses) — this is the actual entry point into the FSRS loop for stories,
+  since there's no session/practice flow for them the way there is for questions.
+  Also fixed a real bug found while wiring this up: Today's due-review card
+  unconditionally linked to `/questions/:objectId`, which would 404/misnavigate for a
+  story-type review (no per-story detail route exists yet) — now branches on
+  `review.objectType` and links story reviews to `/stories` instead. Verified via 3 new
+  unit tests (8 total in `reviews.service.spec.ts`) + full build/lint/typecheck/test +
+  a live round trip: rehearsed a real story through 3 self-ratings via
+  `POST /reviews/story/:id`, confirmed the `ReviewState` row persisted correctly in
+  Postgres with the right FSRS values (reps: 3, lapses: 1, state: 3/Relearning after
+  two "Again" grades), then deleted the story and confirmed the transactional
+  orphan-cleanup removed the `ReviewState` row too (0 remaining).
 
 ### Track I — AI Feedback Engine · Gate 4
-- **MOM-068** AI SDK spike — **NEEDS_SPIKE** (SPIKE-005 Anthropic structured output; verify installed SDK before any code).
-- **MOM-069** AiUsage migration — BLOCKED on MOM-068 + human approval.
-- **MOM-070** Budget service · **MOM-071** Grading service · **MOM-072** Grade-attempt endpoint — BLOCKED chain.
-- **MOM-073** AI feedback FE card · **MOM-074** Integrate into reflection panel — BLOCKED on MOM-039/072; **DEFER** until self-rating loop (Gate 2) is complete.
+- **MOM-068** AI SDK spike — **DONE** 2026-07-06 (SPIKE-005 resolved). Consulted the
+  bundled `claude-api` skill, then verified directly against the *installed*
+  `@anthropic-ai/sdk` package types (the skill's docs describe a newer GA shape than
+  what `^0.70.0` shipped — `messages.parse`/`zodOutputFormat` did not exist under that
+  version; bumped to `^0.110.0`, which matches the skill's documented GA structured-output
+  API: `client.messages.parse()` + `zodOutputFormat` from `@anthropic-ai/sdk/helpers/zod`,
+  `output_config: {effort, format}`, `thinking: {type: 'adaptive'}`, typed error classes).
+  Also discovered the installed `zod` schema must be built from the `zod/v4` subpath
+  (`import * as z from 'zod/v4'`) — the SDK's `zodOutputFormat` type rejects a classic
+  `zod` v3 `ZodObject`. Model: `claude-opus-4-8` (plan default, current pricing).
+- **MOM-069** AiUsage migration — **DONE** 2026-07-06, human-approved (blanket migration
+  approval covers the remainder of the plan). `AiUsage(userId, day @db.Date, requests,
+  inputTokens, outputTokens, costUsd, @@unique([userId, day]))` — migration
+  `20260705230553_add_ai_usage`, applied to the local Postgres instance.
+- **MOM-070** Budget service · **MOM-071** Grading service · **MOM-072** Grade-attempt
+  endpoint — **DONE** 2026-07-06. `apps/api/src/ai/`: `budget.service.ts`
+  (`getUsage`/`checkAndReserve`/`record`, daily-budget gate, default `$1.00` via
+  `AI_DAILY_BUDGET_USD`), `grading.service.ts` (structured grading via
+  `messages.parse`+`zodOutputFormat(GradeResultSchema)`, every Anthropic SDK error class
+  caught most-specific-first and turned into `{ok: false, reason}` — **never throws** on a
+  remote failure), `ai.service.ts` (orchestrates cache/force/budget/persistence),
+  `ai.controller.ts`. Endpoints: `POST /attempts/:id/grade` (idempotent, `?force=true`
+  regrades) and `GET /ai/usage`. `ANTHROPIC_API_KEY` absent ⇒ `available: false`
+  everywhere, checked explicitly via `common/config.ts::isAiGradingAvailable` (not
+  inferred from an SDK construction failure). This activates the previously-dead
+  `AnswerAttempt.aiScore`/`aiFeedback` columns. See `docs/adr/0007-ai-grading-scaffold.md`.
+  Verified live against a running API + real Postgres with no key configured:
+  `GET /ai/usage` → `available:false`; `POST /attempts/:id/grade` → clean `503`, no crash.
+  Zero-network unit tests (mocked Anthropic client, real SDK error classes constructed
+  directly): `ai.budget.spec.ts`, `ai.grading.spec.ts`, `ai.service.spec.ts` — 14 tests.
+- **MOM-073** AI feedback FE card · **MOM-074** Integrate into reflection panel —
+  **DONE** 2026-07-06 (Gate 2's self-rating loop has been complete since MOM-039, so the
+  original DEFER no longer applies). `apps/web/app/components/ai-feedback-card.tsx`
+  probes `GET /ai/usage` once on mount and renders nothing at all when
+  `available:false`; otherwise shows a "Grade with AI" button, a "Regrade" affordance
+  once graded, and the persisted feedback through the existing `Markdown` component.
+  Wired into `(authenticated)/attempts/[id]/page.tsx` (attempt detail view) rather than
+  live inside the in-session `ReflectionPanel`, since grading happens after an attempt is
+  already persisted, not mid-session.
 
 ### Track J — Career Engine · Gate 5
-- **MOM-075** Task consolidation migration design (`StudyPlanItem`→`Task`) — **NEEDS_SPIKE** (SPIKE-007). *Migration → human-gated.*
-- **MOM-076** Merge StudyPlanItem into Task · **MOM-077** Remove old study-plan code — BLOCKED on MOM-075.
+- **MOM-075/076/077** Task consolidation (`StudyPlanItem`→`Task`) — **DONE** 2026-07-06,
+  human-approved (user granted blanket approval to cross the D-004 migration gate for the
+  remainder of the plan). SPIKE-007's mapping: `title`/`notes`/`topicId`/`status` carry
+  over unchanged (`StudyPlanStatus` is a strict subset of `TaskStatus`); `targetDate` →
+  `dueDate`; `priority` defaults to `'medium'` (StudyPlanItem never had one); `type` is
+  always `'study'`. Migration `20260705172825_merge_study_plan_into_task` backfills every
+  `study_plan_items` row into `tasks` before dropping the table. The standalone
+  `apps/api/src/study-plan/*` module, its DTOs, and `packages/shared`'s
+  `StudyPlanItemResponse`/`STUDY_PLAN_STATUSES` are removed; `TasksService`/`TasksController`
+  gained a `remove()`/`DELETE /tasks/:id` (StudyPlanItem had delete, Task didn't yet).
+  `apps/web/(authenticated)/study-plan/page.tsx` repointed onto `tasksApi` with
+  `type: 'study'` — UI/UX unchanged, same route. **Known incident:** the create-only
+  migration command unexpectedly applied itself immediately (dropping `study_plan_items`
+  before the backfill INSERT was hand-added to the migration SQL) — see `LOG.MD` for
+  detail; the backfill was still added to the migration file for correctness on any other
+  environment, but any pre-existing local `study_plan_items` rows in this dev DB could not
+  be recovered. Verified via unit tests + full build/lint/typecheck + a live round trip
+  (create/list/update/delete a `type: 'study'` task via `/tasks`, confirmed `/study-plan`
+  API route now 404s).
 - **MOM-078** Reminder due-delivery / scheduler semantics — **RESOLVED, no scheduler
   needed** (2026-07-05 inspection). Due-delivery is correctly just a query-time filter
   (`status: 'pending' AND dueAt <= now`, see `tasks.service.ts` `listReminders`) — there's
@@ -420,16 +570,27 @@ Global verification / forbidden-file defaults:
   `remindersApi` exactly; no route mismatch, no missing filters needed. The real gap was
   UI: the calendar page fetched reminders but never called `.dismiss()`. Fixed — added a
   Dismiss button to the calendar Reminders card.
-- **MOM-080** Reminder UI (Today + top bar) — **DONE (Today half)** 2026-07-05.
-  `apps/web/app/(authenticated)/today/page.tsx` now fetches and displays pending
-  reminders alongside the recommendation queue, with a working Dismiss action. Top-bar
-  badge/bell is still not implemented — smaller follow-up, not blocking.
+- **MOM-080** Reminder UI (Today + top bar) — **DONE** 2026-07-06. Today-half shipped
+  2026-07-05 (see history below); top-bar half closed 2026-07-06: new
+  `apps/web/app/components/ReminderBell.tsx` fetches `remindersApi.list()` once on mount
+  and renders a bell icon linking to `/today`, with a small red count badge when any
+  pending reminder's `dueAt` has passed (no badge otherwise — ambient signal only, no
+  polling/websocket). Wired into `(authenticated)/layout.tsx`'s header next to
+  `ThemeToggle`.
 - **MOM-081** Jobs page → mobile-first list (no drag-drop) — **DONE** (verified 2026-07-05:
   `jobs/page.tsx` is already a single-column, filterable, mobile-first card list with a
   responsive form grid; no drag-drop anywhere).
 - **MOM-082** Career hub — **DONE** (verified 2026-07-05: `career/page.tsx` already shows
   role-readiness bars, role track selection, and career goals; fully built out).
-- **MOM-083** Link jobs ↔ prep objects — BLOCKED on MOM-032.
+- **MOM-083** Link jobs ↔ prep objects — **DONE** (verified 2026-07-06: already fully
+  wired, stale BLOCKED status — `JobApplication.roleTrackId` links a job to a
+  `CAREER_ROLE_TRACKS` entry; `POST /jobs/:id/generate-prep` (`jobs.service.ts`'s
+  `generatePrep()`) turns that role track's checklist into up to 5 `Task` rows carrying
+  `jobApplicationId`/`roleTrackId`/`area`/`priority`/`dueDate`, plus ensures a deadline
+  reminder; the job detail page (`jobs/[id]/page.tsx`) has a working "Generate Prep"
+  button calling it. Generated tasks flow into the existing Task/Reminder pipeline
+  (MOM-078-080) and so already surface on Today/the reminder bell — no separate Today
+  wiring needed.).
 
 ### Track K — Operations & Hardening · Gate 6
 - **MOM-084** Error/loading boundaries — **DONE**. Already had `global-error.tsx` (root),
@@ -437,9 +598,31 @@ Global verification / forbidden-file defaults:
   gap 2026-07-05: `(auth)` (login/register) had no scoped error boundary, so a render
   error there fell through to `global-error.tsx`, replacing the whole `<html>` instead of
   just the auth card. Added `(auth)/error.tsx` matching the `(authenticated)` pattern.
-- **MOM-085** API exception filter + request logging — READY after MOM-017.
-- **MOM-086** DB health ping — extends MOM-019.
-- **MOM-087** Backup workflow (weekly encrypted) — **NEEDS_SPIKE** (Neon backup strategy).
+- **MOM-085** API exception filter + request logging — **DONE** (verified 2026-07-06:
+  `apps/api/src/common/all-exceptions.filter.ts` registered globally in `main.ts` via
+  `app.useGlobalFilters(...)`; `apps/api/src/common/request-logging.middleware.ts`
+  registered for all routes in `app.module.ts`'s `configure()`; stale READY status).
+- **MOM-086** DB health ping — **DONE** (verified 2026-07-06:
+  `GET /api/v1/health/db` in `health.controller.ts` runs `SELECT 1` via Prisma and
+  returns 503 on failure, kept separate from the base liveness route; stale READY
+  status).
+- **MOM-087** Backup workflow (weekly encrypted) — **DONE (design + implementation;
+  execution untested against real infra)** 2026-07-06. See
+  `docs/adr/0006-backup-strategy.md`. New `.github/workflows/backup.yml` — weekly cron +
+  manual `workflow_dispatch`, `pg_dump --format=custom` piped through `gpg --symmetric`
+  (AES256, passphrase on fd 3 to avoid colliding with the piped dump data on stdin —
+  verified locally with a fake-data round trip), uploaded as a 90-day-retention GitHub
+  Actions artifact. Needs no credentials this agent holds to *merge safely*: the first
+  step checks for `BACKUP_DATABASE_URL`/`BACKUP_GPG_PASSPHRASE` secrets and exits cleanly
+  (not a failure) if either is absent, so the workflow sits dormant with no red-X noise
+  until the user configures both. New `docs/runbooks/backup-restore.md` documents restore
+  as a deliberate manual procedure, not a one-click job. **Known gap, documented not
+  hidden:** 90-day GitHub artifact retention is not a durable long-term archive; swapping
+  in real object storage is the natural follow-up once the user picks a provider.
+  **Genuinely untested:** the real `pg_dump`/`pg_restore` invocations against an actual
+  Postgres/Neon instance — neither binary is installed in this sandbox, and there is no
+  real target database to restore into. This is disclosed as a real limitation, not
+  claimed as fully verified.
 - **MOM-088** Lighthouse + accessibility pass — BLOCKED on Gate 1 UI.
 - **MOM-089** README rewrite — folded into MOM-004; final polish here.
 - **MOM-090** Final full-product golden-path verification — BLOCKED on all gates.
@@ -451,13 +634,13 @@ Global verification / forbidden-file defaults:
 | Spike | Question to answer | Gates |
 |---|---|---|
 | SPIKE-001 | shadcn + Tailwind v4 + Next 16.2.9 compatibility (React 19) | MOM-007 |
-| SPIKE-002 | Service-worker cache vs JWT auth behavior | MOM-016 |
-| SPIKE-003 | ReviewState polymorphic `objectType/objectId` migration on existing DB — **DONE 2026-07-05 for ReviewState/MOM-026**, see ADR-0002. `Story`'s own schema (MOM-063) is separate and still open. | MOM-026, MOM-063 |
+| SPIKE-002 | Service-worker cache vs JWT auth behavior — **RESOLVED 2026-07-06, reversing the earlier DEFER** (D-007's multi-tenant Cache-API leak concern doesn't apply here: this is a single-user, localStorage-Bearer app with registration locked down — see ADR-0001/0009 — so there's no second tenant whose cached HTML could leak). Shipped a hand-rolled `apps/web/public/sw.js`: precache `/`+`/offline` only, network-first-with-cache-fallback for same-origin navigations/static assets, **never caches cross-origin API calls or authenticated page HTML**, old-cache cleanup on activate. | MOM-016 |
+| SPIKE-003 | ReviewState polymorphic `objectType/objectId` migration on existing DB — **DONE 2026-07-05 for ReviewState/MOM-026**, see ADR-0002. `Story`'s own schema (MOM-063) — **DONE 2026-07-06**, see ADR-0005. | MOM-026, MOM-063 |
 | SPIKE-004 | `ts-fsrs` real API + scheduling semantics — **DONE 2026-07-05**, see `apps/api/src/reviews/fsrs-scheduler.ts` | MOM-030 |
-| SPIKE-005 | Anthropic SDK structured output — verify **installed** package, model ids, usage shape, error classes | MOM-068 |
-| SPIKE-006 | LeetCode GraphQL response shape (metadata/links only) | MOM-049 |
-| SPIKE-007 | `StudyPlanItem` → `Task` field mapping + backfill | MOM-075 |
-| SPIKE-008 | Render cold-start reality + keep-warm | MOM-021 |
+| SPIKE-005 | Anthropic SDK structured output — **DONE 2026-07-06**, see MOM-068 | MOM-068 |
+| SPIKE-006 | LeetCode GraphQL response shape (metadata/links only) — **DEFERRED**, human judgment call (third-party GraphQL scope; not required for the study-loop-depth priority) | MOM-049 |
+| SPIKE-007 | `StudyPlanItem` → `Task` field mapping + backfill — **DONE 2026-07-06**, see MOM-075/076/077 | MOM-075 |
+| SPIKE-008 | Render cold-start reality + keep-warm — **DESIGNED, dormant** 2026-07-06: `.github/workflows/keepwarm.yml` pings `/health` every 10 min during study hours (07:00-24:59 ICT), skips cleanly if `API_HEALTH_URL` isn't set. Real cold-start behavior unverified (no live Render deploy in this environment). | MOM-021 |
 
 ---
 

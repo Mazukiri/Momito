@@ -9,7 +9,6 @@ import { TopicsModule } from './topics/topics.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { AttemptsModule } from './attempts/attempts.module';
 import { DashboardModule } from './dashboard/dashboard.module';
-import { StudyPlanModule } from './study-plan/study-plan.module';
 import { ProfileModule } from './profile/profile.module';
 import { ProfileScoresModule } from './profile-scores/profile-scores.module';
 import { CareerModule } from './career/career.module';
@@ -22,6 +21,8 @@ import { HealthModule } from './health/health.module';
 import { ContentModule } from './content/content.module';
 import { DsaModule } from './dsa/dsa.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { StoriesModule } from './stories/stories.module';
+import { AiModule } from './ai/ai.module';
 import { RequestLoggingMiddleware } from './common/request-logging.middleware';
 
 @Module({
@@ -36,13 +37,13 @@ import { RequestLoggingMiddleware } from './common/request-logging.middleware';
     ContentModule,
     DsaModule,
     ReviewsModule,
+    StoriesModule,
     QuestionsModule,
     TopicsModule,
     CompaniesModule,
     SessionsModule,
     AttemptsModule,
     DashboardModule,
-    StudyPlanModule,
     ProfileModule,
     ProfileScoresModule,
     CareerModule,
@@ -51,6 +52,7 @@ import { RequestLoggingMiddleware } from './common/request-logging.middleware';
     LearningModule,
     MissionsModule,
     RecommendationsModule,
+    AiModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

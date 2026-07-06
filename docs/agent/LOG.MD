@@ -1,5 +1,495 @@
 # LOG
 
+## 2026-07-06 - MOM-087: weekly encrypted backup workflow, design + implementation (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing autonomously per user instruction. MOM-087 was marked NEEDS_SPIKE
+("Neon backup strategy") — genuinely a design question, but one answerable without any
+real Neon/hosting credentials by choosing a design that only needs two secrets the user
+adds later.
+
+**Design (ADR-0006, `docs/adr/0006-backup-strategy.md`):** a GitHub Actions workflow
+(`.github/workflows/backup.yml`), weekly cron + manual `workflow_dispatch`, that dumps the
+production database (`pg_dump --format=custom`), pipes it through `gpg --symmetric`
+(AES256), and uploads the encrypted result as a 90-day-retention Actions artifact — chosen
+over external object storage specifically to avoid needing a *third* untestable secret.
+The first step checks whether `BACKUP_DATABASE_URL`/`BACKUP_GPG_PASSPHRASE` are configured
+and exits cleanly (not a failure) if not, so merging this doesn't create weekly red-X
+noise on a repo that hasn't opted in yet.
+
+**Real bug caught and fixed before it could fail silently in production:** the first draft
+had `pg_dump | gpg --passphrase-fd 0 ... <<< "$PASSPHRASE"` — wiring the passphrase to fd 0
+while also piping the dump into fd 0 via the pipe. These collide; gpg would have read
+whichever arrived first as "the passphrase," most likely corrupting the dump into an
+undecryptable state (or worse, appearing to succeed with a wrong passphrase silently
+baked in). Caught this on a careful re-read, not by running it. Fixed by moving the
+passphrase to fd 3 (`--passphrase-fd 3` + `3<<<`), which the pipe never touches.
+
+**Verified what could be verified without real infra:** this sandbox has `gpg` but not
+`pg_dump`/`pg_restore` (no PostgreSQL client tools installed) and no real target database
+to test a restore into. Did the next best thing — extracted the exact fd-3 passphrase
+pattern into a standalone test with a fake multi-line file standing in for `pg_dump`'s
+output, ran the real encrypt-then-decrypt round trip, and confirmed the decrypted output
+matched the original byte-for-byte. This proves the shell mechanics are correct; the
+`pg_dump`/`pg_restore` commands themselves remain genuinely untested against a real
+database — disclosed as a limitation, not glossed over.
+
+**Files changed:**
+- `docs/adr/0006-backup-strategy.md` (new).
+- `.github/workflows/backup.yml` (new).
+- `docs/runbooks/backup-restore.md` (new) — manual restore procedure, deliberately not a
+  one-click job (restoring onto production should never be a single person acting alone
+  under time pressure without a deliberate pause).
+
+**Verification:**
+- YAML syntax validated via Python's `yaml.safe_load` (no parser available in this repo's
+  own toolchain) — parsed without error.
+- The fd-3 gpg passphrase pattern verified locally via a standalone encrypt/decrypt round
+  trip (see above) — exact byte-for-byte match.
+- **Not verified, disclosed honestly:** the actual `pg_dump`/`pg_restore` commands against
+  a real Postgres/Neon database (no client tools installed locally, no real target to
+  restore into); the workflow's actual execution on GitHub's runners (would need the repo
+  pushed to GitHub with secrets configured to test end-to-end).
+
+**Docs updated:** `BACKLOG.md` (MOM-087 → done, with the untested-scope disclosed inline).
+
+**Next:** the remaining open backlog is now entirely gated on either external credentials
+this agent doesn't hold (MOM-021 deploy, MOM-068+ AI feedback, MOM-049 LeetCode import) or
+larger infra this agent can't provision (MOM-088 Lighthouse needs a real browser + running
+app instance; MOM-090 golden-path needs Gate 4 AI feedback to be meaningfully "final").
+
+---
+
+## 2026-07-06 - Content gap fill (CS Fundamentals 149→150) + stale-backlog sweep (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** After closing Track H, swept remaining `BACKLOG.MD` entries for staleness (same
+pattern as earlier in this session) and found one genuine, small, safe content gap.
+
+**Real gap found and closed:** `pnpm content:stats` showed CS Fundamentals at 149/150 (one
+short of the plan §8.2 target) — summing all 14 `CS_FUNDAMENTALS_TYPES` counts. Added one
+original (not LeetCode-sourced, conceptual) `nodejs`-type seed question on stream
+backpressure in Node.js, bringing the total to exactly 150. `content:validate` — 0 errors,
+0 warnings, both before and after.
+
+**Stale-status corrections (no further code changes, all pre-existing):**
+- MOM-043/044 (seed structure/idempotent upserts) — done in an earlier session, entries
+  never updated.
+- MOM-045/046/047/048 (DSA seed/ladder batches) — 150/150 confirmed via `content:stats`.
+- MOM-050/051 (DSA progress API/ladder UI) — both exist and are tested/linked.
+- MOM-055/056/057 (system design batches/editor) — 25/25 confirmed; editor confirmed via
+  MOM-038's earlier log entry.
+- MOM-058/059 (behavioral batches) — 60/60 confirmed.
+- MOM-060 (company packs) — exactly 20 confirmed by counting the `companies` array.
+- MOM-006/008/012/004 (frontend utility foundation, nav model, `/today` stub, README) —
+  all long done; this session alone extended `navigation.ts` and repeatedly relied on
+  `/today` being the real, live implementation, not a stub.
+- **Deliberately left open, not attempted:** MOM-049 (LeetCode import) — scraping/calling a
+  third-party GraphQL API without an explicit go-ahead is a different risk class than
+  writing original content, even scoped to links/metadata only. Flagging this as a
+  judgment call rather than silently skipping it.
+
+**Files changed:**
+- `apps/api/prisma/seed-data.ts` — one new `nodejs` seed question.
+- `README.md` — corrected the stale "149 CS Fundamentals"/"384 seeded questions" counts to
+  150/385; added `/stories` to the routes table; replaced the dead `/study-plan` API
+  section (routes no longer exist) with a `/tasks`-accurate note and a new "Story Bank" API
+  section; added a "Story Bank" features blurb.
+- `docs/agent/BACKLOG.md` — ~12 stale-status corrections.
+
+**Verification:**
+- `pnpm content:validate` — 0 errors, 0 warnings.
+- `pnpm --filter @momito/api build` / `test` — 82/82 passed (content-only change, no
+  service-layer impact expected or found).
+- `pnpm lint` / `pnpm typecheck` / `pnpm build` (full workspace) — green.
+
+**Docs updated:** `BACKLOG.md`, `README.md`.
+
+---
+
+## 2026-07-06 - MOM-067: story rehearsal sessions — Track H complete (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Closing Track H (Story & Behavioral Engine) end to end in one continuous
+session per user instruction ("do it until you ran out of token and dont stop in the
+middle"). This is the last piece: making stories actually reviewable via FSRS.
+
+**Design:** extended `ReviewsService`'s `SUPPORTED_OBJECT_TYPES` to include `'story'`.
+Unlike `Question` (a shared/global bank any user can review), `Story` is per-user private
+data — added `ensureAccessible()`, called from `record()` before scheduling, which
+`findFirst({id, userId})`-checks story ownership and 404s otherwise. This closes a real
+access-control gap that would otherwise have existed the moment `'story'` became a
+supported type: without it, any authenticated user could pass any story UUID and
+schedule/read review metadata for a story they don't own (the FSRS state itself doesn't
+leak story *content*, but it's still an authorization hole not worth leaving open).
+`listDue()` now also enriches story-type rows with the story's title (mirroring the
+existing question-title lookup, just against `this.prisma.story` instead).
+
+**Frontend — the actual rehearsal entry point:** questions get their first `ReviewState`
+row created implicitly when a user submits a self-rated answer during a practice session
+(`sessions.service.ts`). Stories have no equivalent session flow, so MOM-067 needed its own
+entry point: the Story Bank page gained a "Rehearse" button per story that expands into
+the same 1-5 self-rating row Today already uses for questions, calling
+`reviewsApi.record('story', id, rating)` directly. First rating creates the `ReviewState`
+row (FSRS defaults); after that it's a normal FSRS review like anything else, surfacing on
+`/today` when due.
+
+**Real bug found and fixed while wiring this up:** `/today`'s due-review card always
+built its navigate-on-click target as `/questions/${review.objectId}` — harmless while
+`'question'` was the only supported type, but now that story reviews can appear in the
+same due-queue, this would send a story review to `/questions/<story-uuid>`, which either
+404s or (worse) silently mismatches if a question happened to share that UUID space.
+Fixed by branching on `review.objectType`: story reviews now link to `/stories` (no
+per-story detail route exists yet — MOM-065 only shipped list + inline expand). Also
+changed the badge label to say "Story" instead of "Review" for story-type entries, so the
+queue is self-explanatory instead of ambiguous.
+
+**Files changed:**
+- `apps/api/src/reviews/reviews.service.ts` — `'story'` added to
+  `SUPPORTED_OBJECT_TYPES`; new `ensureAccessible()` ownership check; `listDue()`
+  enriches story titles.
+- `apps/api/test/reviews.service.spec.ts` — fixed a test that had been asserting `'story'`
+  was *unsupported* (now wrong, since MOM-067 supports it — swapped to a genuinely
+  unsupported type, `'behavioral_prompt'`); added 3 new tests (schedules for an owned
+  story, rejects an unowned story, enriches due story reviews with title).
+- `apps/web/app/(authenticated)/stories/page.tsx` — added the "Rehearse" action
+  (self-rating row + `reviewsApi.record()` call + a confirmation message).
+- `apps/web/app/(authenticated)/today/page.tsx` — fixed the review-card navigate target
+  and badge label to branch on `review.objectType`.
+
+**Verification:**
+- `pnpm --filter @momito/api test` - 82/82 passed (was 79; +3 new tests).
+- `pnpm lint` / `pnpm typecheck` / `pnpm build` (full workspace) - green.
+- **Live round trip** against the real local Postgres: created a real story, rehearsed it
+  three times via `POST /reviews/story/:id` (ratings 1, 1, 5 — deliberately including two
+  "Again" grades to exercise the lapse-counting path), confirmed via a direct Prisma query
+  that the persisted `ReviewState` row matched the API's last response exactly
+  (`reps: 3, lapses: 1, state: 3`), then deleted the story and confirmed via the same
+  direct query that the transactional orphan-cleanup (ADR-0002/0003) removed the
+  `ReviewState` row too (0 remaining afterward). Did not wait for the real-time due
+  window to pass to test `listDue()`'s enrichment against a live due story (FSRS scheduled
+  it ~10 minutes out and polling that long wasn't a good use of this pass) — that code
+  path is covered by a unit test with a mocked due row instead.
+
+**Docs updated:** `BACKLOG.md` (MOM-067 → done — this closes Track H, MOM-063 through
+MOM-067, entirely).
+
+**This closes the full Story Bank feature**, from schema design through rehearsal
+sessions, in one continuous session. Remaining open backlog items are all either
+migration-gated-but-unattempted (MOM-069 AiUsage, entangled with the credential-gated
+MOM-068 AI SDK spike) or genuinely credential-gated (deploy, AI feedback, LeetCode
+import, backups) — see `NEXT.MD` for the current honest picture of what's left.
+
+---
+
+## 2026-07-06 - MOM-066: link stories to behavioral prompts (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing straight through the Story Bank chain (MOM-063→064→065→066 all in
+one session, per user instruction to keep going without stopping). `StoryPrompt` table
+already existed from ADR-0005's migration — this is CRUD on it plus the frontend affordance
+to actually use it.
+
+**Design:** `StoriesService.linkPrompt(storyId, questionId, userId)` — ownership-checks the
+story, validates the question exists and is `type: 'behavioral'` (400 otherwise; the plan
+explicitly scopes this to behavioral prompts, not any question type), and is idempotent —
+if the pair already exists it just returns current state instead of a duplicate-key error,
+matching how a user re-clicking "Link" shouldn't see a scary error. `unlinkPrompt` is a
+plain scoped `deleteMany`. `StoryResponse.prompts` is `{questionId, questionTitle}[]` —
+denormalized title so the frontend doesn't need a second fetch.
+
+**Frontend:** rather than adding a reverse "stories for this question" endpoint, the new
+`LinkedStories` component (in `questions/[id]/page.tsx`) fetches the user's full
+`storiesApi.list()` once and derives linked/unlinked by checking each story's own
+`prompts` array client-side — simpler than a new backend surface for what's a small
+per-user list. Rendered only when `question.type === 'behavioral'`.
+
+**Files changed:**
+- `packages/shared/src/index.ts` — added `StoryPromptLink`, extended `StoryResponse` with
+  `prompts`.
+- `apps/api/src/stories/dto/link-story-prompt.dto.ts` (new).
+- `apps/api/src/stories/stories.service.ts` — `storyInclude` now also includes `prompts`
+  (with the linked question's `id`/`title`); added `linkPrompt`/`unlinkPrompt`; `serialize`
+  maps `story.prompts` to the shared `StoryPromptLink` shape.
+- `apps/api/src/stories/stories.controller.ts` — `POST /stories/:id/prompts`,
+  `DELETE /stories/:id/prompts/:questionId`.
+- `apps/api/test/stories.service.spec.ts` — 5 new tests (link, idempotent re-link, reject
+  non-behavioral, reject nonexistent question, unlink) + updated `baseStory` fixture to
+  include `prompts: []` (existing tests broke without it once `serialize` started reading
+  `story.prompts`).
+- `apps/web/app/lib/api-client.ts` — `storiesApi.linkPrompt`/`unlinkPrompt`.
+- `apps/web/app/(authenticated)/questions/[id]/page.tsx` — new `LinkedStories` component,
+  rendered for behavioral questions only.
+
+**Verification:**
+- `pnpm --filter @momito/api test` - 79/79 passed (was 74; +5 new tests).
+- `pnpm lint` / `pnpm typecheck` / `pnpm build` (full workspace) - green.
+- **Live round trip** against the real local Postgres: logged in as the demo user, found a
+  real seeded behavioral question ("Prioritize under a deadline"), created a story, linked
+  it (`POST /stories/:id/prompts`), confirmed a re-link is idempotent (still 201, not a
+  duplicate-key error), unlinked it, and cleaned up the test story via delete. The
+  non-behavioral-rejection path is covered by a unit test (a live negative-case query hit
+  an unrelated grep/pagination-shape snag, not a bug in the endpoint itself).
+
+**Docs updated:** `BACKLOG.md` (MOM-066 → done, MOM-067 → ready).
+
+**Next:** MOM-067 (rehearsal sessions) — extend `ReviewsService.record()`'s `objectType`
+allow-list past `'question'` to include `'story'`.
+
+---
+
+## 2026-07-06 - MOM-065: Story Bank frontend (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing straight through the Story Bank chain now that MOM-063/064 (schema +
+API) are done. Pure frontend, no backend changes.
+
+**Files changed:**
+- `apps/web/app/(authenticated)/stories/page.tsx` (new).
+- `apps/web/app/lib/navigation.ts` — added a "Story Bank" nav entry (non-primary; all 5
+  mobile bottom-tab primary slots are already taken).
+
+**Design:** list + inline create/edit form, following the exact conventions already
+established by `/study-plan` and `/questions` (inline forms inside `Card`, delete-confirm
+pattern, `Badge` for tags). STAR fields (situation/task/action/result) are four separate
+textareas, not one blob, matching ADR-0005's schema rationale. Competency tags and
+follow-up questions are comma-separated text inputs converted to/from `string[]` client-side
+(no need for a chip-input component given comma-separated is already this codebase's
+pattern for `roleTags`-shaped fields elsewhere). Companies are a toggle-chip multi-select
+reusing the existing `companiesApi.list()`. Each story card has an expand/collapse toggle
+to view the full STAR breakdown without navigating away from the list.
+
+**Verification:**
+- `pnpm --filter @momito/web lint` / `typecheck` / `build` - all green; `/stories` is now a
+  32nd static route.
+- HTTP smoke test: started the compiled API server and a production `next start` web
+  server locally, `curl`'d `GET /stories` → 200, no server-side crash.
+- **Not verified:** actual interactive behavior in a real browser (create/edit/delete
+  flows, dark mode, mobile layout) — no browser-automation tool is available in this
+  environment. Flagging this explicitly rather than claiming full manual QA.
+
+**Docs updated:** `BACKLOG.md` (MOM-065 → done, MOM-066/067 → next).
+
+**Next:** MOM-066 (link stories to behavioral prompts via `StoryPrompt`).
+
+---
+
+## 2026-07-06 - MOM-063/064: Story Bank schema + CRUD API, human-approved (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Continuing autonomously through migration-gated backlog items under the user's
+standing D-004 approval. First genuinely net-new schema in this pass (MOM-075 was a
+merge/drop of an existing table) — a good test of the incident lesson from that task.
+
+**Design (ADR-0005, `docs/adr/0005-story-bank-schema.md`):** three new, purely additive
+tables — `Story` (STAR fields as separate required columns, not one blob, so a future
+rehearsal UI can quiz each section independently), `StoryCompany` (mirrors the existing
+`QuestionCompany` join-table shape exactly), `StoryPrompt` (many-to-many to `Question`,
+deliberately not 1:1 — one story should be reusable across several behavioral prompts).
+`competencyTags`/`followUpQuestions` are plain `String[]`, matching the existing
+tag-field precedent (`Question.roleTags`/`missTags`) rather than inventing a DB-level enum
+with no existing taxonomy to justify one. No `ReviewState` schema change — ADR-0002 already
+reserved `objectType: 'story'`.
+
+**Migration discipline follow-through from the MOM-075 incident:** this migration only
+*adds* tables (no drops), so the `--create-only` self-apply surprise from that task posed
+zero data-loss risk here regardless. Still hit a real problem worth recording: after
+reverting my hand-edit to the *already-applied* `merge_study_plan_into_task` migration
+(to fix its checksum after the MOM-075 incident), a second `migrate dev --create-only`
+attempt found Prisma wanted to **reset the entire dev database** ("The migration ... was
+modified after it was applied ... All data will be lost") — caused by the checksum
+mismatch from my own edit. **Did not run the reset.** Instead reverted `migration.sql`
+back to exactly what was actually applied (no backfill INSERT — moot anyway, since
+`seed.ts` never populated `study_plan_items` and the table was already dropped), which
+fixed the checksum without touching any data. Also found and removed a stray empty
+duplicate migration folder from an earlier retry
+(`20260705172843_merge_study_plan_into_task`, `-- This is an empty migration.`) before
+retrying the Story migration cleanly. **Lesson restated more sharply than last time:
+never hand-edit an already-applied migration's `.sql` file — it breaks the checksum and
+the only way Prisma offers to "fix" it is a full reset. If a migration already applied
+wrong, fix forward with a new migration, don't rewrite history.**
+
+**Files changed:**
+- `apps/api/prisma/schema.prisma` — added `Story`/`StoryCompany`/`StoryPrompt` models;
+  `User.stories`, `Company.stories`, `Question.storyPrompts` back-relations.
+- `apps/api/prisma/migrations/20260705174649_add_story_bank/migration.sql` — pure
+  `CREATE TABLE` × 3 + indexes + FKs, verified via `prisma migrate status` to have stayed
+  unapplied until I explicitly ran `migrate dev` (unlike the MOM-075 incident).
+- `apps/api/prisma/migrations/20260705172825_merge_study_plan_into_task/migration.sql` —
+  reverted to its originally-applied contents (see incident note above).
+- `docs/adr/0005-story-bank-schema.md` (new).
+- `packages/shared/src/index.ts` — added `StoryResponse`/`CreateStoryRequest`/
+  `UpdateStoryRequest`.
+- `apps/api/src/stories/` (new) — `stories.service.ts`, `stories.controller.ts`,
+  `stories.module.ts`, `dto/create-story.dto.ts`, `dto/update-story.dto.ts`.
+- `apps/api/src/app.module.ts` — registered `StoriesModule`.
+- `apps/api/test/stories.service.spec.ts` (new, 5 tests): user-scoped list, 404 on
+  cross-user get, deduplicated company-link creation, transactional delete (story +
+  ReviewState cleanup) scoped to the owner, 404 on cross-user delete.
+- `apps/web/app/lib/api-client.ts` — added `storiesApi` (list/get/create/update/remove).
+  No page consumes it yet — MOM-065 (frontend) is a separate follow-up PR.
+
+**Verification:**
+- `pnpm --filter @momito/api test` - 74/74 passed (was 69; +5 new `stories.service` tests).
+- `pnpm lint` / `pnpm typecheck` / `pnpm build` (full workspace) - green.
+- **Live round trip** against the real local Postgres: logged in as the seeded demo user,
+  created a real story with a linked company via `POST /stories`, fetched it via
+  `GET /stories/:id`, listed via `GET /stories`, updated `metrics` via `PATCH /stories/:id`,
+  deleted via `DELETE /stories/:id` (204), confirmed a subsequent `GET` 404s, and confirmed
+  the route 401s without a token.
+
+**Docs updated:** `BACKLOG.md` (MOM-063/064 → done, MOM-065/066/067 → READY, SPIKE-003 →
+fully done), `docs/adr/0005-story-bank-schema.md` (new).
+
+**Next:** MOM-065 (Story frontend page), MOM-066 (link stories to behavioral prompts via
+the new `StoryPrompt` table), MOM-067 (rehearsal sessions reusing the FSRS scheduler) are
+all now unblocked. Continuing to work through the remaining migration-gated backlog
+(MOM-069 AiUsage table design is the other open one) under the same standing approval.
+
+---
+
+## 2026-07-06 - MOM-075/076/077: merge StudyPlanItem into Task, human-approved (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Trigger:** User granted blanket approval to cross the D-004 human-approval gate for
+schema migrations for the remainder of the plan ("You will have all the permissions to
+code on whatever you want to finish the plan... I will no longer question you"). Treated
+as standing approval for migration-gated backlog items specifically (not for
+credential-gated items like deploy/AI feedback/LeetCode import/backups — I don't hold
+those credentials, so those remain genuinely blocked regardless of permission).
+
+**Design (SPIKE-007):** `StudyPlanItem` is a strict subset of `Task`'s existing columns —
+`title`/`notes`/`topicId`/`userId` map 1:1; `status` ('todo'|'in_progress'|'done') is a
+strict subset of `TaskStatus`; `targetDate` → `dueDate`; `priority` defaults to `'medium'`
+(StudyPlanItem never had one); `type` is always `'study'`.
+
+**Incident — read this before trusting `--create-only` again:** ran
+`prisma migrate dev --name merge_study_plan_into_task --create-only` intending to hand-edit
+the generated SQL (add the backfill INSERT) *before* it touched the database. Prisma
+instead applied the migration immediately — output showed "Applying migration ... The
+following migration(s) have been applied" despite the flag — dropping `study_plan_items`
+before the backfill INSERT existed anywhere. I could not recover the pre-drop row count
+or contents afterward (`to_regclass('public.study_plan_items')` now returns null). This
+local dev DB had only 2 users and light data at the time (consistent with this session's
+established pattern of creating/cleaning up test rows), so real data loss risk looks low,
+but I want this on record rather than quietly working around it: **before any future
+`--create-only` on a table with data, get an explicit row count first, and don't trust
+the flag to guarantee no database write occurs.** Added the backfill INSERT to the
+migration's `migration.sql` anyway, since it's still correct (and necessary) for any other
+environment (CI, a future fresh `migrate deploy`) that reaches this migration with
+non-empty `study_plan_items` rows.
+
+**Files changed:**
+- `apps/api/prisma/schema.prisma` — removed `model StudyPlanItem` and its `User`/`Topic`
+  back-relations.
+- `apps/api/prisma/migrations/20260705172825_merge_study_plan_into_task/migration.sql` —
+  hand-added the backfill `INSERT INTO tasks ... SELECT ... FROM study_plan_items` before
+  the generated `DROP TABLE`.
+- `apps/api/src/study-plan/` — deleted entirely (service, controller, 2 DTOs).
+- `apps/api/src/app.module.ts` — removed `StudyPlanModule` import/registration.
+- `apps/api/src/tasks/tasks.service.ts` — added `remove(id, userId)` (StudyPlanItem had
+  delete; Task didn't yet — `Reminder.task` is `onDelete: Cascade` per schema, so deleting
+  a task cleans up its reminder in the same statement).
+- `apps/api/src/tasks/tasks.controller.ts` — added `DELETE /tasks/:id` → 204.
+- `apps/api/test/study-plan.service.spec.ts` — deleted (tested the removed service).
+- `apps/api/test/tasks.service.spec.ts` — new (2 tests: scoped delete, 404 for
+  cross-user delete).
+- `packages/shared/src/index.ts` — removed `StudyPlanItemResponse`/`STUDY_PLAN_STATUSES`/
+  `StudyPlanStatus` (only consumers were the removed module and the rewritten web page).
+- `apps/web/app/lib/api-client.ts` — removed `studyPlanApi`; added `tasksApi.remove(id)`.
+- `apps/web/app/(authenticated)/study-plan/page.tsx` — rewritten onto `tasksApi` with
+  `type: 'study'` and `dueDate` in place of `targetDate`. UI/UX intentionally unchanged
+  (same tabs, same create/edit/delete flow, same route) — only the data layer moved.
+
+**Verification:**
+- `pnpm --filter @momito/api test` - 69/69 passed (was 72; -5 removed StudyPlanService
+  tests, +2 new TasksService tests).
+- `pnpm lint` / `pnpm typecheck` / `pnpm build` (full workspace, all 3 packages) - green.
+- `pnpm content:validate` - 0 errors, 0 warnings (unrelated to this change, included in
+  the standard verification set).
+- **Live round trip** against the real local Postgres: logged in as the seeded demo user,
+  created a real `type: 'study'` task via `POST /tasks`, listed it via
+  `GET /tasks?type=study`, updated its status via `PATCH /tasks/:id`, deleted it via
+  `DELETE /tasks/:id` (204), confirmed it no longer appears in the list, and confirmed
+  `GET /study-plan` now 404s (old route fully gone). Cleaned up the test task via the
+  delete call itself (idempotent — nothing left behind).
+- Killed an orphaned earlier dev-server process squatting on port 4000 (from a
+  backgrounded shell whose process outlived that Bash tool call) via
+  `Get-CimInstance Win32_Process` + `Stop-Process`, same pattern as prior sessions'
+  Windows housekeeping notes.
+
+**Docs updated:** `BACKLOG.md` (MOM-075/076/077 → done, SPIKE-007 → done).
+
+**Next:** continuing through the remaining migration-gated backlog (MOM-063 Story schema,
+MOM-069 AiUsage) under the same standing approval; external-credential-gated items (deploy,
+Anthropic AI feedback, LeetCode import, Neon backups) remain skipped since I don't hold
+those credentials.
+
+---
+
+## 2026-07-06 - Backlog reality cleanup + MOM-080 top-bar reminder bell (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Task:** Per `NEXT.MD`'s "safest next task" — inspect remaining `BACKLOG.MD`
+READY/BLOCKED items against the current repo, correct stale statuses, and (since the one
+genuinely open, non-migration, non-credential-gated gap found was small) close it.
+
+**Stale-status corrections (no code changes, all pre-existing):**
+- **MOM-017** (helmet + throttling) — `main.ts` already applies `helmet()` globally;
+  `app.module.ts` already registers a global `ThrottlerModule`/`ThrottlerGuard`.
+- **MOM-018** (auth throttling) — `auth.controller.ts`'s login/register already carry
+  `@Throttle(AUTH_THROTTLE)`.
+- **MOM-019** (health endpoint) — `health.module.ts`/`health.controller.ts` already exist
+  and are registered.
+- **MOM-022/023/024/025** (Knowledge Kernel constants/rubric types/content validation
+  framework/KnowledgeObject helpers) — all already implemented in
+  `packages/shared/src/index.ts` and `apps/api/scripts/content-*.ts`.
+- **MOM-062** (content coverage dashboard) — already implemented end-to-end
+  (`content.service.ts` + `settings/content/page.tsx`).
+- **MOM-085** (exception filter + request logging) — `all-exceptions.filter.ts` and
+  `request-logging.middleware.ts` already registered globally.
+- **MOM-086** (DB health ping) — `GET /api/v1/health/db` already exists.
+
+All corrected in `BACKLOG.MD` with verification notes; no source changed for any of these.
+
+**Real gap found and closed — MOM-080's remaining top-bar half:** the Today page already
+showed reminders (2026-07-05), but nothing outside `/today` gave any ambient signal that a
+reminder was due.
+
+**Files changed:**
+- `apps/web/app/components/ReminderBell.tsx` (new)
+- `apps/web/app/(authenticated)/layout.tsx`
+- `docs/agent/BACKLOG.md`
+- `docs/agent/LOG.MD`
+- `docs/agent/LOCKS.MD`
+- `docs/agent/NEXT.MD`
+
+**Changes:**
+- New `ReminderBell` component: fetches `remindersApi.list()` once on mount, computes how
+  many pending reminders are already past `dueAt` (mirrors the API's own "due" predicate,
+  not just "exists"), renders a bell icon linking to `/today` with a small red count badge
+  only when that count is nonzero. Fetch failures are swallowed — this is an ambient
+  indicator, not a page that should show an error banner.
+- Wired into `(authenticated)/layout.tsx`'s header, next to the existing `ThemeToggle`.
+
+**Verification:**
+- `pnpm --filter @momito/web lint` - passed
+- `pnpm --filter @momito/web typecheck` - passed
+- `pnpm --filter @momito/web build` - passed (31 routes)
+- `pnpm test` - passed (72/72 API tests; web has no test runner configured)
+
+**Risks / follow-ups:**
+- The bell fetches once on mount only (no polling/websocket) — a reminder crossing its due
+  time while the layout is already mounted won't update the badge until next navigation/
+  reload. Acceptable for a single-user app; a polling interval would be the natural
+  follow-up if this becomes noticeable.
+- `AGENTS.MD` remains dirty from an earlier instruction/documentation change and was not
+  touched by this task.
+
+**Suggested commit message:** `feat(web): add top-bar reminder bell and fix stale backlog statuses`
+
+---
+
 ## 2026-07-05 - Spaced review frontend handoff cleanup (CLAUDE)
 
 **Actor:** CLAUDE (implementer)

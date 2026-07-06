@@ -6,6 +6,7 @@ import { attemptsApi } from '../../../lib/api-client';
 import type { AnswerAttemptResponse, MissTagReason } from '@momito/shared';
 import { Card, Spinner, ErrorBanner, EmptyState } from '../../../components/ui';
 import { MISS_TAG_LABELS } from '../../../components/session/ReflectionPanel';
+import { AiFeedbackCard } from '../../../components/ai-feedback-card';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -125,6 +126,8 @@ export default function AttemptDetailPage() {
           <p className="mt-1 text-sm text-zinc-500">{attempt.selfRating} / 5</p>
         </Card>
       )}
+
+      <AiFeedbackCard attemptId={attempt.id} aiScore={attempt.aiScore} aiFeedback={attempt.aiFeedback} />
 
       {((attempt.missTags && attempt.missTags.length > 0) || attempt.reflectionNote) && (
         <Card className="mt-4">

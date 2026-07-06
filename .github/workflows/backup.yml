@@ -1,0 +1,53 @@
+name: Weekly Encrypted Backup
+
+# ADR-0004: safe to merge with no secrets configured — the first step exits
+# cleanly instead of failing when BACKUP_DATABASE_URL/BACKUP_GPG_PASSPHRASE
+# are absent, so this workflow sits dormant until the user opts in.
+on:
+  schedule:
+    - cron: '0 3 * * 0' # Sunday 03:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check required secrets are configured
+        id: secrets-check
+        run: |
+          if [ -z "${{ secrets.BACKUP_DATABASE_URL }}" ] || [ -z "${{ secrets.BACKUP_GPG_PASSPHRASE }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::BACKUP_DATABASE_URL and/or BACKUP_GPG_PASSPHRASE are not set — skipping (see docs/adr/0004-backup-strategy.md)."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install postgresql-client
+        if: steps.secrets-check.outputs.skip == 'false'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client gnupg
+
+      - name: Dump and encrypt
+        if: steps.secrets-check.outputs.skip == 'false'
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          STAMP="$(date -u +%Y%m%d-%H%M%S)"
+          # Passphrase goes in on fd 3 (via `3<<<`), not stdin (fd 0) — fd 0 is
+          # the piped pg_dump output gpg needs to encrypt. Mixing both on fd 0
+          # would silently feed gpg the wrong bytes as its passphrase.
+          pg_dump --format=custom --no-owner --no-privileges "$BACKUP_DATABASE_URL" \
+            | gpg --symmetric --batch --yes --passphrase-fd 3 --cipher-algo AES256 \
+                --output "momito-backup-${STAMP}.dump.gpg" 3<<< "$BACKUP_GPG_PASSPHRASE"
+          echo "BACKUP_FILE=momito-backup-${STAMP}.dump.gpg" >> "$GITHUB_ENV"
+
+      - name: Upload encrypted backup artifact
+        if: steps.secrets-check.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BACKUP_FILE }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 90

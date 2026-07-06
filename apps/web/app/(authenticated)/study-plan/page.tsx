@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
-import { studyPlanApi, topicsApi } from '../../lib/api-client';
-import type { StudyPlanItemResponse, TopicSummary } from '@momito/shared';
+import { tasksApi, topicsApi } from '../../lib/api-client';
+import type { TaskResponse, TopicSummary } from '@momito/shared';
 import { Card, Badge, Spinner, ErrorBanner, EmptyState } from '../../components/ui';
 
+// MOM-075/076/077: this page used to be backed by the standalone StudyPlanItem
+// model/API; that model has been merged into the consolidated Task model
+// (type: 'study'). The UI/UX below is unchanged — only the data layer moved.
 const STATUS_ORDER = ['todo', 'in_progress', 'done'] as const;
 const STATUS_LABELS: Record<string, string> = { todo: 'To Do', in_progress: 'In Progress', done: 'Done' };
 const STATUS_COLORS: Record<string, string> = {
@@ -13,10 +16,10 @@ const STATUS_COLORS: Record<string, string> = {
   done: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-400 dark:border-green-900',
 };
 
-function getDueDateInfo(targetDate: string): { label: string; className: string } | null {
+function getDueDateInfo(dueDate: string): { label: string; className: string } | null {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const target = new Date(targetDate);
+  const target = new Date(dueDate);
   target.setHours(0, 0, 0, 0);
   const diffMs = target.getTime() - today.getTime();
   const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
@@ -34,7 +37,7 @@ function getDueDateInfo(targetDate: string): { label: string; className: string 
   return null;
 }
 
-/** Inline edit form for a single study plan item */
+/** Inline edit form for a single study task */
 function EditForm({
   item,
   topics,
@@ -42,16 +45,16 @@ function EditForm({
   onCancel,
   saving,
 }: {
-  item: StudyPlanItemResponse;
+  item: TaskResponse;
   topics: TopicSummary[];
-  onSave: (data: { title: string; topicId?: string; notes: string; targetDate: string }) => Promise<void>;
+  onSave: (data: { title: string; topicId?: string; notes: string; dueDate: string }) => Promise<void>;
   onCancel: () => void;
   saving: boolean;
 }) {
   const [title, setTitle] = useState(item.title);
   const [topicId, setTopicId] = useState(item.topicId ?? '');
   const [notes, setNotes] = useState(item.notes ?? '');
-  const [targetDate, setTargetDate] = useState(item.targetDate ?? '');
+  const [dueDate, setDueDate] = useState(item.dueDate ? item.dueDate.slice(0, 10) : '');
   const [error, setError] = useState('');
 
   async function handleSubmit(e: FormEvent) {
@@ -62,7 +65,7 @@ function EditForm({
       title: title.trim(),
       topicId: topicId || undefined,
       notes: notes.trim(),
-      targetDate,
+      dueDate,
     });
   }
 
@@ -101,8 +104,8 @@ function EditForm({
           <label className="block text-xs font-medium text-zinc-500 mb-1 dark:text-zinc-400">Target Date</label>
           <input
             type="date"
-            value={targetDate}
-            onChange={(e) => setTargetDate(e.target.value)}
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
             className="block w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           />
         </div>
@@ -172,7 +175,7 @@ function DeleteConfirm({
 
 export default function StudyPlanPage() {
   // List state
-  const [items, setItems] = useState<StudyPlanItemResponse[]>([]);
+  const [items, setItems] = useState<TaskResponse[]>([]);
   const [topics, setTopics] = useState<TopicSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -199,11 +202,11 @@ export default function StudyPlanPage() {
     setLoading(true);
     setError('');
     try {
-      const [planItems, t] = await Promise.all([
-        studyPlanApi.list(),
+      const [tasks, t] = await Promise.all([
+        tasksApi.list({ type: 'study' }),
         topicsApi.list(),
       ]);
-      setItems(planItems);
+      setItems(tasks);
       setTopics(t);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load study plan');
@@ -223,11 +226,12 @@ export default function StudyPlanPage() {
     setFormSubmitting(true);
     setFormError('');
     try {
-      await studyPlanApi.create({
+      await tasksApi.create({
         title: formTitle.trim(),
+        type: 'study',
         topicId: formTopicId || undefined,
         notes: formNotes.trim() || undefined,
-        targetDate: formTargetDate || undefined,
+        dueDate: formTargetDate || undefined,
       });
       setShowForm(false);
       setFormTitle('');
@@ -244,7 +248,7 @@ export default function StudyPlanPage() {
 
   async function handleStatusUpdate(id: string, newStatus: string) {
     try {
-      await studyPlanApi.update(id, { status: newStatus });
+      await tasksApi.update(id, { status: newStatus as TaskResponse['status'] });
       setItems((prev) =>
         prev.map((i) => (i.id === id ? { ...i, status: newStatus as typeof i.status } : i))
       );
@@ -253,14 +257,14 @@ export default function StudyPlanPage() {
     }
   }
 
-  async function handleEditSave(id: string, data: { title: string; topicId?: string; notes: string; targetDate: string }) {
+  async function handleEditSave(id: string, data: { title: string; topicId?: string; notes: string; dueDate: string }) {
     setSavingEdit(true);
     try {
-      const updated = await studyPlanApi.update(id, {
+      const updated = await tasksApi.update(id, {
         title: data.title,
         topicId: data.topicId,
         notes: data.notes || null,
-        targetDate: data.targetDate || null,
+        dueDate: data.dueDate || null,
       });
       setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
       setEditingId(null);
@@ -274,7 +278,7 @@ export default function StudyPlanPage() {
   async function handleDelete(id: string) {
     setDeletingId(id);
     try {
-      await studyPlanApi.delete(id);
+      await tasksApi.remove(id);
       setItems((prev) => prev.filter((i) => i.id !== id));
       setConfirmDeleteId(null);
     } catch (err: unknown) {
@@ -430,7 +434,7 @@ export default function StudyPlanPage() {
       ) : (
         <div className="space-y-3">
           {filteredItems.map((item) => {
-            const dueDateInfo = item.targetDate ? getDueDateInfo(item.targetDate) : null;
+            const dueDateInfo = item.dueDate ? getDueDateInfo(item.dueDate) : null;
             return (
               <Card key={item.id}>
                 <div className="flex items-start justify-between gap-3">
@@ -451,9 +455,9 @@ export default function StudyPlanPage() {
                           {dueDateInfo.label}
                         </span>
                       )}
-                      {item.targetDate && !dueDateInfo && (
+                      {item.dueDate && !dueDateInfo && (
                         <span className="text-xs text-zinc-400">
-                          Due: {new Date(item.targetDate).toLocaleDateString('en-US', {
+                          Due: {new Date(item.dueDate).toLocaleDateString('en-US', {
                             year: 'numeric', month: 'short', day: 'numeric',
                           })}
                         </span>

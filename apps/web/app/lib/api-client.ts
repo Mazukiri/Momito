@@ -296,6 +296,32 @@ export const attemptsApi = {
   },
 };
 
+// ── AI grading (Workstream C: dormant until ANTHROPIC_API_KEY is set) ──────
+export interface AiUsageResponse {
+  available: boolean;
+  day: string;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  dailyBudgetUsd: number;
+  remainingUsd: number;
+}
+
+export interface AiGradeResponse {
+  attemptId: string;
+  aiScore: number | null;
+  aiFeedback: string | null;
+  cached: boolean;
+}
+
+export const aiApi = {
+  usage: () => request<AiUsageResponse>('/ai/usage'),
+
+  grade: (attemptId: string, force = false) =>
+    request<AiGradeResponse>(`/attempts/${attemptId}/grade${force ? '?force=true' : ''}`, { method: 'POST' }),
+};
+
 
 // ── Dashboard ─────────────────────────────────────
 import type { DashboardSummaryResponse } from '@momito/shared';
@@ -303,27 +329,6 @@ import type { DashboardSummaryResponse } from '@momito/shared';
 export const dashboardApi = {
   summary: () =>
     request<DashboardSummaryResponse>('/dashboard/summary'),
-};
-
-// ── Study Plan ────────────────────────────────────
-import type { StudyPlanItemResponse } from '@momito/shared';
-
-export const studyPlanApi = {
-  list: (params: { status?: string } = {}) => {
-    const qs = new URLSearchParams();
-    if (params.status) qs.set('status', params.status);
-    const query = qs.toString();
-    return request<StudyPlanItemResponse[]>(`/study-plan${query ? `?${query}` : ''}`);
-  },
-
-  create: (body: { title: string; topicId?: string; notes?: string | null; targetDate?: string | null }) =>
-    request<StudyPlanItemResponse>('/study-plan', { method: 'POST', body: JSON.stringify(body) }),
-
-  update: (id: string, body: { title?: string; topicId?: string; notes?: string | null; targetDate?: string | null; status?: string }) =>
-    request<StudyPlanItemResponse>(`/study-plan/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-
-  delete: (id: string) =>
-    request<void>(`/study-plan/${id}`, { method: 'DELETE' }),
 };
 
 // Profile and CV Scoring
@@ -454,6 +459,9 @@ export const tasksApi = {
 
   snooze: (id: string, snoozedUntil: string) =>
     request<TaskResponse>(`/tasks/${id}/snooze`, { method: 'POST', body: JSON.stringify({ snoozedUntil }) }),
+
+  remove: (id: string) =>
+    request<void>(`/tasks/${id}`, { method: 'DELETE' }),
 };
 
 export const remindersApi = {
@@ -462,6 +470,34 @@ export const remindersApi = {
 
   dismiss: (id: string) =>
     request<ReminderResponse>(`/reminders/${id}/dismiss`, { method: 'POST' }),
+};
+
+import type { CreateStoryRequest, StoryResponse, UpdateStoryRequest } from '@momito/shared';
+
+// MOM-064/065: CRUD API client for the Story Bank, consumed by
+// apps/web/app/(authenticated)/stories/page.tsx.
+export const storiesApi = {
+  list: () =>
+    request<StoryResponse[]>('/stories'),
+
+  get: (id: string) =>
+    request<StoryResponse>(`/stories/${id}`),
+
+  create: (body: CreateStoryRequest) =>
+    request<StoryResponse>('/stories', { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (id: string, body: UpdateStoryRequest) =>
+    request<StoryResponse>(`/stories/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  remove: (id: string) =>
+    request<void>(`/stories/${id}`, { method: 'DELETE' }),
+
+  // MOM-066: link/unlink a story to a behavioral prompt (Question).
+  linkPrompt: (storyId: string, questionId: string) =>
+    request<StoryResponse>(`/stories/${storyId}/prompts`, { method: 'POST', body: JSON.stringify({ questionId }) }),
+
+  unlinkPrompt: (storyId: string, questionId: string) =>
+    request<StoryResponse>(`/stories/${storyId}/prompts/${questionId}`, { method: 'DELETE' }),
 };
 
 import type { ReviewableObjectType, ReviewStateResponse } from '@momito/shared';

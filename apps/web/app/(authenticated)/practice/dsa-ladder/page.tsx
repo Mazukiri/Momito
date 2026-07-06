@@ -3,31 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { dsaApi } from '../../../lib/api-client';
-import type { DsaProgressResponse } from '@momito/shared';
+import { DSA_PATTERN_META, type DsaPattern, type DsaProgressResponse } from '@momito/shared';
 import { Card, Spinner, ErrorBanner, EmptyState } from '../../../components/ui';
 
-const PATTERN_LABELS: Record<string, string> = {
-  two_pointers: 'Two Pointers',
-  sliding_window: 'Sliding Window',
-  fast_slow_pointers: 'Fast & Slow Pointers',
-  merge_intervals: 'Merge Intervals',
-  cyclic_sort: 'Cyclic Sort',
-  binary_search: 'Binary Search',
-  tree_bfs: 'Tree BFS',
-  tree_dfs: 'Tree DFS',
-  graph_traversal: 'Graph Traversal',
-  topological_sort: 'Topological Sort',
-  union_find: 'Union Find',
-  backtracking: 'Backtracking',
-  dynamic_programming: 'Dynamic Programming',
-  greedy: 'Greedy',
-  heap_priority_queue: 'Heap / Priority Queue',
-  monotonic_stack: 'Monotonic Stack',
-  prefix_sum: 'Prefix Sum',
-  bit_manipulation: 'Bit Manipulation',
-  trie: 'Trie',
-  linked_list_reversal: 'Linked List Reversal',
-};
+// A4: pattern name/whenToUse now come from the shared DSA_PATTERN_META (one
+// source of truth instead of a page-local label map) so the ladder teaches
+// when to reach for each pattern, not just its name.
+function patternMeta(pattern: string) {
+  return DSA_PATTERN_META[pattern as DsaPattern];
+}
 
 export default function DsaLadderPage() {
   const [progress, setProgress] = useState<DsaProgressResponse | null>(null);
@@ -89,16 +73,23 @@ export default function DsaLadderPage() {
           .sort((a, b) => b.totalItems - a.totalItems)
           .map((p) => {
             const solvedPct = p.totalItems > 0 ? Math.round((p.solvedItems / p.totalItems) * 100) : 0;
+            const meta = patternMeta(p.pattern);
             return (
               <Card key={p.pattern}>
                 <div className="mb-2 flex items-center justify-between">
                   <span className="font-medium text-zinc-800 dark:text-zinc-100">
-                    {PATTERN_LABELS[p.pattern] ?? p.pattern}
+                    {meta?.name ?? p.pattern}
                   </span>
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">
                     {p.solvedItems}/{p.totalItems} solved
                   </span>
                 </div>
+                {meta && (
+                  <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    <span className="font-medium text-zinc-600 dark:text-zinc-300">When to use: </span>
+                    {meta.whenToUse}
+                  </p>
+                )}
                 <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                   <div
                     className={`h-full rounded-full ${

@@ -150,7 +150,8 @@ All frontend pages are under `apps/web/app/`.
 | `/attempts` | Past answer history |
 | `/attempts/[id]` | Full attempt detail |
 | `/settings/content` | Content coverage dashboard — progress toward plan §8.2 data targets |
-| `/study-plan` | Todo / In Progress / Done study plan with CRUD |
+| `/study-plan` | Todo / In Progress / Done study tasks (backed by the `Task` model, `type: 'study'`) |
+| `/stories` | Story Bank — STAR-formatted behavioral stories, linkable to prompts, rehearsable via FSRS |
 | `/settings` | Topic and company management |
 
 ---
@@ -227,6 +228,46 @@ If port `5432` is already in use, stop the conflicting local PostgreSQL instance
 
 ---
 
+## Deploy
+
+Free-tier stack: **Neon** (Postgres) + **Render** (API) + **Vercel** (web). Config for the
+API and web builds is already committed (`render.yaml`, `apps/web/vercel.json`) — nothing
+below requires code changes, only connecting accounts and setting secrets.
+
+1. **Neon** (free, pick a region close to you): create a project, then copy both the
+   pooled connection string (`DATABASE_URL`) and the direct connection string —
+   no `-pooler` in the hostname — (`DIRECT_URL`).
+2. **Render**: New → Blueprint, point at this repo (picks up `render.yaml`
+   automatically). Set the secrets it leaves blank: `DATABASE_URL`, `DIRECT_URL`,
+   `JWT_SECRET` (32+ random characters), and `CORS_ORIGIN` (leave a placeholder for
+   now — you'll set it to the real Vercel URL in step 4). Health check is
+   `/api/v1/health`.
+3. **Vercel**: New Project → this repo, Root Directory `apps/web` (picks up
+   `apps/web/vercel.json`'s build command automatically). Env var:
+   `NEXT_PUBLIC_API_URL=https://<your-api>.onrender.com/api/v1`.
+4. Wire the real Vercel URL back into Render's `CORS_ORIGIN` env var and redeploy the API.
+5. Seed production once, from your machine (never commit real credentials):
+   ```bash
+   DATABASE_URL="<neon-direct-url>" DIRECT_URL="<neon-direct-url>" \
+     SEED_USER_EMAIL="you@example.com" SEED_USER_PASSWORD="a-real-password" \
+     pnpm db:seed
+   ```
+6. **Keep-warm** (optional, avoids ~30-60s cold starts): set the `API_HEALTH_URL`
+   repository variable (Settings → Secrets and variables → Actions → Variables) to
+   `https://<your-api>.onrender.com/api/v1/health` — `.github/workflows/keepwarm.yml`
+   then pings it every 10 minutes during Vietnam daytime hours, staying under Render's
+   free 750 instance-hours/month.
+7. **Install on your phone**: open the Vercel URL, then iOS Safari → Share → Add to
+   Home Screen, or Android Chrome → ⋮ → Install app.
+
+**AI grading** (Workstream C) is optional — set `ANTHROPIC_API_KEY` on Render (and
+optionally `ANTHROPIC_MODEL`/`AI_DAILY_BUDGET_USD`) to enable it; the app is fully
+usable on self-rating alone if you never set a key. **Backups**: see
+`docs/adr/0006-backup-strategy.md` for the weekly encrypted-backup workflow, which is
+similarly dormant until its own two secrets are set.
+
+---
+
 ## API Overview
 
 All endpoints are under `http://localhost:3001/api/v1`. Protected routes require `Authorization: Bearer <token>` header.
@@ -265,16 +306,17 @@ All endpoints are under `http://localhost:3001/api/v1`. Protected routes require
 - `GET /attempts/:id` — Detail
 - `GET /questions/:id/attempts` — Attempts for a question
 
-### Dashboard & Study Plan
+### Dashboard
 - `GET /dashboard/summary` — Aggregated stats (practiced count, topic progress, weak areas, recent sessions)
-- `GET /study-plan` — List
-- `POST /study-plan` — Create item
-- `PATCH /study-plan/:id` — Update item (title, status, notes, targetDate)
-- `DELETE /study-plan/:id` — Delete item
 
 ### Content & DSA Progress
 - `GET /content/coverage` — Question counts by type/difficulty plus progress toward plan §8.2 domain targets (DSA, CS Fundamentals, System Design, Behavioral, companies, role tracks)
 - `GET /dsa/progress` — Per-DSA-pattern totals/attempted/solved counts for the current user, cross-referencing `AnswerAttempt` history
+
+### Story Bank
+- `GET /stories`, `POST /stories`, `GET/PATCH/DELETE /stories/:id` — STAR-formatted stories (user-owned)
+- `POST /stories/:id/prompts`, `DELETE /stories/:id/prompts/:questionId` — Link/unlink a story to a behavioral prompt
+- `GET /reviews/due`, `POST /reviews/:objectType/:objectId` — FSRS review scheduling; `objectType` is `question` or `story`
 
 ### Career OS
 - `GET /career/role-tracks` — Available long-term role tracks
@@ -333,7 +375,7 @@ can be added to a phone home screen; there is intentionally **no service worker 
 - 3 difficulty levels: Easy, Medium, Hard
 - Search and multi-filter (topic, difficulty, type, company, keyword) — deep-linkable via `?type=` query param
 - Reference answer toggle for self-study, rendered as markdown
-- 384 seeded questions: 150 DSA (all 20 coding patterns), 149 CS Fundamentals, 25 System Design, 60 Behavioral
+- 385 seeded questions: 150 DSA (all 20 coding patterns), 150 CS Fundamentals, 25 System Design, 60 Behavioral
 
 ### Mock Interview Sessions
 - Four session types: Quick Practice, Topic Practice, Company Practice, Mixed Mock
@@ -377,6 +419,15 @@ can be added to a phone home screen; there is intentionally **no service worker 
 - Smart due-date display (overdue, today, soon)
 - Status progression: Todo → In Progress → Done (or reopen)
 - Delete items with confirmation
+- Backed by the consolidated `Task` model (`type: 'study'`) — no separate schema
+
+### Story Bank
+- STAR-formatted stories (Situation/Task/Action/Result/Metrics) with competency tags,
+  linked companies, and follow-up questions
+- Link a story to one or more behavioral prompts; a behavioral question's detail page
+  shows an "Answer with a Story" picker
+- "Rehearse" a story with a 1–5 self-rating, scheduling its next review via the same FSRS
+  engine used for practice questions — it then resurfaces on `/today` when due
 
 ---
 
@@ -387,8 +438,11 @@ can be added to a phone home screen; there is intentionally **no service worker 
 | `DATABASE_URL` | — | Yes | PostgreSQL connection string (pooled, used at runtime) |
 | `DIRECT_URL` | — | Yes for `prisma migrate` | Non-pooled connection string for migrations. With Neon, use its "direct connection" string (no `-pooler` in the hostname); without a pooler, set it to the same value as `DATABASE_URL`. |
 | `JWT_SECRET` | Development-only fallback | Production | JWT signing key. Production startup fails unless this is at least 32 characters. |
+| `JWT_EXPIRES_IN` | `30d` | No | Access-token lifetime. Long by default since this is a single-user, localStorage-Bearer app (ADR-0009-equivalent tradeoff) — a phone user studying daily shouldn't be logged out every day. |
 | `CORS_ORIGIN` | Open in development; disabled in production | Production deployments | Comma-separated browser origin allowlist, for example `https://momito.example`. |
 | `ALLOW_MULTI_USER_REGISTRATION` | `false` (registration locked after the first account) | No | Set to `true` to allow open registration beyond a single account. |
+| `SEED_USER_EMAIL` / `SEED_USER_PASSWORD` | `demo@momito.local` / `MomitoDemo123!` | No (set both before seeding a real deployment) | Overrides the seeded demo account's credentials. `pnpm db:seed` never logs the password. |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` / `AI_DAILY_BUDGET_USD` | Unset / `claude-opus-4-8` / `1.00` | No | Enables AI grading (Workstream C) when a key is set; the app is fully usable on self-rating alone without one. |
 | `NODE_ENV` | Node default | No | Set to `production` to enable production config checks. |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:3001/api/v1` | Yes | Backend base URL for frontend API client |
 | `PORT` | `3001` | No | Backend listen port |
@@ -414,8 +468,10 @@ decision log at `docs/agent/DECISIONS.MD` and formal ADRs under `docs/adr/`:
 
 - **ADR-0001**: NestJS `apps/api` is the backend of record (not the archived Python `backend/`)
 - **ADR-0002**: `ReviewState` uses a polymorphic `objectType`/`objectId` reference for persisted review scheduling
-- **ADR-0003**: The (not-yet-built) FSRS learning engine will coexist with the existing Mission engine rather than replace it
+- **ADR-0003**: The FSRS learning engine coexists with the existing Mission engine rather than replacing it
 - **ADR-0004**: No copyrighted third-party problem statements in seed content — metadata, links, and original notes only
+- **ADR-0005**: Story Bank schema (STAR-format, user-authored, reviewable via the same polymorphic `ReviewState`)
+- **ADR-0006**: Weekly encrypted database backup workflow (dormant until `BACKUP_DATABASE_URL`/`BACKUP_GPG_PASSPHRASE` secrets are set)
 
 ---
 

@@ -220,7 +220,7 @@ export default function CalendarPage() {
                 <button
                   onClick={() => dismissReminder(reminder.id)}
                   disabled={working}
-                  className="shrink-0 rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+                  className="shrink-0 rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   Dismiss
                 </button>
