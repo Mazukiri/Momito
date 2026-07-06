@@ -322,6 +322,27 @@ export const aiApi = {
     request<AiGradeResponse>(`/attempts/${attemptId}/grade${force ? '?force=true' : ''}`, { method: 'POST' }),
 };
 
+// ── Web Push (ADR-0008) ────────────────────────────
+export interface PushConfigResponse {
+  available: boolean;
+  publicKey: string | null;
+}
+
+export interface PushSubscriptionKeys {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}
+
+export const pushApi = {
+  config: () => request<PushConfigResponse>('/push/config'),
+
+  subscribe: (subscription: PushSubscriptionKeys) =>
+    request<{ ok: true }>('/push/subscriptions', { method: 'POST', body: JSON.stringify(subscription) }),
+
+  unsubscribe: (endpoint: string) =>
+    request<{ ok: true }>('/push/subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint }) }),
+};
+
 
 // ── Dashboard ─────────────────────────────────────
 import type { DashboardSummaryResponse } from '@momito/shared';

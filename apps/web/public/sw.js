@@ -3,7 +3,7 @@
 // a different origin in both dev and production). Bump CACHE_VERSION whenever
 // this file changes so old clients pick up the new shell instead of serving a
 // stale one forever.
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `momito-shell-${CACHE_VERSION}`;
 const OFFLINE_URL = '/offline';
 const PRECACHE_URLS = ['/', OFFLINE_URL];
@@ -59,5 +59,45 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => caches.match(request)),
+  );
+});
+
+// Web Push (ADR-0008): payload is JSON-encoded { title, body?, url? } — see
+// PushService.sendToUser on the API side. Falls back to a generic title if
+// the payload can't be parsed so a malformed push never silently no-ops.
+self.addEventListener('push', (event) => {
+  let payload = { title: 'Momito' };
+  try {
+    if (event.data) payload = event.data.json();
+  } catch {
+    // keep the fallback
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title || 'Momito', {
+      body: payload.body,
+      icon: '/pwa-icon-192',
+      badge: '/pwa-icon-192',
+      data: { url: payload.url || '/today' },
+    }),
+  );
+});
+
+// Focus an existing Momito tab if one is open; otherwise open a new one at
+// the URL the push payload pointed at (defaults to /today).
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/today';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.navigate(targetUrl);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(targetUrl);
+    }),
   );
 });

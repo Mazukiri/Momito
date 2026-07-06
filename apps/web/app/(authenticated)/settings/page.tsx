@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { topicsApi, companiesApi } from '../../lib/api-client';
 import type { TopicSummary, CompanySummary } from '@momito/shared';
 import { Card, Spinner, ErrorBanner, EmptyState } from '../../components/ui';
+import { PushSettingsCard } from '../../components/push-settings-card';
 
 // ── Topics Section ───────────────────────────────
 function TopicsManager() {
@@ -372,6 +373,8 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-8">
+        <PushSettingsCard />
+
         <Card>
           <div className="flex items-center justify-between">
             <div>
