@@ -438,11 +438,12 @@ can be added to a phone home screen; there is intentionally **no service worker 
 | `DATABASE_URL` | — | Yes | PostgreSQL connection string (pooled, used at runtime) |
 | `DIRECT_URL` | — | Yes for `prisma migrate` | Non-pooled connection string for migrations. With Neon, use its "direct connection" string (no `-pooler` in the hostname); without a pooler, set it to the same value as `DATABASE_URL`. |
 | `JWT_SECRET` | Development-only fallback | Production | JWT signing key. Production startup fails unless this is at least 32 characters. |
-| `JWT_EXPIRES_IN` | `30d` | No | Access-token lifetime. Long by default since this is a single-user, localStorage-Bearer app (ADR-0009-equivalent tradeoff) — a phone user studying daily shouldn't be logged out every day. |
+| `JWT_EXPIRES_IN` | `30d` | No | Access-token lifetime. Long by default since this is a single-user, localStorage-Bearer app — a phone user studying daily shouldn't be logged out every day. A token can still be revoked immediately via logout (`User.tokenVersion`), so the long expiry doesn't mean a leaked token is unrevocable. |
 | `CORS_ORIGIN` | Open in development; disabled in production | Production deployments | Comma-separated browser origin allowlist, for example `https://momito.example`. |
 | `ALLOW_MULTI_USER_REGISTRATION` | `false` (registration locked after the first account) | No | Set to `true` to allow open registration beyond a single account. |
 | `SEED_USER_EMAIL` / `SEED_USER_PASSWORD` | `demo@momito.local` / `MomitoDemo123!` | No (set both before seeding a real deployment) | Overrides the seeded demo account's credentials. `pnpm db:seed` never logs the password. |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` / `AI_DAILY_BUDGET_USD` | Unset / `claude-opus-4-8` / `1.00` | No | Enables AI grading (Workstream C) when a key is set; the app is fully usable on self-rating alone without one. |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Unset / Unset / `mailto:admin@example.com` | No | Enables Web Push notifications (ADR-0008) when both keys are set; generate a keypair with `npx web-push generate-vapid-keys` (no third-party account needed). Without them, the notification settings UI is hidden and the reminder-push scheduler no-ops. |
 | `NODE_ENV` | Node default | No | Set to `production` to enable production config checks. |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:3001/api/v1` | Yes | Backend base URL for frontend API client |
 | `PORT` | `3001` | No | Backend listen port |

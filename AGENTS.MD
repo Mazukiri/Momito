@@ -7,7 +7,7 @@ Momito is a pnpm monorepo:
 * `apps/web`: Next.js 16, React 19, Tailwind v4
 * `apps/api`: NestJS 11, Prisma 6, Postgres
 * `packages/shared`: shared TypeScript types/constants
-* `docs/plans/momito-redesign-v2.md`: product/system plan
+* `docs/plans/MOMITO_REDESIGN_PLAN_V2.md`: product/system plan
 * `docs/agent/BACKLOG.md`: task backlog
 * `docs/agent/NEXT.md`: current task
 * `docs/agent/LOCKS.md`: active path locks
@@ -123,7 +123,7 @@ Rules:
 
 * Do not code.
 * Inspect the repo.
-* Read `docs/plans/momito-redesign-v2.md`.
+* Read `docs/plans/MOMITO_REDESIGN_PLAN_V2.md`.
 * Read `docs/agent/BACKLOG.md`.
 * Read `docs/agent/NEXT.md`.
 * Read `docs/agent/DECISIONS.md`.

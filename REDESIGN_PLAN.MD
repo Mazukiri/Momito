@@ -1,5 +1,18 @@
 # Momito Redesign — Phone + Laptop Interview-Prep App
 
+> **⚠️ Superseded, 2026-07-07.** The codebase was actually built against the sibling plan
+> `docs/plans/MOMITO_REDESIGN_PLAN_V2.md` and its `docs/agent/BACKLOG.md` MOM-### task list —
+> **that pair is the authoritative source of truth**, not this file. This document remains for
+> historical context (it identified the same core gaps and North-Star "Today" loop that V2
+> formalized) but several of its specific prescriptions were deliberately NOT followed and
+> should not be treated as outstanding work: `git rm` of `backend/`/`mobile/` (V2 chose
+> `git mv` to `archive/` instead — see ADR-0001 and `docs/agent/LOCKS.md`), the
+> shadcn/TanStack-Query/next-themes stack (V2 kept a hand-rolled `ui.tsx`/`ThemeProvider`/
+> direct `api-client` fetch — see SPIKE-001 in `docs/agent/BACKLOG.md`), cron-fired reminders
+> (V2 shipped poll-on-fetch, a deliberate single-user-scoped simplification), and a desktop
+> kanban jobs board (V2 shipped a mobile-first list on both breakpoints). If you're deciding
+> what to build next, read the BACKLOG.md status table, not this file's task list.
+
 ## Context
 
 Momito (D:\Momito\Momito-clone) is an interview-prep + career app the user is betting everything on: they are studying to pass interviews abroad and emigrate. Today it is a pnpm monorepo — Next.js 16 web (`apps/web`), NestJS 11 + Prisma/Postgres API (`apps/api`, 26 models, ~75 endpoints), shared types (`packages/shared`) — plus an **abandoned** Python FastAPI `backend/` and a 2-screen Expo `mobile/` wired to that dead backend.

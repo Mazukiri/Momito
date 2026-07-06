@@ -131,6 +131,17 @@ statement-pattern check and blocks publish on violation.
 **Consequences:** Legally safe content pipeline; validation gates every seed batch.
 **ADR:** [`docs/adr/0004-no-copyrighted-problem-statements-in-seeds.md`](../adr/0004-no-copyrighted-problem-statements-in-seeds.md)
 
+### D-009 — `roleTrackId` is currently a bare string; decide model-vs-constant before MOM-061
+**Context:** `roleTrackId` appears as an unconstrained `String` across `InterviewSession`, `Task`,
+`JobApplication`, `CareerGoal`, `Mission`, etc. — no `RoleTrack` table.
+**Decision:** MOM-061 (role tracks) must first decide, via inspection, whether to introduce a
+`RoleTrack` model (migration → human-gated) or a shared constant set in `packages/shared`. Default
+lean: constants first (no migration), promote to a table only if referential integrity is needed.
+**Consequences:** Prevents an unplanned schema change sneaking in via a content task.
+
+<!-- Filed chronologically after D-009 despite the lower number — see LOG.MD's 2026-07-05
+     FSRS entry, which assigned D-010 before this file's ordering was cleaned up 2026-07-07.
+     Left as D-010 (not renumbered) since LOG.MD already cites it by that number. -->
 ### D-010 — Self-rating (1-5 stars) maps to FSRS's 4 grades as 1/2/(3,4)/5
 **Context:** `CreateAnswerDto.selfRating` is an existing 1-5 star scale used elsewhere
 (dashboard averages, DSA/mission positive-attempt heuristics) that must not change.
@@ -141,11 +152,3 @@ untouched everywhere else; this mapping only applies inside the FSRS scheduler.
 **Consequences:** No schema change, no change to any existing selfRating consumer. If a
 future need arises to distinguish 3 from 4 for FSRS specifically, revisit here first
 rather than guessing again at the call site.
-
-### D-009 — `roleTrackId` is currently a bare string; decide model-vs-constant before MOM-061
-**Context:** `roleTrackId` appears as an unconstrained `String` across `InterviewSession`, `Task`,
-`JobApplication`, `CareerGoal`, `Mission`, etc. — no `RoleTrack` table.
-**Decision:** MOM-061 (role tracks) must first decide, via inspection, whether to introduce a
-`RoleTrack` model (migration → human-gated) or a shared constant set in `packages/shared`. Default
-lean: constants first (no migration), promote to a table only if referential integrity is needed.
-**Consequences:** Prevents an unplanned schema change sneaking in via a content task.

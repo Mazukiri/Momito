@@ -2084,3 +2084,87 @@ No code written; no app source, schema, or migration touched.
   harmless on Windows but normalize to lowercase `.md` in a later docs pass if Linux CI ever reads them.
 - Migration-bearing tasks (MOM-026/027, 063, 069, 075) require a human approval step before any
   `prisma migrate` runs.
+
+## 2026-07-07 — Post-redesign production-readiness pass (CLAUDE, autonomous overnight run)
+
+**Actor:** CLAUDE (implementer, autonomous — user asleep, scheduled wake-up at token reset)
+**Trigger:** User asked to judge the app against REDESIGN_PLAN.MD/V2 again, identify what's
+left to improve for production readiness, and — separately — build push notifications
+(initially assumed a Flutter rewrite was needed for this; corrected mid-conversation: iOS
+16.4+ supports Web Push for installed PWAs, and the target iPhone X runs up to iOS 16.7).
+
+**Method:** Three parallel research agents (docs/agent hygiene audit, API production-
+readiness audit, web UX/quality audit including root-causing the dark-mode bug via a
+compiled dev-vs-prod CSS diff) fed into a plan, approved, then executed as 6 phases, each
+committed and verified separately (lint+typecheck+test+build, plus live round-trips against
+the local Postgres instance via curl/Playwright).
+
+**First action of the session:** discovered the *entire* prior session's uncommitted work
+(Story Bank, AI grading scaffold, StudyPlanItem→Task merge, PWA offline support, deploy
+scaffolding, streak, markdown highlighting — several thousand lines across ~70 files) sitting
+in the working tree despite being tested and narrated as "done" in earlier LOG.MD entries.
+Recovered all of it in two honestly-labeled `recover:` commits before starting new work,
+including surgically splitting a handful of files (`schema.prisma`, `common/config.ts`,
+`package.json`, `.env.example`, `app.module.ts`, `test/config.spec.ts`) that mixed prior
+uncommitted hunks with this session's own new additions — temporarily reverted this
+session's hunks, committed the recovered prior work, reapplied, committed separately.
+**Lesson reinforced: commit far more often; don't let real working code sit uncommitted.**
+
+**Phase 0 — dark-mode fix:** root cause was `@custom-variant dark` in `globals.css` sitting
+after a foreign `@import`/`@plugin`, silently dropped by Turbopack's dev CSS pipeline (prod
+`next build` compiled it fine). Moved the line; added a pre-hydration theme script + kept
+its hydration-mismatch warning quiet via `suppressHydrationWarning`; made CodeMirror follow
+the app theme. Live-verified via Playwright: background genuinely toggles now.
+
+**Phase 1 — Web Push (MOM-092):** `PushSubscription` model (reused the existing
+`Reminder.lastTriggeredAt` field to dedupe sends, no new column needed); `apps/api/src/push/`
+(service/controller/`@Cron` scheduler); `sw.js` push/notificationclick handlers;
+`push-settings-card.tsx` mirroring the AI-feedback-card's hidden-when-unavailable pattern.
+14 zero-network tests. Live-verified with a self-generated VAPID keypair.
+
+**Phase 2 — API hardening (MOM-093/094/095/098/099/100):** `enableShutdownHooks()`;
+`User.tokenVersion` real token revocation (logout now actually revokes, live-verified:
+old token → 401 after logout, new login still works); API ESLint wired into CI for the
+first time (found + fixed 2 real issues); verified (not just assumed) the `aiScore` 0–1
+scale is consistent across `dsa.service.ts`/`missions.service.ts`/`ai.service.ts` and pinned
+it with regression tests; closed a narrow AI-budget check-and-reserve race via an atomic
+conditional `updateMany`; added a composite `(userId, createdAt)` index for the dashboard's
+hot query path.
+
+**Phase 3 — Web UX/a11y (MOM-096):** 401 auto-logout via a `momito:unauthorized` window
+event; debounced questions search (was 1 request/keystroke) + URL-persisted filters;
+optimistic updates (verified ~100ms perceived latency) on Today's dismiss/review-rate and
+Calendar's complete/snooze/dismiss; labeled previously-unlabeled form controls; made `Card`
+keyboard-reachable; added `dark:` variants to `Badge`/`Pagination`; `ReminderBell` now polls
+instead of fetching once; new `Skeleton`/`ListSkeleton` primitives.
+
+**Phase 4 — frontend tests (MOM-097):** `apps/web` had zero tests. Added vitest +
+`@testing-library/react` + jsdom (skipped `@vitejs/plugin-react` — a vite version conflict
+in this monorepo; tsconfig's `jsx: react-jsx` is sufficient without it). 20 tests. Caught a
+real bug in the *test* itself while writing the session-page test: a non-memoized
+`useRouter` mock caused an infinite fetch loop by changing a `useCallback`'s dependency
+identity every render — a test-mock artifact (real Next's router is stable), documented and
+fixed rather than silently worked around.
+
+**Phase 5 — docs hygiene:** reconciled the BACKLOG.md-vs-NEXT.MD contradiction on
+MOM-068–074's status; fixed a dangling "ADR-0009" citation (never existed) in SPIKE-002;
+fixed `AGENTS.MD`'s wrong plan filename; added a superseded-notice header to root
+`REDESIGN_PLAN.MD` pointing at V2 + BACKLOG.md; rewrote `NEXT.MD`; logged this entry.
+
+**Checks run per phase:** `pnpm --filter @momito/api {lint,typecheck,test,build}`,
+`pnpm --filter @momito/web {lint,typecheck,test,build}`, live curl/Playwright round-trips
+against a locally running API (port 3001) + web (port 3000) against the local Postgres.
+Final full-monorepo `pnpm -r test`: **132 API tests + 20 web tests, all green.**
+
+**Result:** 6 commits (`fix(web): dark mode...`, `feat(api): Web Push...`,
+`feat(web): Web Push...`, `feat(api): production hardening...`,
+`feat(web): UX and accessibility polish`, `test(web): frontend test foundation`), plus the
+2 `recover:` commits for prior-session work. All pushed to local `main` (not remote — no
+`git push` performed this session).
+
+**Genuinely still open, not avoided:** MOM-021 (deploy, needs real hosting credentials),
+MOM-068–074's live-key verification (needs a real `ANTHROPIC_API_KEY`), MOM-092's real iOS
+push-receive path (needs the real HTTPS deploy), MOM-088's Lighthouse audit (needs a
+deployed origin), MOM-049 (LeetCode import, disclosed judgment call), and the V2 plan's
+`WeaknessSignal`/quality-gating vision chunk (net-new feature depth, not a readiness gap —
+flagged for a future scoped plan, not started).

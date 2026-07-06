@@ -499,6 +499,15 @@ Global verification / forbidden-file defaults:
   orphan-cleanup removed the `ReviewState` row too (0 remaining).
 
 ### Track I — AI Feedback Engine · Gate 4
+**Status note (2026-07-07):** this entire track is **DONE (scaffold) — VERIFICATION-BLOCKED
+on a live `ANTHROPIC_API_KEY`**. Reconciles a contradiction the doc-audit found: this section
+marked MOM-068–074 flatly "DONE" while `NEXT.MD` simultaneously listed the same range as
+blocked/unverified pending a real key. Both were true in different senses — the code is
+complete, tested (14 mocked/zero-network tests), and live-verified against the *no-key*
+path (`available:false`, clean `503`). What remains genuinely unverified: a real
+`messages.parse` call succeeding, the budget-exceeded path, and a real graded
+score/feedback actually rendering on the frontend. Gate 4 stays open until a key is added
+and those three are checked once.
 - **MOM-068** AI SDK spike — **DONE** 2026-07-06 (SPIKE-005 resolved). Consulted the
   bundled `claude-api` skill, then verified directly against the *installed*
   `@anthropic-ai/sdk` package types (the skill's docs describe a newer GA shape than
@@ -623,9 +632,116 @@ Global verification / forbidden-file defaults:
   Postgres/Neon instance — neither binary is installed in this sandbox, and there is no
   real target database to restore into. This is disclosed as a real limitation, not
   claimed as fully verified.
-- **MOM-088** Lighthouse + accessibility pass — BLOCKED on Gate 1 UI.
+- **MOM-088** Lighthouse + accessibility pass — BLOCKED on Gate 1 UI (Lighthouse itself needs
+  a real browser + deployed URL). A manual accessibility pass (not Lighthouse) was done as
+  part of MOM-096 below — labeled form controls, keyboard-reachable clickable cards, dark:
+  contrast on badges/pagination — but a full Lighthouse audit is still credential/deploy-gated.
 - **MOM-089** README rewrite — folded into MOM-004; final polish here.
-- **MOM-090** Final full-product golden-path verification — BLOCKED on all gates.
+- **MOM-090** Final full-product golden-path verification — BLOCKED on all gates (Gate 4
+  live-key verification and Gate 1/6 real deploy are the remaining blockers).
+
+### Track L — Post-redesign production-readiness pass (2026-07-07)
+A second audit pass (three parallel research agents: docs/agent hygiene, API
+production-readiness, web UX/quality) after Tracks A–K were believed complete, run per the
+user's "keep finishing the plan" instruction plus an explicit ask for push notifications.
+Full detail in the plan file used to drive this pass and in the commit messages below —
+this section is the BACKLOG-native summary.
+
+- **MOM-091** Dark-mode dev-build bug — **DONE** 2026-07-07. Root cause (found by diffing
+  compiled dev vs. prod CSS): `apps/web/app/globals.css`'s `@custom-variant dark (&:where(
+  .dark, .dark *))` sat after a foreign `@import "highlight.js/..."` and `@plugin
+  "@tailwindcss/typography"`; Turbopack's dev CSS pipeline silently dropped the variant, so
+  `dark:` utilities compiled as plain `prefers-color-scheme` media queries instead of
+  `.dark`-class rules — toggling the UI switch changed `localStorage` and the DOM class but
+  not a single pixel. Production `next build` already compiled this correctly; only `next
+  dev` was affected. Fixed by moving the `@custom-variant` line immediately after the
+  `tailwindcss` import. Also added a blocking pre-hydration `<head>` script (`layout.tsx`)
+  so a saved dark preference applies before first paint instead of flashing light, and made
+  the CodeMirror editor follow the app theme instead of being hardcoded dark. Live-verified
+  via Playwright: background genuinely flips between light/dark, persists across reload.
+- **MOM-092** Web Push notifications — **DONE (dormant until VAPID keys are set)**
+  2026-07-07. See `docs/adr/0008-web-push-notifications.md`. New `PushSubscription` model;
+  `apps/api/src/push/` (`PushService`, `PushController` — `GET /push/config`, `POST`/`DELETE
+  /push/subscriptions` — and `ReminderPushScheduler`, a `@Cron` every 5 minutes on an
+  off-minute that no-ops entirely without keys and otherwise pushes each due, undelivered,
+  non-dismissed reminder exactly once via the existing `Reminder.lastTriggeredAt` field, no
+  new column needed). `apps/web/public/sw.js` gained `push`/`notificationclick` handlers; a
+  new `push-settings-card.tsx` on `/settings` mirrors `ai-feedback-card.tsx`'s
+  hidden-when-unavailable pattern. No third-party account needed — VAPID keys are
+  self-generated (`npx web-push generate-vapid-keys`). 14 zero-network tests. Live-verified
+  locally with a generated keypair: `GET /push/config` reports `available:true`+key,
+  subscribe/unsubscribe round-trips clean. Real iOS install→subscribe→receive is unverified
+  until deployed over HTTPS (push requires it) — flagged the same way as AI grading's live
+  key path.
+- **MOM-093** Graceful shutdown — **DONE** 2026-07-07. `app.enableShutdownHooks()` was never
+  called in `main.ts`, so `PrismaService.onModuleDestroy` never fired on SIGTERM — a
+  platform redeploy/restart dropped connections mid-request instead of disconnecting
+  cleanly. One-line fix.
+- **MOM-094** Real token revocation — **DONE** 2026-07-07. `User.tokenVersion` embedded as
+  `tv` in every signed JWT; `JwtAuthGuard` now checks it against the current DB value and
+  rejects a mismatch. `POST /auth/logout` (previously a no-op) bumps `tokenVersion`,
+  invalidating every token issued before it immediately instead of leaving them valid for
+  up to 30 more days (the JWT expiry). This was flagged as the single largest security
+  exposure in the audit (a leaked localStorage token had no revocation path at all).
+  Live-verified: login → logout → the same old token gets 401 "Session has been revoked";
+  a fresh login still works. 6 new guard tests.
+- **MOM-095** API never linted in CI — **DONE** 2026-07-07. `apps/api` had no ESLint config
+  or `lint` script at all, so root `pnpm -r lint` (already run in CI) silently skipped it.
+  Added `eslint.config.mjs` + script; fixed the two issues this surfaced (an
+  `@typescript-eslint/no-empty-object-type` on a bare `Prisma.XGetPayload<{}>`, one unused
+  import).
+- **MOM-096** UX/accessibility polish — **DONE** 2026-07-07. 401 mid-session now triggers
+  auto-logout + redirect (previously just silently cleared the token, leaving stale UI up
+  until the next manual navigation) via a `momito:unauthorized` window event `api-client.ts`
+  dispatches and `AuthProvider` listens for. Questions search debounced (300ms; was firing
+  one request per keystroke) and filters written to the URL so they survive back/forward
+  and PWA relaunch. Optimistic updates (remove-then-rollback-on-error, no full refetch) for
+  Today's reminder-dismiss/inline-review-rating and Calendar's complete/snooze/dismiss —
+  verified live at ~100ms perceived latency vs. a real round trip. Labeled the
+  previously-unlabeled Questions/Calendar form controls; `Card` (`ui.tsx`) is now
+  keyboard-reachable (`role="button"`/tabIndex/Enter+Space) when given an `onClick`; `Badge`/
+  `Pagination` gained `dark:` variants (previously always light-mode colors, illegible in
+  dark mode since MOM-013). `ReminderBell` now polls every 60s + on window focus instead of
+  fetching once on mount. New `Skeleton`/`ListSkeleton` primitives replace the full-page
+  spinner on Today/Questions.
+- **MOM-097** Frontend test foundation — **DONE** 2026-07-07. `apps/web` had zero automated
+  tests. Added vitest + `@testing-library/react` + jsdom (no `@vitejs/plugin-react` — a vite
+  version conflict in this monorepo's install; tsconfig's `"jsx":"react-jsx"` is enough for
+  Vite's default esbuild transform). 20 tests: `api-client` error shaping/401 flow, an
+  extracted-and-tested `resolveInitialTheme()` pure function (the logic MOM-091's
+  pre-hydration script has to hand-duplicate), `push-settings-card` visibility states,
+  Today's priority-queue ordering, and the practice-session answer-submit payload
+  (self-rating/missTags/reflectionNote present-when-set, omitted-when-default). Caught one
+  real bug while writing the session-page test: a naive `useRouter` mock returning a fresh
+  object every call changed `fetchSession`'s `useCallback` identity every render,
+  re-triggering its effect in an infinite fetch loop — a test-mock artifact (real Next
+  returns a stable router), not an app bug, fixed by memoizing the mock.
+- **MOM-098** `aiScore` scale reconciliation — **VERIFIED, no bug found** 2026-07-07. The
+  audit flagged this as a landmine worth checking: `ai.service.ts` writes `aiScore =
+  overallScore / 100` (a 0–1 scale), and `dsa.service.ts`/`missions.service.ts` both gate on
+  `aiScore >= 0.6`. Confirmed these agree (a 65/100 AI grade counts as solved/positive, a
+  55/100 does not) and pinned the contract with regression tests in both services so a
+  future accidental removal of the `/100` conversion would be caught immediately (a
+  raw 55 would wrongly satisfy `>= 0.6`).
+- **MOM-099** AI budget check-and-reserve race — **DONE** 2026-07-07. The old
+  `checkAndReserve` read today's usage via a plain `SELECT`, so two concurrent grade
+  requests could both read "under budget" and both proceed, overshooting the daily cap once
+  both eventually recorded their real cost. Replaced with an atomic conditional `UPDATE ...
+  WHERE cost_usd < budget` (via Prisma's `updateMany`), closing the read-then-write gap —
+  the real per-call cost still can't be reserved upfront since it's unknown until the model
+  responds; `record()` still trues it up afterward. Low real-world risk for a single-user
+  app; fixed while already touching the module.
+- **MOM-100** `answer_attempts` composite index — **DONE** 2026-07-07. Added `@@index([
+  userId, createdAt])` alongside the existing single-column `userId` index, covering
+  `dashboard.service.ts`'s recent-attempts query (filter by user, order by createdAt desc)
+  directly.
+- **Consciously deferred, not built this pass:** Readwise access-token encryption at rest
+  (do when that integration goes live in a real public deploy — currently plaintext, low
+  risk while nothing is publicly deployed); throttler external storage (in-memory is fine
+  for a single Render dyno; revisit only if ever scaled beyond one instance); stricter
+  password complexity rules (single-user account, not worth the friction); Sentry/metrics/
+  request-ID correlation (genuinely useful, but needs a real deployed instance to be
+  worth wiring up — premature against localhost).
 
 ---
 
@@ -634,7 +750,7 @@ Global verification / forbidden-file defaults:
 | Spike | Question to answer | Gates |
 |---|---|---|
 | SPIKE-001 | shadcn + Tailwind v4 + Next 16.2.9 compatibility (React 19) | MOM-007 |
-| SPIKE-002 | Service-worker cache vs JWT auth behavior — **RESOLVED 2026-07-06, reversing the earlier DEFER** (D-007's multi-tenant Cache-API leak concern doesn't apply here: this is a single-user, localStorage-Bearer app with registration locked down — see ADR-0001/0009 — so there's no second tenant whose cached HTML could leak). Shipped a hand-rolled `apps/web/public/sw.js`: precache `/`+`/offline` only, network-first-with-cache-fallback for same-origin navigations/static assets, **never caches cross-origin API calls or authenticated page HTML**, old-cache cleanup on activate. | MOM-016 |
+| SPIKE-002 | Service-worker cache vs JWT auth behavior — **RESOLVED 2026-07-06, reversing the earlier DEFER** (D-007's multi-tenant Cache-API leak concern doesn't apply here: this is a single-user, localStorage-Bearer app with registration locked down by default — see the MOM-018 doctrine comment in `apps/api/src/common/config.ts` — so there's no second tenant whose cached HTML could leak). Shipped a hand-rolled `apps/web/public/sw.js`: precache `/`+`/offline` only, network-first-with-cache-fallback for same-origin navigations/static assets, **never caches cross-origin API calls or authenticated page HTML**, old-cache cleanup on activate. (Note: fixed a dangling "ADR-0001/0009" citation here 2026-07-07 — ADR-0009 never existed and ADR-0001 is about the NestJS-vs-Python backend choice, not this doctrine; there is no dedicated ADR for the single-user/localStorage-Bearer decision, only this inline doctrine comment.) | MOM-016 |
 | SPIKE-003 | ReviewState polymorphic `objectType/objectId` migration on existing DB — **DONE 2026-07-05 for ReviewState/MOM-026**, see ADR-0002. `Story`'s own schema (MOM-063) — **DONE 2026-07-06**, see ADR-0005. | MOM-026, MOM-063 |
 | SPIKE-004 | `ts-fsrs` real API + scheduling semantics — **DONE 2026-07-05**, see `apps/api/src/reviews/fsrs-scheduler.ts` | MOM-030 |
 | SPIKE-005 | Anthropic SDK structured output — **DONE 2026-07-06**, see MOM-068 | MOM-068 |
