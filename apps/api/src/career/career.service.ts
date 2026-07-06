@@ -3,7 +3,6 @@ import { CareerGoal, Prisma } from '@prisma/client';
 import {
   CAREER_ROLE_TRACKS,
   CareerGoalResponse,
-  CareerRoleAreaId,
   CareerRoleTrack,
   CareerRoleTrackId,
   RoleAreaReadiness,

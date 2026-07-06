@@ -710,7 +710,7 @@ export class MissionsService {
     };
   }
 
-  private serializeEvidence(evidence: Prisma.LearningEvidenceGetPayload<{}>) {
+  private serializeEvidence(evidence: Prisma.LearningEvidenceGetPayload<object>) {
     return {
       id: evidence.id,
       userId: evidence.userId,

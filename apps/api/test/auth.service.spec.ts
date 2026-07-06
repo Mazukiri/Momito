@@ -76,6 +76,18 @@ describe('AuthService', () => {
     });
   });
 
+  it('bumps tokenVersion on logout to revoke every previously issued token', async () => {
+    const update = vi.fn().mockResolvedValue({});
+    const service = new AuthService({ user: { update } } as never, {} as never);
+
+    await service.logout('user-1');
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { tokenVersion: { increment: 1 } },
+    });
+  });
+
   it('loads the current user through the public field selection', async () => {
     const findUniqueOrThrow = vi.fn().mockResolvedValue({ id: 'user-1' });
     const service = new AuthService({ user: { findUniqueOrThrow } } as never, {} as never);

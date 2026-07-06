@@ -10,6 +10,7 @@
     "prisma:generate": "prisma generate",
     "seed": "prisma db seed",
     "test": "vitest run",
+    "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "content:validate": "tsx scripts/content-validate.ts",
     "content:stats": "tsx scripts/content-stats.ts",
@@ -40,11 +41,13 @@
     "@nestjs/cli": "^11.0.7",
     "@nestjs/testing": "^11.1.3",
     "@types/express": "^5.0.6",
-    "@types/node": "^22.15.30",
+    "@types/node": "^22.19.21",
     "@types/web-push": "^3.6.4",
+    "eslint": "^9.39.4",
     "prisma": "^6.19.0",
     "tsx": "^4.20.6",
     "typescript": "^5.8.3",
+    "typescript-eslint": "^8.62.1",
     "vitest": "^3.2.3"
   },
   "prisma": {

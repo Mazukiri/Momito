@@ -18,6 +18,10 @@ model User {
   passwordHash   String             @map("password_hash")
   name           String
   role           String             @default("user")
+  // Embedded in every issued JWT as `tv`; bumped on logout so all previously
+  // issued (otherwise stateless, non-expiring-for-30-days) tokens are
+  // rejected immediately instead of staying valid until they naturally expire.
+  tokenVersion   Int                @default(0) @map("token_version")
   createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
   questions      Question[]
@@ -288,6 +292,11 @@ model AnswerAttempt {
   question   Question          @relation(fields: [questionId], references: [id], onDelete: Restrict)
 
   @@index([userId])
+  // Dashboard's recent-attempts query filters by userId and orders by
+  // createdAt desc (dashboard.service.ts) — this composite index covers that
+  // access pattern directly instead of relying on the single-column index
+  // plus a sort.
+  @@index([userId, createdAt])
   @@index([sessionId])
   @@index([questionId])
   @@index([needsReview])

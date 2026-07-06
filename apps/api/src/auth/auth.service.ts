@@ -30,7 +30,7 @@ export class AuthService {
         },
         select: publicUserSelect,
       });
-      return { user, accessToken: await this.sign(user) };
+      return { user, accessToken: await this.sign({ ...user, tokenVersion: 0 }) };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('Email is already registered');
@@ -48,7 +48,7 @@ export class AuthService {
     }
 
     const publicUser = { id: user.id, email: user.email, name: user.name, role: user.role };
-    return { user: publicUser, accessToken: await this.sign(publicUser) };
+    return { user: publicUser, accessToken: await this.sign(user) };
   }
 
   me(userId: string) {
@@ -58,7 +58,18 @@ export class AuthService {
     });
   }
 
-  private sign(user: { id: string; email: string; role: string }) {
-    return this.jwt.signAsync({ id: user.id, email: user.email, role: user.role });
+  // Bumping tokenVersion invalidates every previously issued token for this
+  // user immediately (JwtAuthGuard rejects any token whose `tv` claim no
+  // longer matches) — turns what used to be a no-op into real revocation for
+  // an otherwise stateless, 30-day-lived JWT.
+  async logout(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+  }
+
+  private sign(user: { id: string; email: string; role: string; tokenVersion: number }) {
+    return this.jwt.signAsync({ id: user.id, email: user.email, role: user.role, tv: user.tokenVersion });
   }
 }
