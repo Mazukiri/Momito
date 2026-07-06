@@ -14,7 +14,10 @@ type Environment = Partial<
     | 'ALLOW_MULTI_USER_REGISTRATION'
     | 'ANTHROPIC_API_KEY'
     | 'ANTHROPIC_MODEL'
-    | 'AI_DAILY_BUDGET_USD',
+    | 'AI_DAILY_BUDGET_USD'
+    | 'VAPID_PUBLIC_KEY'
+    | 'VAPID_PRIVATE_KEY'
+    | 'VAPID_SUBJECT',
     string | undefined
   >
 >;
@@ -85,4 +88,23 @@ export function getAiDailyBudgetUsd(environment: Environment = process.env): num
 
 export function isAiGradingAvailable(environment: Environment = process.env): boolean {
   return Boolean(getAnthropicApiKey(environment));
+}
+
+// Web Push: absence of a VAPID keypair means "Enable notifications" is hidden
+// on the client and the reminder-push scheduler no-ops rather than erroring —
+// same dormant-until-configured pattern as AI grading (docs/adr/0008).
+export function getVapidPublicKey(environment: Environment = process.env): string | undefined {
+  return environment.VAPID_PUBLIC_KEY?.trim() || undefined;
+}
+
+export function getVapidPrivateKey(environment: Environment = process.env): string | undefined {
+  return environment.VAPID_PRIVATE_KEY?.trim() || undefined;
+}
+
+export function getVapidSubject(environment: Environment = process.env): string {
+  return environment.VAPID_SUBJECT?.trim() || 'mailto:admin@example.com';
+}
+
+export function isPushAvailable(environment: Environment = process.env): boolean {
+  return Boolean(getVapidPublicKey(environment) && getVapidPrivateKey(environment));
 }

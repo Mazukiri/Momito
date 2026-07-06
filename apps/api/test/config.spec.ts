@@ -6,8 +6,12 @@ import {
   getCorsOrigin,
   getJwtExpiresIn,
   getJwtSecret,
+  getVapidPublicKey,
+  getVapidPrivateKey,
+  getVapidSubject,
   isAiGradingAvailable,
   isMultiUserRegistrationAllowed,
+  isPushAvailable,
 } from '../src/common/config';
 
 describe('application config', () => {
@@ -76,5 +80,19 @@ describe('application config', () => {
     expect(getAiDailyBudgetUsd({})).toBe(1.0);
     expect(getAiDailyBudgetUsd({ AI_DAILY_BUDGET_USD: '2.50' })).toBe(2.5);
     expect(getAiDailyBudgetUsd({ AI_DAILY_BUDGET_USD: 'not-a-number' })).toBe(1.0);
+  });
+
+  it('reports push unavailable unless both VAPID keys are set', () => {
+    expect(isPushAvailable({})).toBe(false);
+    expect(isPushAvailable({ VAPID_PUBLIC_KEY: 'pub' })).toBe(false);
+    expect(isPushAvailable({ VAPID_PRIVATE_KEY: 'priv' })).toBe(false);
+    expect(isPushAvailable({ VAPID_PUBLIC_KEY: 'pub', VAPID_PRIVATE_KEY: 'priv' })).toBe(true);
+    expect(getVapidPublicKey({ VAPID_PUBLIC_KEY: '  pub  ' })).toBe('pub');
+    expect(getVapidPrivateKey({ VAPID_PRIVATE_KEY: '  priv  ' })).toBe('priv');
+  });
+
+  it('defaults the VAPID subject, honoring an override', () => {
+    expect(getVapidSubject({})).toBe('mailto:admin@example.com');
+    expect(getVapidSubject({ VAPID_SUBJECT: 'mailto:demo@momito.local' })).toBe('mailto:demo@momito.local');
   });
 });

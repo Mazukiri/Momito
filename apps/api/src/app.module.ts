@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { CompaniesModule } from './companies/companies.module';
@@ -23,6 +24,7 @@ import { DsaModule } from './dsa/dsa.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { StoriesModule } from './stories/stories.module';
 import { AiModule } from './ai/ai.module';
+import { PushModule } from './push/push.module';
 import { RequestLoggingMiddleware } from './common/request-logging.middleware';
 
 @Module({
@@ -31,6 +33,8 @@ import { RequestLoggingMiddleware } from './common/request-logging.middleware';
     // because liveness pollers run far below this rate; MOM-018 layers a tighter
     // limit onto auth routes specifically.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    // Needed for ReminderPushScheduler's @Cron (push/reminder-push.scheduler.ts).
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     HealthModule,
@@ -53,6 +57,7 @@ import { RequestLoggingMiddleware } from './common/request-logging.middleware';
     MissionsModule,
     RecommendationsModule,
     AiModule,
+    PushModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
