@@ -1,9 +1,14 @@
 @import "tailwindcss";
-@plugin "@tailwindcss/typography";
 
 /* MOM-013: class-based dark mode so a user toggle (ThemeProvider) can override the
-   system preference, instead of `dark:` only ever following prefers-color-scheme. */
+   system preference, instead of `dark:` only ever following prefers-color-scheme.
+   Must come immediately after the tailwindcss import — Turbopack's dev CSS
+   pipeline silently drops this variant if a foreign @import/@plugin sits between
+   them, and dark: utilities fall back to a plain prefers-color-scheme media query. */
 @custom-variant dark (&:where(.dark, .dark *));
+
+@import "highlight.js/styles/github-dark.css";
+@plugin "@tailwindcss/typography";
 
 :root {
   --background: #ffffff;

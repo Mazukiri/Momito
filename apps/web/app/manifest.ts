@@ -1,8 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-// MOM-015: installable PWA manifest. No service worker yet (MOM-016 is
-// SPIKE-gated / deferred — see DECISIONS.md D-007) so this only makes the app
-// installable; it does not add offline support.
+// MOM-015: installable PWA manifest (service worker lives in public/sw.js).
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Momito - Interview Prep',

@@ -11,6 +11,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { java } from '@codemirror/lang-java';
+import { useTheme } from '../lib/theme-context';
 
 const LANGUAGES = {
   javascript: { label: 'JavaScript', extension: javascript({ jsx: true }) },
@@ -32,6 +33,7 @@ export default function CodeEditor({
 }) {
   const [language, setLanguage] = useState<LanguageKey>('javascript');
   const extensions = useMemo(() => [LANGUAGES[language].extension], [language]);
+  const { theme } = useTheme();
 
   return (
     <div className="rounded-lg border border-zinc-300 dark:border-zinc-700">
@@ -54,7 +56,7 @@ export default function CodeEditor({
         onChange={onChange}
         extensions={extensions}
         placeholder={placeholder}
-        theme="dark"
+        theme={theme}
         basicSetup={{ lineNumbers: true, foldGutter: true }}
         minHeight="12rem"
         className="text-sm"
