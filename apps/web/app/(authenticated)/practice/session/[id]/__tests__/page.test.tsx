@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ActiveSessionPage from '../page';
-import { sessionsApi, type SessionDetailResponse } from '../../../../../lib/api-client';
+import { aiApi, attemptsApi, sessionsApi, type SessionDetailResponse } from '../../../../../lib/api-client';
 
 const push = vi.fn();
 const replace = vi.fn();
@@ -18,6 +18,31 @@ vi.mock('next/navigation', () => ({
   useRouter: () => router,
 }));
 
+function buildQuestion(overrides: { referenceAnswer?: string | null } = {}) {
+  return {
+    id: 'q-1',
+    title: 'Leading without formal authority',
+    prompt: 'Describe a time you led without formal authority.',
+    type: 'behavioral',
+    difficulty: 'hard',
+    topicId: 'topic-1',
+    referenceAnswer: overrides.referenceAnswer ?? 'Strong answers anchor on influence through credibility and outcomes.',
+    notes: null,
+    sourceUrl: null,
+    roleTags: [],
+    areaTags: [],
+    patternTags: [],
+    estimatedMinutes: null,
+    rubric: null,
+    importance: 1,
+    createdByUserId: 'user-1',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    topic: { id: 'topic-1', name: 'Behavioral' },
+    companies: [],
+  };
+}
+
 function buildSession(): SessionDetailResponse {
   return {
     id: 'session-1',
@@ -30,94 +55,126 @@ function buildSession(): SessionDetailResponse {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     sessionQuestions: [
-      {
-        id: 'sq-1',
-        sessionId: 'session-1',
-        questionId: 'q-1',
-        order: 1,
-        question: {
-          id: 'q-1',
-          title: 'Leading without formal authority',
-          prompt: 'Describe a time you led without formal authority.',
-          type: 'behavioral',
-          difficulty: 'hard',
-          topicId: 'topic-1',
-          referenceAnswer: null,
-          notes: null,
-          sourceUrl: null,
-          roleTags: [],
-          areaTags: [],
-          patternTags: [],
-          estimatedMinutes: null,
-          rubric: null,
-          importance: 1,
-          createdByUserId: 'user-1',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          topic: { id: 'topic-1', name: 'Behavioral' },
-          companies: [],
-        },
-      },
+      { id: 'sq-1', sessionId: 'session-1', questionId: 'q-1', order: 1, question: buildQuestion() },
     ],
     answerAttempts: [],
   } as unknown as SessionDetailResponse;
 }
 
-describe('ActiveSessionPage — answer submit payload', () => {
+function buildAttempt() {
+  return {
+    id: 'attempt-1',
+    userId: 'user-1',
+    sessionId: 'session-1',
+    questionId: 'q-1',
+    answerText: 'I organized a cross-team migration without direct authority.',
+    selfRating: null,
+    aiScore: null,
+    aiFeedback: null,
+    missTags: [],
+    reflectionNote: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function mockAiUnavailable() {
+  // RevealPanel embeds AiFeedbackCard, which probes /ai/usage on mount — keep
+  // tests offline and deterministic.
+  vi.spyOn(aiApi, 'usage').mockResolvedValue({ available: false } as never);
+}
+
+describe('ActiveSessionPage — answer → reveal → rate lifecycle (plan §7.2)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     push.mockClear();
     replace.mockClear();
   });
 
-  it('submits self-rating, miss tags, and reflection note alongside the answer text', async () => {
+  it('withholds the reference answer and rating until the answer is submitted, then reveals both', async () => {
+    mockAiUnavailable();
     vi.spyOn(sessionsApi, 'get').mockResolvedValue(buildSession());
-    const answerSpy = vi.spyOn(sessionsApi, 'answer').mockResolvedValue({} as never);
+    const answerSpy = vi.spyOn(sessionsApi, 'answer').mockResolvedValue(buildAttempt() as never);
 
     render(<ActiveSessionPage />);
 
     const textarea = await screen.findByLabelText('Your Answer');
+    // Answer phase: no reference answer, no rating buttons.
+    expect(screen.queryByText(/Strong answers anchor on influence/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Again')).not.toBeInTheDocument();
+
     fireEvent.change(textarea, { target: { value: 'I organized a cross-team migration without direct authority.' } });
+    fireEvent.click(screen.getByText('Submit & reveal answer'));
 
-    // Self-rating: click the "4/5" star.
-    fireEvent.click(screen.getByTitle('4 / 5'));
+    await waitFor(() => expect(answerSpy).toHaveBeenCalledTimes(1));
+    const [sessionId, payload] = answerSpy.mock.calls[0];
+    expect(sessionId).toBe('session-1');
+    // The submit carries only the recall — the grade comes after the reveal.
+    expect(payload).toMatchObject({
+      questionId: 'q-1',
+      answerText: 'I organized a cross-team migration without direct authority.',
+    });
+    expect(payload.selfRating).toBeUndefined();
+    expect(typeof payload.timeSpentSeconds).toBe('number');
 
-    // Expand reflection, tag one miss reason, add a note.
-    fireEvent.click(screen.getByText('+ Add reflection (optional)'));
+    // Reveal phase: reference answer, the user's own answer, and the labeled grades.
+    expect(await screen.findByText(/Strong answers anchor on influence/)).toBeInTheDocument();
+    expect(screen.getByText('I organized a cross-team migration without direct authority.')).toBeInTheDocument();
+    for (const label of ['Again', 'Hard', 'Good', 'Easy']) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+  });
+
+  it('saves rating with post-reveal reflection through PATCH /attempts/:id', async () => {
+    mockAiUnavailable();
+    vi.spyOn(sessionsApi, 'get').mockResolvedValue(buildSession());
+    vi.spyOn(sessionsApi, 'answer').mockResolvedValue(buildAttempt() as never);
+    const updateSpy = vi.spyOn(attemptsApi, 'update').mockResolvedValue({
+      ...buildAttempt(),
+      selfRating: 3,
+      missTags: ['communication_gap'],
+      reflectionNote: 'Should have led with the outcome.',
+    } as never);
+
+    render(<ActiveSessionPage />);
+
+    fireEvent.change(await screen.findByLabelText('Your Answer'), {
+      target: { value: 'I organized a cross-team migration without direct authority.' },
+    });
+    fireEvent.click(screen.getByText('Submit & reveal answer'));
+
+    // In the reveal, tag a miss reason and add a note *after* seeing the reference.
+    fireEvent.click(await screen.findByText('+ Add reflection (optional)'));
     fireEvent.click(screen.getByText('Struggled to explain it'));
     fireEvent.change(screen.getByPlaceholderText('Anything else worth remembering next time?'), {
       target: { value: 'Should have led with the outcome.' },
     });
 
-    fireEvent.click(screen.getByText('Submit Answer'));
+    fireEvent.click(screen.getByText('Good'));
 
-    await waitFor(() => expect(answerSpy).toHaveBeenCalledTimes(1));
-    const [sessionId, payload] = answerSpy.mock.calls[0];
-    expect(sessionId).toBe('session-1');
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+    const [attemptId, payload] = updateSpy.mock.calls[0];
+    expect(attemptId).toBe('attempt-1');
     expect(payload).toMatchObject({
-      questionId: 'q-1',
-      answerText: 'I organized a cross-team migration without direct authority.',
-      selfRating: 4,
+      selfRating: 3,
       missTags: ['communication_gap'],
       reflectionNote: 'Should have led with the outcome.',
     });
-    expect(typeof payload.timeSpentSeconds).toBe('number');
+    expect(await screen.findByText(/next review scheduled/)).toBeInTheDocument();
   });
 
-  it('omits selfRating/missTags/reflectionNote entirely when left at their defaults', async () => {
-    vi.spyOn(sessionsApi, 'get').mockResolvedValue(buildSession());
-    const answerSpy = vi.spyOn(sessionsApi, 'answer').mockResolvedValue({} as never);
+  it('resumes an answered question in the reveal phase instead of asking for a new answer', async () => {
+    mockAiUnavailable();
+    const session = buildSession();
+    (session as unknown as { answerAttempts: unknown[] }).answerAttempts = [buildAttempt()];
+    vi.spyOn(sessionsApi, 'get').mockResolvedValue(session);
 
     render(<ActiveSessionPage />);
 
-    const textarea = await screen.findByLabelText('Your Answer');
-    fireEvent.change(textarea, { target: { value: 'A minimal answer with no extras.' } });
-    fireEvent.click(screen.getByText('Submit Answer'));
-
-    await waitFor(() => expect(answerSpy).toHaveBeenCalledTimes(1));
-    const [, payload] = answerSpy.mock.calls[0];
-    expect(payload.selfRating).toBeUndefined();
-    expect(payload.missTags).toBeUndefined();
-    expect(payload.reflectionNote).toBeUndefined();
+    // Loads straight into the reveal for the already-answered question.
+    expect(await screen.findByText(/Strong answers anchor on influence/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Your Answer')).not.toBeInTheDocument();
+    // And the whole-session completion CTA is available.
+    expect(screen.getByText('Complete Session')).toBeInTheDocument();
   });
 });

@@ -1,29 +1,26 @@
 'use client';
 
 import { useEffect } from 'react';
-import type { MissTagReason, SessionQuestionResponse } from '@momito/shared';
+import type { SessionQuestionResponse } from '@momito/shared';
 import { Card, Badge, Spinner } from '../ui';
 import { useTimer } from '../../lib/use-timer';
 import { TYPE_LABELS } from './question-type-labels';
 import { TextAnswerPanel } from './answer-panels/TextAnswerPanel';
 import { SystemDesignAnswerPanel } from './answer-panels/SystemDesignAnswerPanel';
 import { CodeAnswerPanel } from './answer-panels/CodeAnswerPanel';
-import { ReflectionPanel } from './ReflectionPanel';
 
+// Attempt lifecycle (plan §7.2): this form is only the *recall* half —
+// read the prompt, write the answer, submit. Self-rating and reflection
+// deliberately moved to RevealPanel: they can only be answered honestly after
+// the reference answer is on screen (rating blind is guessing; "what did I
+// miss" is unanswerable before seeing what a strong answer contains).
 export function AnswerForm({
   currentQuestion,
   currentIndex,
   totalQuestions,
   answerText,
   onAnswerTextChange,
-  selfRating,
-  onSelfRatingChange,
-  missTags,
-  onMissTagsChange,
-  reflectionNote,
-  onReflectionNoteChange,
   submitting,
-  isAlreadyAnswered,
   onPrevious,
   onSubmit,
 }: {
@@ -32,15 +29,8 @@ export function AnswerForm({
   totalQuestions: number;
   answerText: string;
   onAnswerTextChange: (value: string) => void;
-  selfRating: number;
-  onSelfRatingChange: (value: number) => void;
-  missTags: MissTagReason[];
-  onMissTagsChange: (tags: MissTagReason[]) => void;
-  reflectionNote: string;
-  onReflectionNoteChange: (value: string) => void;
   submitting: boolean;
-  isAlreadyAnswered: boolean;
-  onPrevious: () => void;
+  onPrevious?: () => void;
   onSubmit: (timeSpentSeconds: number) => void;
 }) {
   // MOM-036: timer restarts for each new question so timeSpentSeconds reflects
@@ -107,40 +97,9 @@ export function AnswerForm({
           <TextAnswerPanel value={answerText} onChange={onAnswerTextChange} />
         )}
 
-        <div className="mt-3">
-          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Self Rating <span className="text-zinc-400">(optional)</span>
-          </span>
-          <div className="mt-1 flex gap-2">
-            {[1, 2, 3, 4, 5].map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => onSelfRatingChange(selfRating === r ? 0 : r)}
-                className={`h-8 w-8 rounded-full text-sm font-medium transition-colors ${
-                  selfRating >= r
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400'
-                }`}
-                title={`${r} / 5`}
-              >
-                {r}
-              </button>
-            ))}
-            <span className="ml-1 self-center text-xs text-zinc-400">1-5</span>
-          </div>
-        </div>
-
-        <ReflectionPanel
-          missTags={missTags}
-          onMissTagsChange={onMissTagsChange}
-          reflectionNote={reflectionNote}
-          onReflectionNoteChange={onReflectionNoteChange}
-        />
-
         <div className="mt-4 flex items-center justify-between">
           <div className="flex gap-2">
-            {currentIndex > 0 && (
+            {onPrevious && (
               <button
                 type="button"
                 onClick={onPrevious}
@@ -156,7 +115,7 @@ export function AnswerForm({
             disabled={!answerText.trim() || submitting}
             className="rounded-lg bg-indigo-600 px-5 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
           >
-            {submitting ? <Spinner className="h-4 w-4" /> : isAlreadyAnswered ? 'Update Answer' : 'Submit Answer'}
+            {submitting ? <Spinner className="h-4 w-4" /> : 'Submit & reveal answer'}
           </button>
         </div>
       </div>
