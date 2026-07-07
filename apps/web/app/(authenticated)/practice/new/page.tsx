@@ -24,7 +24,7 @@ const SESSION_TYPE_DESCRIPTIONS: Record<string, string> = {
   company_practice: 'Practice questions asked by a specific company',
   mixed_mock: 'Mix of question types and difficulties',
   role_drill: 'Focus on one role track and area',
-  weak_area_review: 'Revisit low-confidence areas',
+  weak_area_review: 'Redo recent misses plus sibling questions from your weak patterns and topics',
   daily_mixed_set: 'Small balanced set for today',
   job_prep: 'Practice against a target job',
   spaced_review: 'Practice everything currently due for spaced-repetition review',

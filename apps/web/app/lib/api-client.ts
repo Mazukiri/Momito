@@ -222,6 +222,7 @@ import type {
   SessionQuestionResponse,
   AnswerAttemptResponse,
   MissTagReason,
+  WeaknessSummaryResponse,
 } from '@momito/shared';
 
 export interface CreateSessionResponse {
@@ -312,6 +313,35 @@ export const attemptsApi = {
     const query = qs.toString();
     return request<PaginatedResponse<AnswerAttemptResponse>>(`/questions/${questionId}/attempts${query ? `?${query}` : ''}`);
   },
+
+  // Standalone attempt (no session) — the Today queue's inline recall flow
+  // records a typed recall as a real attempt so it feeds streak, history, and
+  // weakness signals like any session answer.
+  create: (body: {
+    questionId: string;
+    answerText: string;
+    selfRating?: number;
+    timeSpentSeconds?: number;
+    missTags?: MissTagReason[];
+    reflectionNote?: string;
+  }) =>
+    request<AnswerAttemptResponse>('/attempts', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Post-reveal rate/reflect (attempt lifecycle §7.2: Submit → Reveal →
+  // Reflect → Self-rate). Rating here schedules the FSRS review server-side.
+  update: (id: string, body: {
+    selfRating?: number;
+    correctness?: string;
+    confidence?: number;
+    missTags?: MissTagReason[];
+    reflectionNote?: string;
+  }) =>
+    request<AnswerAttemptResponse>(`/attempts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+};
+
+// ── Weakness signals (plan §5.4/§6.1) ───────────────────────────────────────
+export const weaknessesApi = {
+  summary: () => request<WeaknessSummaryResponse>('/weaknesses'),
 };
 
 // ── AI grading (Workstream C: dormant until ANTHROPIC_API_KEY is set) ──────

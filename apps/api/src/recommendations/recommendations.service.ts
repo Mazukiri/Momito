@@ -3,6 +3,7 @@ import { PracticeRecommendationResponse } from '@momito/shared';
 import { CareerService } from '../career/career.service';
 import { MissionsService } from '../missions/missions.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { WeaknessesService } from '../weaknesses/weaknesses.service';
 
 // MOM-033: standardized reason taxonomy (plan §6.2 wants every recommendation to
 // explain, in a complete sentence, why it appears — not a mix of phrases and
@@ -16,7 +17,17 @@ const RECOMMENDATION_REASONS = {
   jobActive: () => 'This is an active job application in your pipeline.',
   unreviewedHighlights: (count: number) =>
     `You have ${count} unreviewed learning highlight${count === 1 ? '' : 's'} waiting in your inbox.`,
+  // Plan §6.2's example wording ("You failed 2 sliding-window questions
+  // recently") — a weakness recommendation names the exact signal and count.
+  weakReason: (label: string, count: number) =>
+    `You logged "${label}" on ${count} recent attempt${count === 1 ? '' : 's'}.`,
+  weakArea: (label: string, struggles: number) =>
+    `You struggled with ${struggles} ${label} question${struggles === 1 ? '' : 's'} recently.`,
 };
+
+// A weak signal needs at least this many struggles before it drives a
+// recommendation — one bad attempt is noise, not a pattern.
+const WEAKNESS_MIN_COUNT = 2;
 
 @Injectable()
 export class RecommendationsService {
@@ -24,10 +35,11 @@ export class RecommendationsService {
     private readonly prisma: PrismaService,
     private readonly career: CareerService,
     private readonly missions: MissionsService,
+    private readonly weaknesses: WeaknessesService,
   ) {}
 
   async list(userId: string): Promise<PracticeRecommendationResponse[]> {
-    const [readiness, activeMissions, overdueTasks, jobs, inboxCount] = await Promise.all([
+    const [readiness, activeMissions, overdueTasks, jobs, inboxCount, weaknessSummary] = await Promise.all([
       this.career.listActiveReadiness(userId),
       this.missions.list(userId),
       this.prisma.task.findMany({
@@ -41,9 +53,47 @@ export class RecommendationsService {
         take: 3,
       }),
       this.prisma.learningHighlight.count({ where: { userId, isDeleted: false, reviewedAt: null } }),
+      this.weaknesses.summary(userId),
     ]);
 
     const recommendations: PracticeRecommendationResponse[] = [];
+
+    // Plan §6.1 queue priority 3: weakness repair sits above readiness gaps
+    // (80+) and below overdue tasks (100). Patterns/topics with repeated
+    // struggles come first (they map directly to a repair session); a
+    // repeated miss reason without an area (e.g. "time_pressure" across mixed
+    // topics) still surfaces once so the signal is never silently dropped.
+    const weakAreas = [...weaknessSummary.patterns, ...weaknessSummary.topics]
+      .filter((area) => area.struggles >= WEAKNESS_MIN_COUNT)
+      .sort((left, right) => right.struggles - left.struggles)
+      .slice(0, 2);
+    for (const area of weakAreas) {
+      recommendations.push({
+        id: `weakness:area:${area.key}`,
+        type: 'practice',
+        title: `Repair weak spot: ${area.label}`,
+        reason: RECOMMENDATION_REASONS.weakArea(area.label, area.struggles),
+        roleTrackId: null,
+        area: null,
+        targetHref: '/practice/new?mode=weak_area_review',
+        priority: 95,
+      });
+    }
+    if (weakAreas.length === 0) {
+      const topReason = weaknessSummary.reasons.find((reason) => reason.count >= WEAKNESS_MIN_COUNT);
+      if (topReason) {
+        recommendations.push({
+          id: `weakness:reason:${topReason.reason}`,
+          type: 'practice',
+          title: 'Repair a recurring mistake',
+          reason: RECOMMENDATION_REASONS.weakReason(topReason.label, topReason.count),
+          roleTrackId: null,
+          area: null,
+          targetHref: '/practice/new?mode=weak_area_review',
+          priority: 95,
+        });
+      }
+    }
     for (const mission of activeMissions.filter((item) => item.stage !== 'archived').slice(0, 2)) {
       recommendations.push({
         id: `mission:${mission.id}`,

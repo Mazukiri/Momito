@@ -18,6 +18,7 @@ import { TasksModule } from './tasks/tasks.module';
 import { LearningModule } from './learning/learning.module';
 import { MissionsModule } from './missions/missions.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
+import { WeaknessesModule } from './weaknesses/weaknesses.module';
 import { HealthModule } from './health/health.module';
 import { ContentModule } from './content/content.module';
 import { DsaModule } from './dsa/dsa.module';
@@ -56,6 +57,7 @@ import { RequestLoggingMiddleware } from './common/request-logging.middleware';
     LearningModule,
     MissionsModule,
     RecommendationsModule,
+    WeaknessesModule,
     AiModule,
     PushModule,
   ],

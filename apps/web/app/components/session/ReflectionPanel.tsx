@@ -1,22 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { MISS_TAG_REASONS, type MissTagReason } from '@momito/shared';
+import { MISS_TAG_LABELS, MISS_TAG_REASONS, type MissTagReason } from '@momito/shared';
 
-// MOM-039: optional reflection step (plan §5.4's WeaknessSignal.reason taxonomy,
-// added to AnswerAttempt by MOM-028). Collapsed by default so it never gets in
-// the way of a quick answer — most attempts won't need it.
-export const MISS_TAG_LABELS: Record<MissTagReason, string> = {
-  misread: 'Misread the question',
-  wrong_pattern: 'Used the wrong approach',
-  edge_case: 'Missed an edge case',
-  time_pressure: 'Ran out of time',
-  blank: "Didn't know where to start",
-  implementation_bug: 'Implementation bug',
-  concept_gap: "Didn't know the concept",
-  communication_gap: 'Struggled to explain it',
-  tradeoff_gap: 'Missed a tradeoff',
-};
+// MOM-039: optional reflection step (plan §5.4's WeaknessSignal.reason
+// taxonomy, added to AnswerAttempt by MOM-028). Shown in the *reveal* phase —
+// after the reference answer — since "what did I miss" can only be answered
+// honestly once the user has seen what a strong answer contains. Labels live
+// in @momito/shared so the API's weakness recommendations quote the exact
+// wording the user tapped.
+export { MISS_TAG_LABELS };
 
 export function ReflectionPanel({
   missTags,

@@ -2,22 +2,32 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { sessionsApi } from '../../lib/api-client';
-import type { InterviewSessionResponse } from '@momito/shared';
+import { useRouter } from 'next/navigation';
+import { sessionsApi, weaknessesApi } from '../../lib/api-client';
+import type { InterviewSessionResponse, WeaknessSummaryResponse } from '@momito/shared';
 import { Card, Spinner, Badge } from '../../components/ui';
 
 // MOM-041: practice hub — the landing page for the "Practice" primary nav tab.
-// Surfaces an in-progress session (if any) plus entry points into every
-// practice mode, instead of dropping straight into the session-creation form.
+// Surfaces an in-progress session (if any), the user's current weak spots
+// (plan §5.4/§6.1 — the signals their reflections have been feeding), plus
+// entry points into every practice mode.
 export default function PracticeHubPage() {
+  const router = useRouter();
   const [activeSessions, setActiveSessions] = useState<InterviewSessionResponse[]>([]);
+  const [weaknesses, setWeaknesses] = useState<WeaknessSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [startingRepair, setStartingRepair] = useState(false);
+  const [repairError, setRepairError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await sessionsApi.list({ status: 'active', limit: 3 });
-      setActiveSessions(data);
+      const [sessions, weaknessSummary] = await Promise.all([
+        sessionsApi.list({ status: 'active', limit: 3 }),
+        weaknessesApi.summary().catch(() => null),
+      ]);
+      setActiveSessions(sessions.data);
+      setWeaknesses(weaknessSummary);
     } catch {
       // Non-critical for the hub — the "start new session" path still works.
       setActiveSessions([]);
@@ -30,6 +40,25 @@ export default function PracticeHubPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard data load
     load();
   }, [load]);
+
+  async function startRepairSession() {
+    if (startingRepair) return;
+    setStartingRepair(true);
+    setRepairError('');
+    try {
+      const created = await sessionsApi.create({
+        sessionType: 'weak_area_review',
+        title: 'Weakness repair',
+        questionCount: 5,
+      });
+      router.push(`/practice/session/${created.session.id}`);
+    } catch (err: unknown) {
+      setRepairError(err instanceof Error ? err.message : 'Failed to start repair session');
+      setStartingRepair(false);
+    }
+  }
+
+  const hasWeaknesses = (weaknesses?.totalStruggles ?? 0) > 0;
 
   return (
     <div className="space-y-6">
@@ -68,6 +97,50 @@ export default function PracticeHubPage() {
           ))}
         </div>
       ) : null}
+
+      {!loading && hasWeaknesses && weaknesses && (
+        <div>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+            Weak spots — last {weaknesses.windowDays} days
+          </h2>
+          <Card>
+            <div className="flex flex-wrap gap-2">
+              {weaknesses.reasons.slice(0, 3).map((reason) => (
+                <span
+                  key={reason.reason}
+                  className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-400"
+                  title={reason.sampleTitles.join(' · ')}
+                >
+                  {reason.label} ×{reason.count}
+                </span>
+              ))}
+              {[...weaknesses.patterns, ...weaknesses.topics]
+                .sort((left, right) => right.struggles - left.struggles)
+                .slice(0, 3)
+                .map((area) => (
+                  <span
+                    key={area.key}
+                    className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                  >
+                    {area.label} · {area.struggles}/{area.attempts} struggled
+                  </span>
+                ))}
+            </div>
+            <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+              A repair session redoes your recent misses and drills sibling questions from the same
+              patterns and topics.
+            </p>
+            <button
+              onClick={startRepairSession}
+              disabled={startingRepair}
+              className="mt-3 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {startingRepair ? 'Starting…' : 'Start repair session →'}
+            </button>
+            {repairError && <p className="mt-2 text-xs text-red-600">{repairError}</p>}
+          </Card>
+        </div>
+      )}
 
       <div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">

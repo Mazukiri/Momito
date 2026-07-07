@@ -1,15 +1,27 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { sessionsApi, type SessionDetailResponse } from '../../../../lib/api-client';
-import type { MissTagReason, SessionQuestionResponse } from '@momito/shared';
+import { attemptsApi, sessionsApi, type SessionDetailResponse } from '../../../../lib/api-client';
+import type { AnswerAttemptResponse, MissTagReason, SessionQuestionResponse } from '@momito/shared';
 import { Spinner, ErrorBanner } from '../../../../components/ui';
 import { SessionHeader } from '../../../../components/session/SessionHeader';
 import { AnswerForm } from '../../../../components/session/AnswerForm';
 import { AllAnsweredPanel } from '../../../../components/session/AllAnsweredPanel';
-import { ReviewQuestionCard } from '../../../../components/session/ReviewQuestionCard';
+import { RevealPanel } from '../../../../components/session/RevealPanel';
 
+// Attempt lifecycle (plan §7.2), now actually in this order:
+//
+//   read prompt → answer → submit
+//   → REVEAL reference/rubric (new)
+//   → reflect (moved here — after the reveal, where it can be honest)
+//   → rate Again/Hard/Good/Easy (moved here — schedules the FSRS review)
+//   → next question
+//
+// Each question is therefore in one of two phases: 'answer' (no attempt yet)
+// or 'reveal' (attempt exists). Navigating back to an answered question
+// reopens its reveal, where the rating/reflection can still be revised —
+// the PATCH reschedules the review from the newest grade.
 export default function ActiveSessionPage() {
   const params = useParams();
   const router = useRouter();
@@ -20,12 +32,12 @@ export default function ActiveSessionPage() {
   const [error, setError] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answerText, setAnswerText] = useState('');
-  const [selfRating, setSelfRating] = useState<number>(0);
-  const [missTags, setMissTags] = useState<MissTagReason[]>([]);
-  const [reflectionNote, setReflectionNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set());
+  const [attemptsByQuestion, setAttemptsByQuestion] = useState<Map<string, AnswerAttemptResponse>>(new Map());
   const [completing, setCompleting] = useState(false);
+  // Once every question is answered, the same index navigation switches into a
+  // browse mode over reveals; this flag keeps the "all answered" banner up.
+  const [browseAll, setBrowseAll] = useState(false);
 
   const fetchSession = useCallback(async () => {
     setLoading(true);
@@ -38,15 +50,15 @@ export default function ActiveSessionPage() {
         return;
       }
       setSession(s);
-      // Pre-populate answered questions from existing attempts
-      const answered = new Set(s.answerAttempts.map((a) => a.questionId));
-      setAnsweredQuestions(answered);
+      // answerAttempts arrive oldest-first; overwriting keeps the latest per question.
+      const byQuestion = new Map<string, AnswerAttemptResponse>();
+      for (const attempt of s.answerAttempts) byQuestion.set(attempt.questionId, attempt as AnswerAttemptResponse);
+      setAttemptsByQuestion(byQuestion);
       // Resume from the first unanswered question
       if (s.sessionQuestions.length > 0) {
-        const firstUnanswered = s.sessionQuestions.findIndex(
-          (sq) => !answered.has(sq.questionId)
-        );
-        setCurrentIndex(firstUnanswered >= 0 ? firstUnanswered : s.sessionQuestions.length - 1);
+        const firstUnanswered = s.sessionQuestions.findIndex((sq) => !byQuestion.has(sq.questionId));
+        setCurrentIndex(firstUnanswered >= 0 ? firstUnanswered : 0);
+        setBrowseAll(firstUnanswered < 0);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load session');
@@ -60,44 +72,74 @@ export default function ActiveSessionPage() {
     fetchSession();
   }, [fetchSession]);
 
+  const questions = useMemo(() => session?.sessionQuestions ?? [], [session]);
+  const totalQuestions = questions.length;
+  const answeredCount = useMemo(
+    () => questions.filter((sq) => attemptsByQuestion.has(sq.questionId)).length,
+    [questions, attemptsByQuestion],
+  );
+  const allAnswered = totalQuestions > 0 && answeredCount >= totalQuestions;
+  const currentQuestion: SessionQuestionResponse | null =
+    currentIndex >= 0 && currentIndex < totalQuestions ? questions[currentIndex] : null;
+  const currentAttempt = currentQuestion ? attemptsByQuestion.get(currentQuestion.questionId) ?? null : null;
+
   async function handleSubmitAnswer(timeSpentSeconds: number) {
-    if (!session || !answerText.trim() || submitting) return;
-    const currentQuestion = session.sessionQuestions[currentIndex];
-    if (!currentQuestion) return;
+    if (!session || !currentQuestion || !answerText.trim() || submitting) return;
 
     setSubmitting(true);
+    setError('');
     try {
-      await sessionsApi.answer(id, {
+      const attempt = await sessionsApi.answer(id, {
         questionId: currentQuestion.questionId,
         answerText: answerText.trim(),
-        selfRating: selfRating > 0 ? selfRating : undefined,
         timeSpentSeconds,
-        missTags: missTags.length > 0 ? missTags : undefined,
-        reflectionNote: reflectionNote.trim() || undefined,
       });
-      const newAnswered = new Set(answeredQuestions);
-      newAnswered.add(currentQuestion.questionId);
-      setAnsweredQuestions(newAnswered);
+      setAttemptsByQuestion((current) => {
+        const next = new Map(current);
+        next.set(currentQuestion.questionId, attempt);
+        return next;
+      });
       setAnswerText('');
-      setSelfRating(0);
-      setMissTags([]);
-      setReflectionNote('');
-
-      // Move to next unanswered question
-      const nextUnanswered = session.sessionQuestions.findIndex((sq, i) =>
-        i > currentIndex && !newAnswered.has(sq.questionId)
-      );
-      if (nextUnanswered >= 0) {
-        setCurrentIndex(nextUnanswered);
-      } else {
-        // All answered — prompt completion
-        setCurrentIndex(session.sessionQuestions.length); // "all done" state
-      }
+      // Stay on this question — the reveal phase renders now that an attempt exists.
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to submit answer');
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleRated(
+    attempt: AnswerAttemptResponse,
+    payload: { selfRating: number; missTags: MissTagReason[]; reflectionNote: string },
+  ) {
+    const updated = await attemptsApi.update(attempt.id, {
+      selfRating: payload.selfRating,
+      missTags: payload.missTags,
+      reflectionNote: payload.reflectionNote || undefined,
+    });
+    setAttemptsByQuestion((current) => {
+      const next = new Map(current);
+      next.set(attempt.questionId, { ...attempt, ...updated });
+      return next;
+    });
+  }
+
+  function goToNext() {
+    // Prefer the next unanswered question after the current one, then any
+    // unanswered earlier one; when none remain, enter browse-all mode.
+    const nextUnanswered = questions.findIndex(
+      (sq, i) => i > currentIndex && !attemptsByQuestion.has(sq.questionId),
+    );
+    if (nextUnanswered >= 0) {
+      setCurrentIndex(nextUnanswered);
+      return;
+    }
+    const anyUnanswered = questions.findIndex((sq) => !attemptsByQuestion.has(sq.questionId));
+    if (anyUnanswered >= 0) {
+      setCurrentIndex(anyUnanswered);
+      return;
+    }
+    setBrowseAll(true);
   }
 
   async function handleComplete() {
@@ -147,20 +189,15 @@ export default function ActiveSessionPage() {
     );
   }
 
-  if (!session || session.sessionQuestions.length === 0) {
+  if (!session || totalQuestions === 0) {
     return null;
   }
-
-  const questions = session.sessionQuestions;
-  const totalQuestions = questions.length;
-  const allAnswered = answeredQuestions.size >= totalQuestions;
-  const currentQuestion: SessionQuestionResponse | null = currentIndex < totalQuestions ? questions[currentIndex] : null;
 
   return (
     <div className="mx-auto max-w-3xl">
       <SessionHeader
         title={session.title}
-        answeredCount={answeredQuestions.size}
+        answeredCount={answeredCount}
         totalQuestions={totalQuestions}
         completing={completing}
         onAbandon={handleAbandon}
@@ -172,49 +209,48 @@ export default function ActiveSessionPage() {
         </div>
       )}
 
-      {currentQuestion && !allAnswered && (
+      {allAnswered && browseAll && (
+        <AllAnsweredPanel questions={questions} currentIndex={currentIndex} onSelect={setCurrentIndex} />
+      )}
+
+      {currentQuestion && !currentAttempt && (
         <AnswerForm
           currentQuestion={currentQuestion}
           currentIndex={currentIndex}
           totalQuestions={totalQuestions}
           answerText={answerText}
           onAnswerTextChange={setAnswerText}
-          selfRating={selfRating}
-          onSelfRatingChange={setSelfRating}
-          missTags={missTags}
-          onMissTagsChange={setMissTags}
-          reflectionNote={reflectionNote}
-          onReflectionNoteChange={setReflectionNote}
           submitting={submitting}
-          isAlreadyAnswered={answeredQuestions.has(currentQuestion.questionId)}
-          onPrevious={() => setCurrentIndex(currentIndex - 1)}
+          onPrevious={currentIndex > 0 ? () => setCurrentIndex(currentIndex - 1) : undefined}
           onSubmit={handleSubmitAnswer}
         />
       )}
 
-      {allAnswered && (
-        <AllAnsweredPanel questions={questions} currentIndex={currentIndex} onSelect={setCurrentIndex} />
-      )}
-
-      {currentQuestion && allAnswered && (
-        <ReviewQuestionCard
+      {currentQuestion && currentAttempt && (
+        <RevealPanel
+          key={currentAttempt.id}
           currentQuestion={currentQuestion}
           currentIndex={currentIndex}
           totalQuestions={totalQuestions}
-          onPrevious={() => setCurrentIndex(currentIndex - 1)}
-          onNext={() => setCurrentIndex(currentIndex + 1)}
+          attempt={currentAttempt}
+          onRated={(payload) => handleRated(currentAttempt, payload)}
+          onPrevious={currentIndex > 0 ? () => setCurrentIndex(currentIndex - 1) : undefined}
+          onNext={allAnswered && currentIndex >= totalQuestions - 1 ? undefined : goToNext}
+          nextLabel={allAnswered ? 'Next →' : 'Next question →'}
         />
       )}
 
-      <div className="flex justify-center">
-        <button
-          onClick={handleComplete}
-          disabled={completing}
-          className="rounded-lg bg-green-600 px-8 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-        >
-          {completing ? <Spinner className="h-4 w-4" /> : 'Complete Session'}
-        </button>
-      </div>
+      {allAnswered && (
+        <div className="flex justify-center">
+          <button
+            onClick={handleComplete}
+            disabled={completing}
+            className="rounded-lg bg-green-600 px-8 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          >
+            {completing ? <Spinner className="h-4 w-4" /> : 'Complete Session'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

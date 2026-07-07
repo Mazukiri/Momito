@@ -2168,3 +2168,59 @@ push-receive path (needs the real HTTPS deploy), MOM-088's Lighthouse audit (nee
 deployed origin), MOM-049 (LeetCode import, disclosed judgment call), and the V2 plan's
 `WeaknessSignal`/quality-gating vision chunk (net-new feature depth, not a readiness gap —
 flagged for a future scoped plan, not started).
+
+---
+
+## 2026-07-07 — Learning-loop integrity: reveal-then-rate, real Today recall, live weakness engine
+
+**Diagnosis first, code second.** Read the full repo against plan §7.2's attempt lifecycle
+(`Submit → Reveal reference → Reflect → Rate → Schedule`) and found the loop implemented
+*out of order* in three places: (1) sessions asked for self-rating and miss-tags **before**
+the reference answer was ever shown — and never showed it at all, in-session or after; (2)
+Today's "Review now" expanded into bare 1-5 buttons — a grade with no prompt, no recall, no
+reveal; (3) `missTags` (§5.4 WeaknessSignal taxonomy, MOM-028) were written but read by
+nothing — the prior session's log itself flagged this chunk as "not started". Blind grades
+degrade FSRS scheduling; unread reflections make the reflection UI theater.
+
+**Phase 1 — shared:** `MISS_TAG_LABELS` moved to `@momito/shared` (API recommendation
+reasons now quote the exact wording the reflection UI showed); `SELF_RATING_SCALE`
+(Again=1/Hard=2/Good=3/Easy=5, mirroring `fsrs-scheduler`'s existing 1→Again 2→Hard 3-4→Good
+5→Easy map — value 4 intentionally absent, historical 4s untouched); weakness summary types.
+
+**Phase 2 — API:** `POST /attempts` (standalone, sessionless — `sessionId` was already
+nullable) and `PATCH /attempts/:id` (post-reveal rate/reflect; `answerText` deliberately
+immutable — the attempt is a record of pre-reveal recall). Both schedule FSRS reviews on
+rating, same non-fatal contract as `sessions.answer`. New `weaknesses` module: `GET
+/weaknesses` derives reason/pattern/topic signals on the fly from windowed attempts
+(§2.1.8 "derived from real attempts" — no new table, no migration). `RecommendationsService`
+gains weakness-repair items at priority 95 (§6.1 slot 3: under overdue tasks, over readiness
+gaps) with §6.2-style concrete reasons ("You struggled with 3 sliding-window questions
+recently."), gated at ≥2 struggles so one bad attempt is noise, not a pattern.
+`weak_area_review` sessions — previously identical to `quick_practice` — now redo recent
+unrepaired misses (a later clean ≥3-rated attempt clears the flag) and fill with siblings
+from the weakest patterns/topics; falls back to the filtered draw for new users.
+
+**Phase 3 — web:** Session page rebuilt as a two-phase machine: `AnswerForm` is recall-only
+(prompt → answer → "Submit & reveal answer"); new `RevealPanel` carries everything after —
+reference answer, rubric criteria, the user's own answer side-by-side, reflection (moved
+here, where "what did I miss" is answerable), labeled Again/Hard/Good/Easy grading via
+`PATCH`, and the existing `AiFeedbackCard` (self-hides without a key). Navigating back to an
+answered question reopens its reveal (keyed remount by attempt id); `ReviewQuestionCard`
+deleted as superseded. Today's review card became `TodayReviewCard`: expand → prompt →
+optional typed recall → reveal → grade; a *typed* recall posts a real standalone attempt
+(streak/history/weakness all count it), a mental-only recall records just the grade. Summary
+page: collapsible reference answers, Again/Hard/Good/Easy grade chips, and "Retry N missed →"
+(unanswered ∪ rated ≤2 ∪ any miss-tag) via `questionIds`-pinned session. Practice hub shows
+live weak spots + one-tap repair session.
+
+**Checks:** `pnpm -r lint/typecheck/test` green — **146 API + 24 web tests** (was 132 + 20).
+New coverage: attempt create/update scheduling + ownership, weakness aggregation +
+repaired-miss exclusion, weak_area_review composition + fallback, weakness recommendations
+(incl. noise gate), session reveal-order lifecycle, Today recall flow (typed-vs-mental
+paths). `next build`/`nest build` compile (web verified with a temporary font stub — Google
+Fonts is unreachable from this sandbox; stub reverted, not committed).
+
+**Deliberately not done:** no `WeaknessSignal` table (derive-don't-store until decay/dismiss
+is needed); no FSRS interval preview on grade buttons (needs an API surface — candidate
+follow-up); DSA-ladder per-pattern drill links and dashboard weakness panel deferred (hub
+card covers the entry point).
