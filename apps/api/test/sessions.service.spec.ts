@@ -5,6 +5,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { CreateSessionDto } from '../src/sessions/dto/create-session.dto';
 import { SessionsService } from '../src/sessions/sessions.service';
 
+// New third constructor dependency (weakness-driven weak_area_review selection).
+// Tests that don't exercise that session type get an inert stub.
+const weaknessesStub = () =>
+  ({
+    struggledQuestionIds: vi.fn().mockResolvedValue([]),
+    summary: vi.fn().mockResolvedValue({ windowDays: 30, totalAttempts: 0, totalStruggles: 0, reasons: [], patterns: [], topics: [] }),
+  }) as never;
+
 describe('SessionsService', () => {
   it('creates no more questions than are available and preserves order', async () => {
     const create = vi.fn().mockImplementation(({ data }) => ({
@@ -22,7 +30,7 @@ describe('SessionsService', () => {
       question: { findMany: vi.fn().mockResolvedValue([{ id: 'q-1' }, { id: 'q-2' }]) },
       interviewSession: { create },
     };
-    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
 
     const result = await service.create(
       { sessionType: 'mixed_mock', difficulty: 'hard', questionCount: 5 },
@@ -35,7 +43,7 @@ describe('SessionsService', () => {
   });
 
   it('rejects session creation when no question matches', async () => {
-    const service = new SessionsService({ question: { findMany: vi.fn().mockResolvedValue([]) } } as never, { record: vi.fn() } as never);
+    const service = new SessionsService({ question: { findMany: vi.fn().mockResolvedValue([]) } } as never, { record: vi.fn() } as never, weaknessesStub());
     await expect(service.create({ sessionType: 'quick_practice', questionCount: 1 }, 'user-1'))
       .rejects.toEqual(new BadRequestException('No questions match the selected filters'));
   });
@@ -53,7 +61,7 @@ describe('SessionsService', () => {
       })),
     }));
     const findMany = vi.fn().mockResolvedValue([{ id: 'q-2' }, { id: 'q-1' }]);
-    const service = new SessionsService({ question: { findMany }, interviewSession: { create } } as never, { record: vi.fn() } as never);
+    const service = new SessionsService({ question: { findMany }, interviewSession: { create } } as never, { record: vi.fn() } as never, weaknessesStub());
 
     await service.create(
       { sessionType: 'quick_practice', questionCount: 99, questionIds: ['q-1', 'q-2'] },
@@ -84,7 +92,7 @@ describe('SessionsService', () => {
       },
       interviewSession: { create },
     };
-    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
 
     await service.create({ sessionType: 'spaced_review', questionCount: 2 }, 'user-1');
 
@@ -107,7 +115,7 @@ describe('SessionsService', () => {
       question: { findMany: vi.fn().mockResolvedValue([{ id: 'q-existing' }]) },
       interviewSession: { create },
     };
-    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
 
     await service.create({ sessionType: 'spaced_review', questionCount: 5 }, 'user-1');
 
@@ -123,7 +131,7 @@ describe('SessionsService', () => {
       question: { findMany: vi.fn().mockResolvedValue([{ id: 'q-picked' }]) },
       interviewSession: { create },
     };
-    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
 
     await service.create(
       { sessionType: 'spaced_review', questionCount: 5, questionIds: ['q-picked'] },
@@ -139,7 +147,7 @@ describe('SessionsService', () => {
   it('deduplicates exact question IDs while preserving first-seen order', async () => {
     const create = vi.fn().mockResolvedValue({ id: 'session-1', status: 'active', sessionQuestions: [] });
     const findMany = vi.fn().mockResolvedValue([{ id: 'q-2' }, { id: 'q-1' }]);
-    const service = new SessionsService({ question: { findMany }, interviewSession: { create } } as never, { record: vi.fn() } as never);
+    const service = new SessionsService({ question: { findMany }, interviewSession: { create } } as never, { record: vi.fn() } as never, weaknessesStub());
 
     await service.create(
       { sessionType: 'quick_practice', questionCount: 3, questionIds: ['q-1', 'q-2', 'q-1'] },
@@ -169,7 +177,7 @@ describe('SessionsService', () => {
     const service = new SessionsService({
       question: { findMany: vi.fn().mockResolvedValue([{ id: 'q-1' }]) },
       interviewSession: { create },
-    } as never, { record: vi.fn() } as never);
+    } as never, { record: vi.fn() } as never, weaknessesStub());
 
     await expect(service.create(
       { sessionType: 'quick_practice', questionCount: 2, questionIds: ['q-1', 'missing'] },
@@ -183,7 +191,7 @@ describe('SessionsService', () => {
       interviewSession: { findFirst: vi.fn().mockResolvedValue({ status: 'active', sessionQuestions: [] }) },
       answerAttempt: { create: vi.fn() },
     };
-    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
 
     await expect(service.answer('session-1', { questionId: 'q-1', answerText: 'answer' }, 'user-1'))
       .rejects.toEqual(new BadRequestException('Question is not part of this session'));
@@ -200,7 +208,7 @@ describe('SessionsService', () => {
       },
     };
     const record = vi.fn().mockResolvedValue({});
-    const service = new SessionsService(prisma as never, { record } as never);
+    const service = new SessionsService(prisma as never, { record } as never, weaknessesStub());
 
     await service.answer('session-1', { questionId: 'q-1', answerText: 'answer', selfRating: 4 }, 'user-1');
 
@@ -217,7 +225,7 @@ describe('SessionsService', () => {
       },
     };
     const record = vi.fn();
-    const service = new SessionsService(prisma as never, { record } as never);
+    const service = new SessionsService(prisma as never, { record } as never, weaknessesStub());
 
     await service.answer('session-1', { questionId: 'q-1', answerText: 'answer' }, 'user-1');
 
@@ -234,7 +242,7 @@ describe('SessionsService', () => {
       },
     };
     const record = vi.fn().mockRejectedValue(new Error('scheduling exploded'));
-    const service = new SessionsService(prisma as never, { record } as never);
+    const service = new SessionsService(prisma as never, { record } as never, weaknessesStub());
 
     const result = await service.answer('session-1', { questionId: 'q-1', answerText: 'answer', selfRating: 2 }, 'user-1');
 
@@ -242,7 +250,7 @@ describe('SessionsService', () => {
   });
 
   it('does not expose another users session', async () => {
-    const service = new SessionsService({ interviewSession: { findFirst: vi.fn().mockResolvedValue(null) } } as never, { record: vi.fn() } as never);
+    const service = new SessionsService({ interviewSession: { findFirst: vi.fn().mockResolvedValue(null) } } as never, { record: vi.fn() } as never, weaknessesStub());
     await expect(service.get('session-1', 'user-2')).rejects.toEqual(new NotFoundException('Session not found'));
   });
 
@@ -253,8 +261,82 @@ describe('SessionsService', () => {
         findFirst: vi.fn().mockResolvedValue({ status: 'completed' }),
       },
     };
-    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
     await expect(service.abandon('session-1', 'user-1'))
       .rejects.toEqual(new ConflictException('Session is already completed'));
+  });
+});
+
+describe('SessionsService — weak_area_review selection', () => {
+  it('leads with struggled questions and fills with weak-pattern siblings', async () => {
+    const create = vi.fn().mockImplementation(({ data }) => ({
+      id: 'session-1',
+      status: 'active',
+      sessionQuestions: data.sessionQuestions.create.map((item: { questionId: string; order: number }) => ({
+        id: `sq-${item.order}`,
+        sessionId: 'session-1',
+        questionId: item.questionId,
+        order: item.order,
+        question: { id: item.questionId, topic: { id: 't', name: 'T' }, companies: [] },
+      })),
+    }));
+    const prisma = {
+      interviewSession: { create },
+      question: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'sibling-1', patternTags: ['sliding-window'], topicId: 'topic-dsa', importance: 2 },
+          { id: 'sibling-2', patternTags: ['two-pointers'], topicId: 'topic-other', importance: 1 },
+        ]),
+      },
+    };
+    const weaknesses = {
+      struggledQuestionIds: vi.fn().mockResolvedValue(['struggle-1', 'struggle-2']),
+      summary: vi.fn().mockResolvedValue({
+        windowDays: 30,
+        totalAttempts: 5,
+        totalStruggles: 3,
+        reasons: [],
+        patterns: [{ key: 'sliding-window', label: 'sliding-window', struggles: 2, attempts: 3, lastAt: '', questionIds: [] }],
+        topics: [{ key: 'topic-dsa', label: 'DSA', struggles: 2, attempts: 4, lastAt: '', questionIds: [] }],
+      }),
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknesses as never);
+
+    const result = await service.create({ sessionType: 'weak_area_review', questionCount: 3 }, 'user-1');
+
+    const chosen = result.questions.map((question) => question.questionId);
+    // Redo items lead (capped at 2/3 of 3 = 2), then a sibling fills the rest.
+    expect(chosen.slice(0, 2)).toEqual(['struggle-1', 'struggle-2']);
+    expect(chosen).toHaveLength(3);
+    expect(['sibling-1', 'sibling-2']).toContain(chosen[2]);
+    // Sibling lookup must exclude questions already being redone.
+    expect(prisma.question.findMany.mock.calls[0][0].where.id).toEqual({ notIn: ['struggle-1', 'struggle-2'] });
+  });
+
+  it('falls back to the plain filtered draw when there is no struggle history yet', async () => {
+    const create = vi.fn().mockImplementation(({ data }) => ({
+      id: 'session-1',
+      status: 'active',
+      sessionQuestions: data.sessionQuestions.create.map((item: { questionId: string; order: number }) => ({
+        id: `sq-${item.order}`,
+        sessionId: 'session-1',
+        questionId: item.questionId,
+        order: item.order,
+        question: { id: item.questionId, topic: { id: 't', name: 'T' }, companies: [] },
+      })),
+    }));
+    const prisma = {
+      interviewSession: { create },
+      question: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'q-1', roleTags: [], areaTags: [], patternTags: [], importance: 1 },
+        ]),
+      },
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
+
+    const result = await service.create({ sessionType: 'weak_area_review', questionCount: 2 }, 'user-1');
+
+    expect(result.questions.map((question) => question.questionId)).toEqual(['q-1']);
   });
 });

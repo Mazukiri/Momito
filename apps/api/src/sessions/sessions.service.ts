@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewsService } from '../reviews/reviews.service';
+import { WeaknessesService } from '../weaknesses/weaknesses.service';
 import { CreateAnswerDto } from './dto/create-answer.dto';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { ListSessionsDto } from './dto/list-sessions.dto';
@@ -24,6 +25,7 @@ export class SessionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly reviews: ReviewsService,
+    private readonly weaknesses: WeaknessesService,
   ) {}
 
   async create(dto: CreateSessionDto, userId: string) {
@@ -34,7 +36,9 @@ export class SessionsService {
       ? await this.selectExactQuestions(questionIds)
       : sessionData.sessionType === 'spaced_review'
         ? await this.selectDueReviewQuestions(userId, questionCount)
-        : await this.selectFilteredQuestions({ topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern });
+        : sessionData.sessionType === 'weak_area_review'
+          ? await this.selectWeaknessQuestions(userId, { topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern })
+          : await this.selectFilteredQuestions({ topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern });
 
     if (selected.length === 0) throw new BadRequestException('No questions match the selected filters');
 
@@ -86,6 +90,71 @@ export class SessionsService {
     });
     const existingIds = new Set(existingQuestions.map((question) => question.id));
     return dueQuestionIds.filter((id) => existingIds.has(id)).map((id) => ({ id }));
+  }
+
+  // Plan §7.1 weakness_repair: 'weak_area_review' had a label and description
+  // in the UI but drew a plain filtered-random set — identical to
+  // quick_practice. It now draws from the user's actual weakness signals:
+  // 1. Questions they recently struggled on and haven't since repaired (redo).
+  // 2. Sibling questions from their weakest patterns/topics they haven't
+  //    struggled on yet (drill the pattern, not just the exact item).
+  // Falls back to the plain filtered draw when there's no struggle history
+  // yet, so the session type always works (UX invariant §2.3.2-style: the
+  // feature degrades, it doesn't dead-end).
+  private async selectWeaknessQuestions(
+    userId: string,
+    filters: {
+      topicId?: string;
+      companyId?: string;
+      difficulty?: string;
+      roleTrackId?: string;
+      area?: string;
+      pattern?: string;
+      questionCount: number;
+    },
+  ) {
+    const [struggledIds, summary] = await Promise.all([
+      this.weaknesses.struggledQuestionIds(userId),
+      this.weaknesses.summary(userId),
+    ]);
+
+    if (struggledIds.length === 0) {
+      return this.selectFilteredQuestions(filters);
+    }
+
+    const weakPatterns = summary.patterns.slice(0, 3).map((areaSummary) => areaSummary.key.toLowerCase());
+    const weakTopicIds = summary.topics.slice(0, 3).map((areaSummary) => areaSummary.key);
+
+    // Redo items lead the session, capped so at least ~1/3 of slots stay open
+    // for pattern siblings whenever any exist.
+    const redoCap = Math.max(1, Math.ceil(filters.questionCount * (2 / 3)));
+    const redo = struggledIds.slice(0, Math.min(redoCap, filters.questionCount));
+
+    const siblingCandidates =
+      weakPatterns.length > 0 || weakTopicIds.length > 0
+        ? await this.prisma.question.findMany({
+            where: {
+              id: { notIn: struggledIds },
+              ...(weakTopicIds.length > 0 && { topicId: { in: weakTopicIds } }),
+              ...(filters.difficulty && { difficulty: filters.difficulty }),
+            },
+            select: { id: true, patternTags: true, topicId: true, importance: true },
+          })
+        : [];
+    const siblings = this.shuffle(
+      siblingCandidates.filter((question) => {
+        if (weakTopicIds.includes(question.topicId)) return true;
+        const patternTags = this.asStringArray(question.patternTags).map((tag) => tag.toLowerCase());
+        return patternTags.some((tag) => weakPatterns.includes(tag));
+      }),
+    )
+      .sort((left, right) => right.importance - left.importance)
+      .map(({ id }) => id);
+
+    const combined = [...redo, ...siblings, ...struggledIds.slice(redo.length)];
+    const unique = [...new Set(combined)].slice(0, filters.questionCount);
+    if (unique.length === 0) return this.selectFilteredQuestions(filters);
+    return unique.map((id) => ({ id }));
   }
 
   private async selectFilteredQuestions(filters: {
