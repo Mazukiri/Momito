@@ -1,0 +1,3171 @@
+From d046f2763e5f81b4eb5300320ca6d1d3f4b07f35 Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Tue, 7 Jul 2026 18:03:01 +0000
+Subject: [PATCH 1/6] feat(shared): self-rating scale, shared miss-tag labels,
+ weakness summary types
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+SELF_RATING_SCALE names the four grades (Again=1/Hard=2/Good=3/Easy=5) exactly
+as fsrs-scheduler already maps selfRating, so rating UIs can stop presenting
+unlabeled stars. MISS_TAG_LABELS moves here from the web ReflectionPanel so API
+weakness recommendations quote the same wording the user tapped. Weakness
+summary types back the new GET /weaknesses shape (plan §5.4/§6.1).
+---
+ packages/shared/src/index.ts | 67 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 67 insertions(+)
+
+diff --git a/packages/shared/src/index.ts b/packages/shared/src/index.ts
+index 736920c..663887c 100644
+--- a/packages/shared/src/index.ts
++++ b/packages/shared/src/index.ts
+@@ -1177,6 +1177,73 @@ export const MISS_TAG_REASONS = [
+ ] as const;
+ export type MissTagReason = (typeof MISS_TAG_REASONS)[number];
+ 
++// Human labels for MissTagReason, shared so the API can compose recommendation
++// reasons ("You logged 'Missed an edge case' on 3 recent attempts") with the
++// exact same wording the reflection UI showed when the tag was captured.
++export const MISS_TAG_LABELS: Record<MissTagReason, string> = {
++  misread: 'Misread the question',
++  wrong_pattern: 'Used the wrong approach',
++  edge_case: 'Missed an edge case',
++  time_pressure: 'Ran out of time',
++  blank: "Didn't know where to start",
++  implementation_bug: 'Implementation bug',
++  concept_gap: "Didn't know the concept",
++  communication_gap: 'Struggled to explain it',
++  tradeoff_gap: 'Missed a tradeoff',
++};
++
++// ── Self-rating scale (learning loop §7.2) ──────────────────────────────────
++// The API stores selfRating 1-5 and fsrs-scheduler maps it 1→Again, 2→Hard,
++// 3/4→Good, 5→Easy. Rating UIs should present these four labeled grades —
++// shown *after* the reference answer is revealed — instead of an unlabeled
++// star row, so the grade the user picks means the same thing FSRS thinks it
++// means. Value 4 is intentionally absent from the scale (it schedules
++// identically to 3); historical 4s remain valid data.
++export const SELF_RATING_SCALE = [
++  { value: 1, label: 'Again', description: 'Got it wrong — show me again soon' },
++  { value: 2, label: 'Hard', description: 'Got there, but it was a struggle' },
++  { value: 3, label: 'Good', description: 'Solid recall with minor gaps' },
++  { value: 5, label: 'Easy', description: 'Knew it cold' },
++] as const;
++export type SelfRatingValue = (typeof SELF_RATING_SCALE)[number]['value'];
++
++// ── Weakness signals (plan §5.4 / §6.1 priority 3) ──────────────────────────
++// Derived on the fly from AnswerAttempt.missTags + low selfRating within a
++// recent window — "Progress is derived from real attempts" (§2.1.8), so there
++// is no separate weakness table to drift out of sync.
++
++export interface WeaknessReasonSummary {
++  reason: MissTagReason;
++  label: string;
++  count: number;
++  lastAt: string;
++  /** Up to 3 recent question titles that carried this tag. */
++  sampleTitles: string[];
++  /** Question ids behind this signal, most recent first (capped). */
++  questionIds: string[];
++}
++
++export interface WeaknessAreaSummary {
++  /** patternTag (e.g. 'sliding-window') or topic name, depending on the list. */
++  key: string;
++  label: string;
++  /** Attempts in the window that struggled (low rating or any miss tag). */
++  struggles: number;
++  /** Total attempts in the window touching this area. */
++  attempts: number;
++  lastAt: string;
++  questionIds: string[];
++}
++
++export interface WeaknessSummaryResponse {
++  windowDays: number;
++  totalAttempts: number;
++  totalStruggles: number;
++  reasons: WeaknessReasonSummary[];
++  patterns: WeaknessAreaSummary[];
++  topics: WeaknessAreaSummary[];
++}
++
+ // ── Rubric (MOM-023) ────────────────────────────────────────────────────────
+ // Matches the Json shape already stored in Question.rubric (plan §5.3). Existing
+ // rows may not conform yet — treat this as the target shape for new/updated rubrics,
+-- 
+2.43.0
+
+
+From df502852d56a121cb7f77c1a748c359b4071ff13 Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Tue, 7 Jul 2026 18:03:01 +0000
+Subject: [PATCH 2/6] =?UTF-8?q?feat(api):=20standalone=20+=20patchable=20a?=
+ =?UTF-8?q?ttempts=20close=20the=20reveal=E2=86=92rate=20loop?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+POST /attempts records a sessionless attempt (Today inline recall — sessionId
+was already nullable) and PATCH /attempts/:id carries the post-reveal half of
+plan §7.2's lifecycle: rate + reflect after the reference answer is on screen.
+Both schedule FSRS reviews on rating with the same non-fatal contract as
+sessions.answer. answerText is deliberately immutable on PATCH — the attempt
+records what was recalled before the reveal.
+---
+ apps/api/src/attempts/attempts.controller.ts  |  8 ++-
+ apps/api/src/attempts/attempts.module.ts      |  3 +-
+ apps/api/src/attempts/attempts.service.ts     | 61 +++++++++++++++-
+ .../src/attempts/dto/create-attempt.dto.ts    | 67 ++++++++++++++++++
+ .../src/attempts/dto/update-attempt.dto.ts    | 39 +++++++++++
+ apps/api/test/attempts.service.spec.ts        | 69 ++++++++++++++++++-
+ 6 files changed, 241 insertions(+), 6 deletions(-)
+ create mode 100644 apps/api/src/attempts/dto/create-attempt.dto.ts
+ create mode 100644 apps/api/src/attempts/dto/update-attempt.dto.ts
+
+diff --git a/apps/api/src/attempts/attempts.controller.ts b/apps/api/src/attempts/attempts.controller.ts
+index 2d7b5ef..a8cf49f 100644
+--- a/apps/api/src/attempts/attempts.controller.ts
++++ b/apps/api/src/attempts/attempts.controller.ts
+@@ -1,8 +1,10 @@
+-import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
++import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+ import { CurrentUser } from '../common/current-user.decorator';
+ import { AuthenticatedUser } from '../common/jwt-auth.guard';
+ import { AttemptsService } from './attempts.service';
++import { CreateAttemptDto } from './dto/create-attempt.dto';
+ import { ListAttemptsDto } from './dto/list-attempts.dto';
++import { UpdateAttemptDto } from './dto/update-attempt.dto';
+ 
+ @Controller()
+ export class AttemptsController {
+@@ -11,4 +13,8 @@ export class AttemptsController {
+   @Get('attempts') list(@Query() query: ListAttemptsDto, @CurrentUser() user: AuthenticatedUser) { return this.attempts.list(query, user.id); }
+   @Get('attempts/:id') get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) { return this.attempts.get(id, user.id); }
+   @Get('questions/:id/attempts') forQuestion(@Param('id', ParseUUIDPipe) id: string, @Query() query: ListAttemptsDto, @CurrentUser() user: AuthenticatedUser) { return this.attempts.list(query, user.id, id); }
++  // Standalone attempt (Today inline recall) — sessionless by design.
++  @Post('attempts') create(@Body() dto: CreateAttemptDto, @CurrentUser() user: AuthenticatedUser) { return this.attempts.create(dto, user.id); }
++  // Post-reveal rate/reflect (plan §7.2 attempt lifecycle).
++  @Patch('attempts/:id') update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAttemptDto, @CurrentUser() user: AuthenticatedUser) { return this.attempts.update(id, dto, user.id); }
+ }
+diff --git a/apps/api/src/attempts/attempts.module.ts b/apps/api/src/attempts/attempts.module.ts
+index f1f36e8..9270dd3 100644
+--- a/apps/api/src/attempts/attempts.module.ts
++++ b/apps/api/src/attempts/attempts.module.ts
+@@ -1,6 +1,7 @@
+ import { Module } from '@nestjs/common';
++import { ReviewsModule } from '../reviews/reviews.module';
+ import { AttemptsController } from './attempts.controller';
+ import { AttemptsService } from './attempts.service';
+ 
+-@Module({ controllers: [AttemptsController], providers: [AttemptsService] })
++@Module({ imports: [ReviewsModule], controllers: [AttemptsController], providers: [AttemptsService] })
+ export class AttemptsModule {}
+diff --git a/apps/api/src/attempts/attempts.service.ts b/apps/api/src/attempts/attempts.service.ts
+index 922ea1d..80816b2 100644
+--- a/apps/api/src/attempts/attempts.service.ts
++++ b/apps/api/src/attempts/attempts.service.ts
+@@ -1,11 +1,19 @@
+-import { Injectable, NotFoundException } from '@nestjs/common';
++import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+ import { Prisma } from '@prisma/client';
+ import { PrismaService } from '../prisma/prisma.service';
++import { ReviewsService } from '../reviews/reviews.service';
++import { CreateAttemptDto } from './dto/create-attempt.dto';
+ import { ListAttemptsDto } from './dto/list-attempts.dto';
++import { UpdateAttemptDto } from './dto/update-attempt.dto';
+ 
+ @Injectable()
+ export class AttemptsService {
+-  constructor(private readonly prisma: PrismaService) {}
++  private readonly logger = new Logger('AttemptsService');
++
++  constructor(
++    private readonly prisma: PrismaService,
++    private readonly reviews: ReviewsService,
++  ) {}
+ 
+   async list(query: ListAttemptsDto, userId: string, forcedQuestionId?: string) {
+     const where: Prisma.AnswerAttemptWhereInput = {
+@@ -41,4 +49,53 @@ export class AttemptsService {
+     if (!attempt) throw new NotFoundException('Attempt not found');
+     return attempt;
+   }
++
++  // Standalone attempt — no session required. The Today queue's inline review
++  // flow uses this so a typed recall is a real attempt (history, streak,
++  // weakness signals) rather than a bare FSRS rating with no evidence behind
++  // it. Same review-scheduling side effect as sessions.answer (MOM-031).
++  async create(dto: CreateAttemptDto, userId: string) {
++    const question = await this.prisma.question.findUnique({
++      where: { id: dto.questionId },
++      select: { id: true },
++    });
++    if (!question) throw new NotFoundException('Question not found');
++
++    const attempt = await this.prisma.answerAttempt.create({
++      data: { ...dto, userId },
++      include: { question: { select: { id: true, title: true } } },
++    });
++    await this.scheduleReviewIfRated(userId, dto.questionId, dto.selfRating);
++    return attempt;
++  }
++
++  // Post-reveal update (plan §7.2: Submit → Reveal → Reflect → Self-rate).
++  // Rating here (re)schedules the FSRS review just like rating at submit time
++  // did — the learning loop must close no matter which step carried the grade.
++  async update(id: string, dto: UpdateAttemptDto, userId: string) {
++    const existing = await this.prisma.answerAttempt.findFirst({
++      where: { id, userId },
++      select: { id: true, questionId: true },
++    });
++    if (!existing) throw new NotFoundException('Attempt not found');
++
++    const attempt = await this.prisma.answerAttempt.update({
++      where: { id: existing.id },
++      data: dto,
++      include: { question: { select: { id: true, title: true } } },
++    });
++    await this.scheduleReviewIfRated(userId, existing.questionId, dto.selfRating);
++    return attempt;
++  }
++
++  // A scheduling failure must never break the attempt write — the attempt
++  // itself already succeeded (same contract as sessions.service.ts).
++  private async scheduleReviewIfRated(userId: string, questionId: string, selfRating?: number) {
++    if (selfRating === undefined) return;
++    try {
++      await this.reviews.record(userId, 'question', questionId, selfRating);
++    } catch (error) {
++      this.logger.warn(`Failed to update review schedule for question ${questionId}: ${error}`);
++    }
++  }
+ }
+diff --git a/apps/api/src/attempts/dto/create-attempt.dto.ts b/apps/api/src/attempts/dto/create-attempt.dto.ts
+new file mode 100644
+index 0000000..0077985
+--- /dev/null
++++ b/apps/api/src/attempts/dto/create-attempt.dto.ts
+@@ -0,0 +1,67 @@
++import { Type } from 'class-transformer';
++import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
++import { MISS_TAG_REASONS, type MissTagReason } from '@momito/shared';
++
++// Standalone attempt (no session) — AnswerAttempt.sessionId is already
++// nullable, so a quick recall recorded straight from the Today queue is a
++// first-class attempt: it feeds streak, weakness signals, and attempt history
++// exactly like a session answer ("Every serious attempt creates history",
++// plan §2.1.3). Field-for-field the same shape as sessions' CreateAnswerDto.
++export class CreateAttemptDto {
++  @IsUUID()
++  questionId!: string;
++
++  @IsString()
++  @MinLength(1)
++  answerText!: string;
++
++  @IsOptional()
++  @Type(() => Number)
++  @IsInt()
++  @Min(1)
++  @Max(5)
++  selfRating?: number;
++
++  @IsOptional()
++  @IsIn(['correct', 'partial', 'incorrect'])
++  correctness?: string;
++
++  @IsOptional()
++  @Type(() => Number)
++  @IsInt()
++  @Min(1)
++  @Max(5)
++  confidence?: number;
++
++  @IsOptional()
++  @Type(() => Number)
++  @IsInt()
++  @Min(0)
++  @Max(24 * 60 * 60)
++  timeSpentSeconds?: number;
++
++  @IsOptional()
++  @IsBoolean()
++  hintUsed?: boolean;
++
++  @IsOptional()
++  @IsArray()
++  @ArrayMaxSize(MISS_TAG_REASONS.length)
++  @IsIn(MISS_TAG_REASONS, { each: true })
++  missTags?: MissTagReason[];
++
++  @IsOptional()
++  @IsString()
++  @MaxLength(2000)
++  reflectionNote?: string;
++
++  @IsOptional()
++  @IsString()
++  @MaxLength(50)
++  language?: string;
++
++  @IsOptional()
++  @IsString()
++  @MaxLength(20)
++  complexity?: string;
++}
+diff --git a/apps/api/src/attempts/dto/update-attempt.dto.ts b/apps/api/src/attempts/dto/update-attempt.dto.ts
+new file mode 100644
+index 0000000..49f24b9
+--- /dev/null
++++ b/apps/api/src/attempts/dto/update-attempt.dto.ts
+@@ -0,0 +1,39 @@
++import { Type } from 'class-transformer';
++import { ArrayMaxSize, IsArray, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
++import { MISS_TAG_REASONS, type MissTagReason } from '@momito/shared';
++
++// Attempt lifecycle (plan §7.2) is Submit → Reveal reference → Reflect →
++// Self-rate. The answer is therefore submitted *before* the user can honestly
++// rate or tag what they missed — this PATCH carries the post-reveal half.
++// answerText is deliberately not updatable: the attempt is a record of what
++// was recalled before the reference was shown.
++export class UpdateAttemptDto {
++  @IsOptional()
++  @Type(() => Number)
++  @IsInt()
++  @Min(1)
++  @Max(5)
++  selfRating?: number;
++
++  @IsOptional()
++  @IsIn(['correct', 'partial', 'incorrect'])
++  correctness?: string;
++
++  @IsOptional()
++  @Type(() => Number)
++  @IsInt()
++  @Min(1)
++  @Max(5)
++  confidence?: number;
++
++  @IsOptional()
++  @IsArray()
++  @ArrayMaxSize(MISS_TAG_REASONS.length)
++  @IsIn(MISS_TAG_REASONS, { each: true })
++  missTags?: MissTagReason[];
++
++  @IsOptional()
++  @IsString()
++  @MaxLength(2000)
++  reflectionNote?: string;
++}
+diff --git a/apps/api/test/attempts.service.spec.ts b/apps/api/test/attempts.service.spec.ts
+index 1e0c9ee..e617d70 100644
+--- a/apps/api/test/attempts.service.spec.ts
++++ b/apps/api/test/attempts.service.spec.ts
+@@ -10,7 +10,7 @@ describe('AttemptsService', () => {
+       answerAttempt: { findMany, count },
+       $transaction: vi.fn().mockResolvedValue([[], 0]),
+     };
+-    const service = new AttemptsService(prisma as never);
++    const service = new AttemptsService(prisma as never, { record: vi.fn() } as never);
+ 
+     const result = await service.list(
+       { questionId: 'q-1', sessionId: 's-1', page: 2, limit: 10 },
+@@ -27,7 +27,72 @@ describe('AttemptsService', () => {
+   });
+ 
+   it('returns not found instead of revealing another users attempt', async () => {
+-    const service = new AttemptsService({ answerAttempt: { findFirst: vi.fn().mockResolvedValue(null) } } as never);
++    const service = new AttemptsService({ answerAttempt: { findFirst: vi.fn().mockResolvedValue(null) } } as never, { record: vi.fn() } as never);
+     await expect(service.get('attempt-1', 'user-2')).rejects.toEqual(new NotFoundException('Attempt not found'));
+   });
+ });
++
++describe('AttemptsService — learning-loop writes', () => {
++  it('creates a standalone attempt and schedules a review when a self-rating is present', async () => {
++    const create = vi.fn().mockResolvedValue({ id: 'attempt-1', questionId: 'q-1' });
++    const prisma = {
++      question: { findUnique: vi.fn().mockResolvedValue({ id: 'q-1' }) },
++      answerAttempt: { create },
++    };
++    const record = vi.fn().mockResolvedValue({});
++    const service = new AttemptsService(prisma as never, { record } as never);
++
++    await service.create({ questionId: 'q-1', answerText: 'my recall', selfRating: 3 }, 'user-1');
++
++    expect(create.mock.calls[0][0].data).toMatchObject({ questionId: 'q-1', answerText: 'my recall', selfRating: 3, userId: 'user-1' });
++    expect(record).toHaveBeenCalledWith('user-1', 'question', 'q-1', 3);
++  });
++
++  it('rejects standalone attempts for questions that do not exist', async () => {
++    const service = new AttemptsService(
++      { question: { findUnique: vi.fn().mockResolvedValue(null) } } as never,
++      { record: vi.fn() } as never,
++    );
++    await expect(service.create({ questionId: 'q-missing', answerText: 'x' }, 'user-1'))
++      .rejects.toEqual(new NotFoundException('Question not found'));
++  });
++
++  it('updates an owned attempt post-reveal and (re)schedules its review from the new rating', async () => {
++    const update = vi.fn().mockResolvedValue({ id: 'attempt-1' });
++    const prisma = {
++      answerAttempt: {
++        findFirst: vi.fn().mockResolvedValue({ id: 'attempt-1', questionId: 'q-1' }),
++        update,
++      },
++    };
++    const record = vi.fn().mockResolvedValue({});
++    const service = new AttemptsService(prisma as never, { record } as never);
++
++    await service.update('attempt-1', { selfRating: 1, missTags: ['edge_case'], reflectionNote: 'forgot empty input' }, 'user-1');
++
++    expect(update.mock.calls[0][0].data).toMatchObject({ selfRating: 1, missTags: ['edge_case'] });
++    expect(record).toHaveBeenCalledWith('user-1', 'question', 'q-1', 1);
++  });
++
++  it('does not let a failed review-schedule break the attempt update', async () => {
++    const prisma = {
++      answerAttempt: {
++        findFirst: vi.fn().mockResolvedValue({ id: 'attempt-1', questionId: 'q-1' }),
++        update: vi.fn().mockResolvedValue({ id: 'attempt-1' }),
++      },
++    };
++    const record = vi.fn().mockRejectedValue(new Error('scheduler down'));
++    const service = new AttemptsService(prisma as never, { record } as never);
++
++    await expect(service.update('attempt-1', { selfRating: 2 }, 'user-1')).resolves.toEqual({ id: 'attempt-1' });
++  });
++
++  it('refuses to update another users attempt', async () => {
++    const service = new AttemptsService(
++      { answerAttempt: { findFirst: vi.fn().mockResolvedValue(null) } } as never,
++      { record: vi.fn() } as never,
++    );
++    await expect(service.update('attempt-1', { selfRating: 3 }, 'user-2'))
++      .rejects.toEqual(new NotFoundException('Attempt not found'));
++  });
++});
+-- 
+2.43.0
+
+
+From 0bfece1d953d8d418adc59f8347d9afe92f1f57b Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Tue, 7 Jul 2026 18:03:01 +0000
+Subject: [PATCH 3/6] =?UTF-8?q?feat(api):=20weakness=20engine=20=E2=80=94?=
+ =?UTF-8?q?=20derived=20signals,=20repair=20recommendations,=20real=20weak?=
+ =?UTF-8?q?=5Farea=5Freview?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+missTags/selfRating/correctness were written by reflection and read by nothing.
+GET /weaknesses now derives reason/pattern/topic signals from windowed attempts
+(plan §5.4; no new table per §2.1.8 'derived from real attempts').
+Recommendations gain weakness-repair items at priority 95 (§6.1 slot 3) with
+§6.2-style concrete reasons, gated at ≥2 struggles. weak_area_review sessions —
+previously identical to quick_practice — now redo recent unrepaired misses and
+fill with siblings from the weakest patterns/topics, falling back to the
+filtered draw for users with no history.
+---
+ apps/api/src/app.module.ts                    |   2 +
+ .../recommendations/recommendations.module.ts |   3 +-
+ .../recommendations.service.ts                |  52 ++++-
+ apps/api/src/sessions/sessions.module.ts      |   3 +-
+ apps/api/src/sessions/sessions.service.ts     |  71 ++++++-
+ .../src/weaknesses/weaknesses.controller.ts   |  13 ++
+ apps/api/src/weaknesses/weaknesses.module.ts  |  10 +
+ apps/api/src/weaknesses/weaknesses.service.ts | 185 ++++++++++++++++++
+ apps/api/test/recommendations.service.spec.ts |  75 +++++++
+ apps/api/test/sessions.service.spec.ts        | 110 +++++++++--
+ apps/api/test/weaknesses.service.spec.ts      |  94 +++++++++
+ 11 files changed, 600 insertions(+), 18 deletions(-)
+ create mode 100644 apps/api/src/weaknesses/weaknesses.controller.ts
+ create mode 100644 apps/api/src/weaknesses/weaknesses.module.ts
+ create mode 100644 apps/api/src/weaknesses/weaknesses.service.ts
+ create mode 100644 apps/api/test/recommendations.service.spec.ts
+ create mode 100644 apps/api/test/weaknesses.service.spec.ts
+
+diff --git a/apps/api/src/app.module.ts b/apps/api/src/app.module.ts
+index 00f21c5..5d1eef8 100644
+--- a/apps/api/src/app.module.ts
++++ b/apps/api/src/app.module.ts
+@@ -18,6 +18,7 @@ import { TasksModule } from './tasks/tasks.module';
+ import { LearningModule } from './learning/learning.module';
+ import { MissionsModule } from './missions/missions.module';
+ import { RecommendationsModule } from './recommendations/recommendations.module';
++import { WeaknessesModule } from './weaknesses/weaknesses.module';
+ import { HealthModule } from './health/health.module';
+ import { ContentModule } from './content/content.module';
+ import { DsaModule } from './dsa/dsa.module';
+@@ -56,6 +57,7 @@ import { RequestLoggingMiddleware } from './common/request-logging.middleware';
+     LearningModule,
+     MissionsModule,
+     RecommendationsModule,
++    WeaknessesModule,
+     AiModule,
+     PushModule,
+   ],
+diff --git a/apps/api/src/recommendations/recommendations.module.ts b/apps/api/src/recommendations/recommendations.module.ts
+index 3c7ee25..7a5c16c 100644
+--- a/apps/api/src/recommendations/recommendations.module.ts
++++ b/apps/api/src/recommendations/recommendations.module.ts
+@@ -2,11 +2,12 @@ import { Module } from '@nestjs/common';
+ import { CareerModule } from '../career/career.module';
+ import { MissionsModule } from '../missions/missions.module';
+ import { PrismaModule } from '../prisma/prisma.module';
++import { WeaknessesModule } from '../weaknesses/weaknesses.module';
+ import { RecommendationsController } from './recommendations.controller';
+ import { RecommendationsService } from './recommendations.service';
+ 
+ @Module({
+-  imports: [PrismaModule, CareerModule, MissionsModule],
++  imports: [PrismaModule, CareerModule, MissionsModule, WeaknessesModule],
+   controllers: [RecommendationsController],
+   providers: [RecommendationsService],
+   exports: [RecommendationsService],
+diff --git a/apps/api/src/recommendations/recommendations.service.ts b/apps/api/src/recommendations/recommendations.service.ts
+index ac77adb..f720059 100644
+--- a/apps/api/src/recommendations/recommendations.service.ts
++++ b/apps/api/src/recommendations/recommendations.service.ts
+@@ -3,6 +3,7 @@ import { PracticeRecommendationResponse } from '@momito/shared';
+ import { CareerService } from '../career/career.service';
+ import { MissionsService } from '../missions/missions.service';
+ import { PrismaService } from '../prisma/prisma.service';
++import { WeaknessesService } from '../weaknesses/weaknesses.service';
+ 
+ // MOM-033: standardized reason taxonomy (plan §6.2 wants every recommendation to
+ // explain, in a complete sentence, why it appears — not a mix of phrases and
+@@ -16,18 +17,29 @@ const RECOMMENDATION_REASONS = {
+   jobActive: () => 'This is an active job application in your pipeline.',
+   unreviewedHighlights: (count: number) =>
+     `You have ${count} unreviewed learning highlight${count === 1 ? '' : 's'} waiting in your inbox.`,
++  // Plan §6.2's example wording ("You failed 2 sliding-window questions
++  // recently") — a weakness recommendation names the exact signal and count.
++  weakReason: (label: string, count: number) =>
++    `You logged "${label}" on ${count} recent attempt${count === 1 ? '' : 's'}.`,
++  weakArea: (label: string, struggles: number) =>
++    `You struggled with ${struggles} ${label} question${struggles === 1 ? '' : 's'} recently.`,
+ };
+ 
++// A weak signal needs at least this many struggles before it drives a
++// recommendation — one bad attempt is noise, not a pattern.
++const WEAKNESS_MIN_COUNT = 2;
++
+ @Injectable()
+ export class RecommendationsService {
+   constructor(
+     private readonly prisma: PrismaService,
+     private readonly career: CareerService,
+     private readonly missions: MissionsService,
++    private readonly weaknesses: WeaknessesService,
+   ) {}
+ 
+   async list(userId: string): Promise<PracticeRecommendationResponse[]> {
+-    const [readiness, activeMissions, overdueTasks, jobs, inboxCount] = await Promise.all([
++    const [readiness, activeMissions, overdueTasks, jobs, inboxCount, weaknessSummary] = await Promise.all([
+       this.career.listActiveReadiness(userId),
+       this.missions.list(userId),
+       this.prisma.task.findMany({
+@@ -41,9 +53,47 @@ export class RecommendationsService {
+         take: 3,
+       }),
+       this.prisma.learningHighlight.count({ where: { userId, isDeleted: false, reviewedAt: null } }),
++      this.weaknesses.summary(userId),
+     ]);
+ 
+     const recommendations: PracticeRecommendationResponse[] = [];
++
++    // Plan §6.1 queue priority 3: weakness repair sits above readiness gaps
++    // (80+) and below overdue tasks (100). Patterns/topics with repeated
++    // struggles come first (they map directly to a repair session); a
++    // repeated miss reason without an area (e.g. "time_pressure" across mixed
++    // topics) still surfaces once so the signal is never silently dropped.
++    const weakAreas = [...weaknessSummary.patterns, ...weaknessSummary.topics]
++      .filter((area) => area.struggles >= WEAKNESS_MIN_COUNT)
++      .sort((left, right) => right.struggles - left.struggles)
++      .slice(0, 2);
++    for (const area of weakAreas) {
++      recommendations.push({
++        id: `weakness:area:${area.key}`,
++        type: 'practice',
++        title: `Repair weak spot: ${area.label}`,
++        reason: RECOMMENDATION_REASONS.weakArea(area.label, area.struggles),
++        roleTrackId: null,
++        area: null,
++        targetHref: '/practice/new?mode=weak_area_review',
++        priority: 95,
++      });
++    }
++    if (weakAreas.length === 0) {
++      const topReason = weaknessSummary.reasons.find((reason) => reason.count >= WEAKNESS_MIN_COUNT);
++      if (topReason) {
++        recommendations.push({
++          id: `weakness:reason:${topReason.reason}`,
++          type: 'practice',
++          title: 'Repair a recurring mistake',
++          reason: RECOMMENDATION_REASONS.weakReason(topReason.label, topReason.count),
++          roleTrackId: null,
++          area: null,
++          targetHref: '/practice/new?mode=weak_area_review',
++          priority: 95,
++        });
++      }
++    }
+     for (const mission of activeMissions.filter((item) => item.stage !== 'archived').slice(0, 2)) {
+       recommendations.push({
+         id: `mission:${mission.id}`,
+diff --git a/apps/api/src/sessions/sessions.module.ts b/apps/api/src/sessions/sessions.module.ts
+index 2acb548..121c8c4 100644
+--- a/apps/api/src/sessions/sessions.module.ts
++++ b/apps/api/src/sessions/sessions.module.ts
+@@ -1,7 +1,8 @@
+ import { Module } from '@nestjs/common';
+ import { ReviewsModule } from '../reviews/reviews.module';
++import { WeaknessesModule } from '../weaknesses/weaknesses.module';
+ import { SessionsController } from './sessions.controller';
+ import { SessionsService } from './sessions.service';
+ 
+-@Module({ imports: [ReviewsModule], controllers: [SessionsController], providers: [SessionsService] })
++@Module({ imports: [ReviewsModule, WeaknessesModule], controllers: [SessionsController], providers: [SessionsService] })
+ export class SessionsModule {}
+diff --git a/apps/api/src/sessions/sessions.service.ts b/apps/api/src/sessions/sessions.service.ts
+index 8d4a347..b259e57 100644
+--- a/apps/api/src/sessions/sessions.service.ts
++++ b/apps/api/src/sessions/sessions.service.ts
+@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
+ import { Prisma } from '@prisma/client';
+ import { PrismaService } from '../prisma/prisma.service';
+ import { ReviewsService } from '../reviews/reviews.service';
++import { WeaknessesService } from '../weaknesses/weaknesses.service';
+ import { CreateAnswerDto } from './dto/create-answer.dto';
+ import { CreateSessionDto } from './dto/create-session.dto';
+ import { ListSessionsDto } from './dto/list-sessions.dto';
+@@ -24,6 +25,7 @@ export class SessionsService {
+   constructor(
+     private readonly prisma: PrismaService,
+     private readonly reviews: ReviewsService,
++    private readonly weaknesses: WeaknessesService,
+   ) {}
+ 
+   async create(dto: CreateSessionDto, userId: string) {
+@@ -34,7 +36,9 @@ export class SessionsService {
+       ? await this.selectExactQuestions(questionIds)
+       : sessionData.sessionType === 'spaced_review'
+         ? await this.selectDueReviewQuestions(userId, questionCount)
+-        : await this.selectFilteredQuestions({ topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern });
++        : sessionData.sessionType === 'weak_area_review'
++          ? await this.selectWeaknessQuestions(userId, { topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern })
++          : await this.selectFilteredQuestions({ topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern });
+ 
+     if (selected.length === 0) throw new BadRequestException('No questions match the selected filters');
+ 
+@@ -88,6 +92,71 @@ export class SessionsService {
+     return dueQuestionIds.filter((id) => existingIds.has(id)).map((id) => ({ id }));
+   }
+ 
++  // Plan §7.1 weakness_repair: 'weak_area_review' had a label and description
++  // in the UI but drew a plain filtered-random set — identical to
++  // quick_practice. It now draws from the user's actual weakness signals:
++  // 1. Questions they recently struggled on and haven't since repaired (redo).
++  // 2. Sibling questions from their weakest patterns/topics they haven't
++  //    struggled on yet (drill the pattern, not just the exact item).
++  // Falls back to the plain filtered draw when there's no struggle history
++  // yet, so the session type always works (UX invariant §2.3.2-style: the
++  // feature degrades, it doesn't dead-end).
++  private async selectWeaknessQuestions(
++    userId: string,
++    filters: {
++      topicId?: string;
++      companyId?: string;
++      difficulty?: string;
++      roleTrackId?: string;
++      area?: string;
++      pattern?: string;
++      questionCount: number;
++    },
++  ) {
++    const [struggledIds, summary] = await Promise.all([
++      this.weaknesses.struggledQuestionIds(userId),
++      this.weaknesses.summary(userId),
++    ]);
++
++    if (struggledIds.length === 0) {
++      return this.selectFilteredQuestions(filters);
++    }
++
++    const weakPatterns = summary.patterns.slice(0, 3).map((areaSummary) => areaSummary.key.toLowerCase());
++    const weakTopicIds = summary.topics.slice(0, 3).map((areaSummary) => areaSummary.key);
++
++    // Redo items lead the session, capped so at least ~1/3 of slots stay open
++    // for pattern siblings whenever any exist.
++    const redoCap = Math.max(1, Math.ceil(filters.questionCount * (2 / 3)));
++    const redo = struggledIds.slice(0, Math.min(redoCap, filters.questionCount));
++
++    const siblingCandidates =
++      weakPatterns.length > 0 || weakTopicIds.length > 0
++        ? await this.prisma.question.findMany({
++            where: {
++              id: { notIn: struggledIds },
++              ...(weakTopicIds.length > 0 && { topicId: { in: weakTopicIds } }),
++              ...(filters.difficulty && { difficulty: filters.difficulty }),
++            },
++            select: { id: true, patternTags: true, topicId: true, importance: true },
++          })
++        : [];
++    const siblings = this.shuffle(
++      siblingCandidates.filter((question) => {
++        if (weakTopicIds.includes(question.topicId)) return true;
++        const patternTags = this.asStringArray(question.patternTags).map((tag) => tag.toLowerCase());
++        return patternTags.some((tag) => weakPatterns.includes(tag));
++      }),
++    )
++      .sort((left, right) => right.importance - left.importance)
++      .map(({ id }) => id);
++
++    const combined = [...redo, ...siblings, ...struggledIds.slice(redo.length)];
++    const unique = [...new Set(combined)].slice(0, filters.questionCount);
++    if (unique.length === 0) return this.selectFilteredQuestions(filters);
++    return unique.map((id) => ({ id }));
++  }
++
+   private async selectFilteredQuestions(filters: {
+     topicId?: string;
+     companyId?: string;
+diff --git a/apps/api/src/weaknesses/weaknesses.controller.ts b/apps/api/src/weaknesses/weaknesses.controller.ts
+new file mode 100644
+index 0000000..a971b87
+--- /dev/null
++++ b/apps/api/src/weaknesses/weaknesses.controller.ts
+@@ -0,0 +1,13 @@
++import { Controller, Get } from '@nestjs/common';
++import { CurrentUser } from '../common/current-user.decorator';
++import { AuthenticatedUser } from '../common/jwt-auth.guard';
++import { WeaknessesService } from './weaknesses.service';
++
++@Controller()
++export class WeaknessesController {
++  constructor(private readonly weaknesses: WeaknessesService) {}
++
++  @Get('weaknesses') summary(@CurrentUser() user: AuthenticatedUser) {
++    return this.weaknesses.summary(user.id);
++  }
++}
+diff --git a/apps/api/src/weaknesses/weaknesses.module.ts b/apps/api/src/weaknesses/weaknesses.module.ts
+new file mode 100644
+index 0000000..9766705
+--- /dev/null
++++ b/apps/api/src/weaknesses/weaknesses.module.ts
+@@ -0,0 +1,10 @@
++import { Module } from '@nestjs/common';
++import { WeaknessesController } from './weaknesses.controller';
++import { WeaknessesService } from './weaknesses.service';
++
++@Module({
++  controllers: [WeaknessesController],
++  providers: [WeaknessesService],
++  exports: [WeaknessesService],
++})
++export class WeaknessesModule {}
+diff --git a/apps/api/src/weaknesses/weaknesses.service.ts b/apps/api/src/weaknesses/weaknesses.service.ts
+new file mode 100644
+index 0000000..e954896
+--- /dev/null
++++ b/apps/api/src/weaknesses/weaknesses.service.ts
+@@ -0,0 +1,185 @@
++import { Injectable } from '@nestjs/common';
++import {
++  MISS_TAG_LABELS,
++  type MissTagReason,
++  type WeaknessAreaSummary,
++  type WeaknessReasonSummary,
++  type WeaknessSummaryResponse,
++} from '@momito/shared';
++import { PrismaService } from '../prisma/prisma.service';
++
++// Plan §5.4 WeaknessSignal + §6.1 queue priority 3 ("Weakness repair items").
++// Signals are derived on demand from AnswerAttempt rows — the reflection data
++// (missTags, selfRating, correctness) users already record — instead of a
++// separate signals table, honoring §2.1.8 "Progress is derived from real
++// attempts". A dedicated table can come later if severity decay or manual
++// dismissal is ever needed; the response shape wouldn't change.
++
++const DEFAULT_WINDOW_DAYS = 30;
++const MAX_LIST = 6;
++const MAX_QUESTION_IDS = 10;
++
++interface AttemptRow {
++  questionId: string;
++  selfRating: number | null;
++  correctness: string | null;
++  missTags: string[];
++  createdAt: Date;
++  question: {
++    id: string;
++    title: string;
++    patternTags: unknown;
++    topic: { id: string; name: string } | null;
++  };
++}
++
++// An attempt "struggled" when the user said so in any of the three signals the
++// reflection step captures. selfRating <= 2 matches the Again/Hard grades of
++// the SELF_RATING_SCALE (and fsrs-scheduler's Again/Hard mapping).
++export function isStruggleAttempt(attempt: { selfRating: number | null; correctness: string | null; missTags: string[] }): boolean {
++  if (attempt.missTags.length > 0) return true;
++  if (attempt.selfRating !== null && attempt.selfRating <= 2) return true;
++  if ((attempt.correctness ?? '').toLowerCase() === 'incorrect') return true;
++  return false;
++}
++
++@Injectable()
++export class WeaknessesService {
++  constructor(private readonly prisma: PrismaService) {}
++
++  async summary(userId: string, windowDays = DEFAULT_WINDOW_DAYS): Promise<WeaknessSummaryResponse> {
++    const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
++    const attempts = (await this.prisma.answerAttempt.findMany({
++      where: { userId, createdAt: { gte: since } },
++      orderBy: { createdAt: 'desc' },
++      select: {
++        questionId: true,
++        selfRating: true,
++        correctness: true,
++        missTags: true,
++        createdAt: true,
++        question: {
++          select: {
++            id: true,
++            title: true,
++            patternTags: true,
++            topic: { select: { id: true, name: true } },
++          },
++        },
++      },
++    })) as AttemptRow[];
++
++    const struggles = attempts.filter(isStruggleAttempt);
++
++    return {
++      windowDays,
++      totalAttempts: attempts.length,
++      totalStruggles: struggles.length,
++      reasons: this.aggregateReasons(struggles),
++      patterns: this.aggregateAreas(attempts, (attempt) =>
++        this.patternsOf(attempt).map((tag) => ({ key: tag, label: tag })),
++      ),
++      // Topics are keyed by topic id (so a repair session can query questions
++      // by topicId) and labeled with the human name.
++      topics: this.aggregateAreas(attempts, (attempt) =>
++        attempt.question.topic ? [{ key: attempt.question.topic.id, label: attempt.question.topic.name }] : [],
++      ),
++    };
++  }
++
++  // The question ids a weakness-repair session should draw from: everything
++  // the user struggled on recently, most recent first, deduplicated.
++  async struggledQuestionIds(userId: string, windowDays = 60): Promise<string[]> {
++    const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
++    const attempts = await this.prisma.answerAttempt.findMany({
++      where: { userId, createdAt: { gte: since } },
++      orderBy: { createdAt: 'desc' },
++      select: { questionId: true, selfRating: true, correctness: true, missTags: true },
++    });
++    const seen = new Set<string>();
++    const struggled: string[] = [];
++    const solidLater = new Set<string>();
++    for (const attempt of attempts) {
++      // Attempts are newest-first: a later clean attempt (rating >= 3 with no
++      // miss tags) means the earlier struggle on that question is repaired.
++      if (!isStruggleAttempt(attempt) && (attempt.selfRating ?? 0) >= 3) {
++        solidLater.add(attempt.questionId);
++        continue;
++      }
++      if (isStruggleAttempt(attempt) && !seen.has(attempt.questionId) && !solidLater.has(attempt.questionId)) {
++        seen.add(attempt.questionId);
++        struggled.push(attempt.questionId);
++      }
++    }
++    return struggled;
++  }
++
++  private aggregateReasons(struggles: AttemptRow[]): WeaknessReasonSummary[] {
++    const byReason = new Map<MissTagReason, { count: number; lastAt: Date; titles: string[]; questionIds: string[] }>();
++    for (const attempt of struggles) {
++      for (const tag of attempt.missTags as MissTagReason[]) {
++        if (!(tag in MISS_TAG_LABELS)) continue;
++        const entry = byReason.get(tag) ?? { count: 0, lastAt: attempt.createdAt, titles: [], questionIds: [] };
++        entry.count += 1;
++        if (attempt.createdAt > entry.lastAt) entry.lastAt = attempt.createdAt;
++        if (entry.titles.length < 3 && !entry.titles.includes(attempt.question.title)) {
++          entry.titles.push(attempt.question.title);
++        }
++        if (entry.questionIds.length < MAX_QUESTION_IDS && !entry.questionIds.includes(attempt.questionId)) {
++          entry.questionIds.push(attempt.questionId);
++        }
++        byReason.set(tag, entry);
++      }
++    }
++    return [...byReason.entries()]
++      .map(([reason, entry]) => ({
++        reason,
++        label: MISS_TAG_LABELS[reason],
++        count: entry.count,
++        lastAt: entry.lastAt.toISOString(),
++        sampleTitles: entry.titles,
++        questionIds: entry.questionIds,
++      }))
++      .sort((a, b) => b.count - a.count || b.lastAt.localeCompare(a.lastAt))
++      .slice(0, MAX_LIST);
++  }
++
++  private aggregateAreas(
++    attempts: AttemptRow[],
++    keysOf: (attempt: AttemptRow) => Array<{ key: string; label: string }>,
++  ): WeaknessAreaSummary[] {
++    const byKey = new Map<string, { label: string; struggles: number; attempts: number; lastAt: Date; questionIds: string[] }>();
++    for (const attempt of attempts) {
++      const struggled = isStruggleAttempt(attempt);
++      for (const { key, label } of keysOf(attempt)) {
++        const entry = byKey.get(key) ?? { label, struggles: 0, attempts: 0, lastAt: attempt.createdAt, questionIds: [] };
++        entry.attempts += 1;
++        if (struggled) {
++          entry.struggles += 1;
++          if (entry.questionIds.length < MAX_QUESTION_IDS && !entry.questionIds.includes(attempt.questionId)) {
++            entry.questionIds.push(attempt.questionId);
++          }
++        }
++        if (attempt.createdAt > entry.lastAt) entry.lastAt = attempt.createdAt;
++        byKey.set(key, entry);
++      }
++    }
++    return [...byKey.entries()]
++      .filter(([, entry]) => entry.struggles > 0)
++      .map(([key, entry]) => ({
++        key,
++        label: entry.label,
++        struggles: entry.struggles,
++        attempts: entry.attempts,
++        lastAt: entry.lastAt.toISOString(),
++        questionIds: entry.questionIds,
++      }))
++      .sort((a, b) => b.struggles - a.struggles || b.lastAt.localeCompare(a.lastAt))
++      .slice(0, MAX_LIST);
++  }
++
++  private patternsOf(attempt: AttemptRow): string[] {
++    const tags = attempt.question.patternTags;
++    return Array.isArray(tags) ? tags.filter((tag): tag is string => typeof tag === 'string') : [];
++  }
++}
+diff --git a/apps/api/test/recommendations.service.spec.ts b/apps/api/test/recommendations.service.spec.ts
+new file mode 100644
+index 0000000..52d0e67
+--- /dev/null
++++ b/apps/api/test/recommendations.service.spec.ts
+@@ -0,0 +1,75 @@
++import { describe, expect, it, vi } from 'vitest';
++import { RecommendationsService } from '../src/recommendations/recommendations.service';
++
++// The other sources (missions, tasks, readiness, jobs, inbox) are covered by
++// their own services; these tests pin the new weakness-repair source: plan
++// §6.1 priority 3, with §6.2-style concrete reasons.
++
++function buildService(weaknessSummary: {
++  patterns?: Array<{ key: string; label: string; struggles: number; attempts: number; lastAt: string; questionIds: string[] }>;
++  topics?: Array<{ key: string; label: string; struggles: number; attempts: number; lastAt: string; questionIds: string[] }>;
++  reasons?: Array<{ reason: string; label: string; count: number; lastAt: string; sampleTitles: string[]; questionIds: string[] }>;
++}) {
++  const prisma = {
++    task: { findMany: vi.fn().mockResolvedValue([]) },
++    jobApplication: { findMany: vi.fn().mockResolvedValue([]) },
++    learningHighlight: { count: vi.fn().mockResolvedValue(0) },
++  };
++  const career = { listActiveReadiness: vi.fn().mockResolvedValue([]) };
++  const missions = { list: vi.fn().mockResolvedValue([]) };
++  const weaknesses = {
++    summary: vi.fn().mockResolvedValue({
++      windowDays: 30,
++      totalAttempts: 10,
++      totalStruggles: 4,
++      reasons: weaknessSummary.reasons ?? [],
++      patterns: weaknessSummary.patterns ?? [],
++      topics: weaknessSummary.topics ?? [],
++    }),
++  };
++  return new RecommendationsService(prisma as never, career as never, missions as never, weaknesses as never);
++}
++
++describe('RecommendationsService — weakness repair', () => {
++  it('recommends repairing an area with repeated struggles, naming the count', async () => {
++    const service = buildService({
++      patterns: [
++        { key: 'sliding-window', label: 'sliding-window', struggles: 3, attempts: 5, lastAt: '2026-07-05', questionIds: [] },
++      ],
++    });
++
++    const recommendations = await service.list('user-1');
++
++    const weakness = recommendations.find((item) => item.id === 'weakness:area:sliding-window');
++    expect(weakness).toBeDefined();
++    expect(weakness).toMatchObject({
++      type: 'practice',
++      priority: 95,
++      targetHref: '/practice/new?mode=weak_area_review',
++    });
++    expect(weakness?.reason).toBe('You struggled with 3 sliding-window questions recently.');
++  });
++
++  it('ignores single-struggle noise but still surfaces a repeated miss reason with no area', async () => {
++    const service = buildService({
++      patterns: [
++        { key: 'graphs', label: 'graphs', struggles: 1, attempts: 2, lastAt: '2026-07-05', questionIds: [] },
++      ],
++      reasons: [
++        { reason: 'time_pressure', label: 'Ran out of time', count: 3, lastAt: '2026-07-05', sampleTitles: [], questionIds: [] },
++      ],
++    });
++
++    const recommendations = await service.list('user-1');
++
++    expect(recommendations.find((item) => item.id === 'weakness:area:graphs')).toBeUndefined();
++    const reason = recommendations.find((item) => item.id === 'weakness:reason:time_pressure');
++    expect(reason?.reason).toBe('You logged "Ran out of time" on 3 recent attempts.');
++  });
++
++  it('adds no weakness recommendation when there are no repeated signals', async () => {
++    const service = buildService({});
++    const recommendations = await service.list('user-1');
++    expect(recommendations.some((item) => item.id.startsWith('weakness:'))).toBe(false);
++  });
++});
+diff --git a/apps/api/test/sessions.service.spec.ts b/apps/api/test/sessions.service.spec.ts
+index 97a0dcf..fa9f3f0 100644
+--- a/apps/api/test/sessions.service.spec.ts
++++ b/apps/api/test/sessions.service.spec.ts
+@@ -5,6 +5,14 @@ import { describe, expect, it, vi } from 'vitest';
+ import { CreateSessionDto } from '../src/sessions/dto/create-session.dto';
+ import { SessionsService } from '../src/sessions/sessions.service';
+ 
++// New third constructor dependency (weakness-driven weak_area_review selection).
++// Tests that don't exercise that session type get an inert stub.
++const weaknessesStub = () =>
++  ({
++    struggledQuestionIds: vi.fn().mockResolvedValue([]),
++    summary: vi.fn().mockResolvedValue({ windowDays: 30, totalAttempts: 0, totalStruggles: 0, reasons: [], patterns: [], topics: [] }),
++  }) as never;
++
+ describe('SessionsService', () => {
+   it('creates no more questions than are available and preserves order', async () => {
+     const create = vi.fn().mockImplementation(({ data }) => ({
+@@ -22,7 +30,7 @@ describe('SessionsService', () => {
+       question: { findMany: vi.fn().mockResolvedValue([{ id: 'q-1' }, { id: 'q-2' }]) },
+       interviewSession: { create },
+     };
+-    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
++    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
+ 
+     const result = await service.create(
+       { sessionType: 'mixed_mock', difficulty: 'hard', questionCount: 5 },
+@@ -35,7 +43,7 @@ describe('SessionsService', () => {
+   });
+ 
+   it('rejects session creation when no question matches', async () => {
+-    const service = new SessionsService({ question: { findMany: vi.fn().mockResolvedValue([]) } } as never, { record: vi.fn() } as never);
++    const service = new SessionsService({ question: { findMany: vi.fn().mockResolvedValue([]) } } as never, { record: vi.fn() } as never, weaknessesStub());
+     await expect(service.create({ sessionType: 'quick_practice', questionCount: 1 }, 'user-1'))
+       .rejects.toEqual(new BadRequestException('No questions match the selected filters'));
+   });
+@@ -53,7 +61,7 @@ describe('SessionsService', () => {
+       })),
+     }));
+     const findMany = vi.fn().mockResolvedValue([{ id: 'q-2' }, { id: 'q-1' }]);
+-    const service = new SessionsService({ question: { findMany }, interviewSession: { create } } as never, { record: vi.fn() } as never);
++    const service = new SessionsService({ question: { findMany }, interviewSession: { create } } as never, { record: vi.fn() } as never, weaknessesStub());
+ 
+     await service.create(
+       { sessionType: 'quick_practice', questionCount: 99, questionIds: ['q-1', 'q-2'] },
+@@ -84,7 +92,7 @@ describe('SessionsService', () => {
+       },
+       interviewSession: { create },
+     };
+-    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
++    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
+ 
+     await service.create({ sessionType: 'spaced_review', questionCount: 2 }, 'user-1');
+ 
+@@ -107,7 +115,7 @@ describe('SessionsService', () => {
+       question: { findMany: vi.fn().mockResolvedValue([{ id: 'q-existing' }]) },
+       interviewSession: { create },
+     };
+-    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
++    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
+ 
+     await service.create({ sessionType: 'spaced_review', questionCount: 5 }, 'user-1');
+ 
+@@ -123,7 +131,7 @@ describe('SessionsService', () => {
+       question: { findMany: vi.fn().mockResolvedValue([{ id: 'q-picked' }]) },
+       interviewSession: { create },
+     };
+-    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
++    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
+ 
+     await service.create(
+       { sessionType: 'spaced_review', questionCount: 5, questionIds: ['q-picked'] },
+@@ -139,7 +147,7 @@ describe('SessionsService', () => {
+   it('deduplicates exact question IDs while preserving first-seen order', async () => {
+     const create = vi.fn().mockResolvedValue({ id: 'session-1', status: 'active', sessionQuestions: [] });
+     const findMany = vi.fn().mockResolvedValue([{ id: 'q-2' }, { id: 'q-1' }]);
+-    const service = new SessionsService({ question: { findMany }, interviewSession: { create } } as never, { record: vi.fn() } as never);
++    const service = new SessionsService({ question: { findMany }, interviewSession: { create } } as never, { record: vi.fn() } as never, weaknessesStub());
+ 
+     await service.create(
+       { sessionType: 'quick_practice', questionCount: 3, questionIds: ['q-1', 'q-2', 'q-1'] },
+@@ -169,7 +177,7 @@ describe('SessionsService', () => {
+     const service = new SessionsService({
+       question: { findMany: vi.fn().mockResolvedValue([{ id: 'q-1' }]) },
+       interviewSession: { create },
+-    } as never, { record: vi.fn() } as never);
++    } as never, { record: vi.fn() } as never, weaknessesStub());
+ 
+     await expect(service.create(
+       { sessionType: 'quick_practice', questionCount: 2, questionIds: ['q-1', 'missing'] },
+@@ -183,7 +191,7 @@ describe('SessionsService', () => {
+       interviewSession: { findFirst: vi.fn().mockResolvedValue({ status: 'active', sessionQuestions: [] }) },
+       answerAttempt: { create: vi.fn() },
+     };
+-    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
++    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
+ 
+     await expect(service.answer('session-1', { questionId: 'q-1', answerText: 'answer' }, 'user-1'))
+       .rejects.toEqual(new BadRequestException('Question is not part of this session'));
+@@ -200,7 +208,7 @@ describe('SessionsService', () => {
+       },
+     };
+     const record = vi.fn().mockResolvedValue({});
+-    const service = new SessionsService(prisma as never, { record } as never);
++    const service = new SessionsService(prisma as never, { record } as never, weaknessesStub());
+ 
+     await service.answer('session-1', { questionId: 'q-1', answerText: 'answer', selfRating: 4 }, 'user-1');
+ 
+@@ -217,7 +225,7 @@ describe('SessionsService', () => {
+       },
+     };
+     const record = vi.fn();
+-    const service = new SessionsService(prisma as never, { record } as never);
++    const service = new SessionsService(prisma as never, { record } as never, weaknessesStub());
+ 
+     await service.answer('session-1', { questionId: 'q-1', answerText: 'answer' }, 'user-1');
+ 
+@@ -234,7 +242,7 @@ describe('SessionsService', () => {
+       },
+     };
+     const record = vi.fn().mockRejectedValue(new Error('scheduling exploded'));
+-    const service = new SessionsService(prisma as never, { record } as never);
++    const service = new SessionsService(prisma as never, { record } as never, weaknessesStub());
+ 
+     const result = await service.answer('session-1', { questionId: 'q-1', answerText: 'answer', selfRating: 2 }, 'user-1');
+ 
+@@ -242,7 +250,7 @@ describe('SessionsService', () => {
+   });
+ 
+   it('does not expose another users session', async () => {
+-    const service = new SessionsService({ interviewSession: { findFirst: vi.fn().mockResolvedValue(null) } } as never, { record: vi.fn() } as never);
++    const service = new SessionsService({ interviewSession: { findFirst: vi.fn().mockResolvedValue(null) } } as never, { record: vi.fn() } as never, weaknessesStub());
+     await expect(service.get('session-1', 'user-2')).rejects.toEqual(new NotFoundException('Session not found'));
+   });
+ 
+@@ -253,8 +261,82 @@ describe('SessionsService', () => {
+         findFirst: vi.fn().mockResolvedValue({ status: 'completed' }),
+       },
+     };
+-    const service = new SessionsService(prisma as never, { record: vi.fn() } as never);
++    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
+     await expect(service.abandon('session-1', 'user-1'))
+       .rejects.toEqual(new ConflictException('Session is already completed'));
+   });
+ });
++
++describe('SessionsService — weak_area_review selection', () => {
++  it('leads with struggled questions and fills with weak-pattern siblings', async () => {
++    const create = vi.fn().mockImplementation(({ data }) => ({
++      id: 'session-1',
++      status: 'active',
++      sessionQuestions: data.sessionQuestions.create.map((item: { questionId: string; order: number }) => ({
++        id: `sq-${item.order}`,
++        sessionId: 'session-1',
++        questionId: item.questionId,
++        order: item.order,
++        question: { id: item.questionId, topic: { id: 't', name: 'T' }, companies: [] },
++      })),
++    }));
++    const prisma = {
++      interviewSession: { create },
++      question: {
++        findMany: vi.fn().mockResolvedValue([
++          { id: 'sibling-1', patternTags: ['sliding-window'], topicId: 'topic-dsa', importance: 2 },
++          { id: 'sibling-2', patternTags: ['two-pointers'], topicId: 'topic-other', importance: 1 },
++        ]),
++      },
++    };
++    const weaknesses = {
++      struggledQuestionIds: vi.fn().mockResolvedValue(['struggle-1', 'struggle-2']),
++      summary: vi.fn().mockResolvedValue({
++        windowDays: 30,
++        totalAttempts: 5,
++        totalStruggles: 3,
++        reasons: [],
++        patterns: [{ key: 'sliding-window', label: 'sliding-window', struggles: 2, attempts: 3, lastAt: '', questionIds: [] }],
++        topics: [{ key: 'topic-dsa', label: 'DSA', struggles: 2, attempts: 4, lastAt: '', questionIds: [] }],
++      }),
++    };
++    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknesses as never);
++
++    const result = await service.create({ sessionType: 'weak_area_review', questionCount: 3 }, 'user-1');
++
++    const chosen = result.questions.map((question) => question.questionId);
++    // Redo items lead (capped at 2/3 of 3 = 2), then a sibling fills the rest.
++    expect(chosen.slice(0, 2)).toEqual(['struggle-1', 'struggle-2']);
++    expect(chosen).toHaveLength(3);
++    expect(['sibling-1', 'sibling-2']).toContain(chosen[2]);
++    // Sibling lookup must exclude questions already being redone.
++    expect(prisma.question.findMany.mock.calls[0][0].where.id).toEqual({ notIn: ['struggle-1', 'struggle-2'] });
++  });
++
++  it('falls back to the plain filtered draw when there is no struggle history yet', async () => {
++    const create = vi.fn().mockImplementation(({ data }) => ({
++      id: 'session-1',
++      status: 'active',
++      sessionQuestions: data.sessionQuestions.create.map((item: { questionId: string; order: number }) => ({
++        id: `sq-${item.order}`,
++        sessionId: 'session-1',
++        questionId: item.questionId,
++        order: item.order,
++        question: { id: item.questionId, topic: { id: 't', name: 'T' }, companies: [] },
++      })),
++    }));
++    const prisma = {
++      interviewSession: { create },
++      question: {
++        findMany: vi.fn().mockResolvedValue([
++          { id: 'q-1', roleTags: [], areaTags: [], patternTags: [], importance: 1 },
++        ]),
++      },
++    };
++    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
++
++    const result = await service.create({ sessionType: 'weak_area_review', questionCount: 2 }, 'user-1');
++
++    expect(result.questions.map((question) => question.questionId)).toEqual(['q-1']);
++  });
++});
+diff --git a/apps/api/test/weaknesses.service.spec.ts b/apps/api/test/weaknesses.service.spec.ts
+new file mode 100644
+index 0000000..a9c0d5c
+--- /dev/null
++++ b/apps/api/test/weaknesses.service.spec.ts
+@@ -0,0 +1,94 @@
++import { describe, expect, it, vi } from 'vitest';
++import { isStruggleAttempt, WeaknessesService } from '../src/weaknesses/weaknesses.service';
++
++function buildAttempt(overrides: Partial<{
++  questionId: string;
++  selfRating: number | null;
++  correctness: string | null;
++  missTags: string[];
++  createdAt: Date;
++  title: string;
++  patternTags: string[];
++  topic: { id: string; name: string } | null;
++}> = {}) {
++  const questionId = overrides.questionId ?? 'q-1';
++  return {
++    questionId,
++    selfRating: overrides.selfRating ?? null,
++    correctness: overrides.correctness ?? null,
++    missTags: overrides.missTags ?? [],
++    createdAt: overrides.createdAt ?? new Date('2026-07-01T00:00:00Z'),
++    question: {
++      id: questionId,
++      title: overrides.title ?? `Question ${questionId}`,
++      patternTags: overrides.patternTags ?? [],
++      topic: overrides.topic === undefined ? { id: 'topic-1', name: 'Databases' } : overrides.topic,
++    },
++  };
++}
++
++function serviceWith(attempts: unknown[]) {
++  const findMany = vi.fn().mockResolvedValue(attempts);
++  return { service: new WeaknessesService({ answerAttempt: { findMany } } as never), findMany };
++}
++
++describe('isStruggleAttempt', () => {
++  it('treats any miss tag, a rating of 2 or below, or incorrect correctness as a struggle', () => {
++    expect(isStruggleAttempt({ selfRating: null, correctness: null, missTags: ['edge_case'] })).toBe(true);
++    expect(isStruggleAttempt({ selfRating: 2, correctness: null, missTags: [] })).toBe(true);
++    expect(isStruggleAttempt({ selfRating: null, correctness: 'incorrect', missTags: [] })).toBe(true);
++    expect(isStruggleAttempt({ selfRating: 3, correctness: 'partial', missTags: [] })).toBe(false);
++    expect(isStruggleAttempt({ selfRating: null, correctness: null, missTags: [] })).toBe(false);
++  });
++});
++
++describe('WeaknessesService.summary', () => {
++  it('aggregates miss-tag reasons with counts, sample titles, and question ids', async () => {
++    const { service } = serviceWith([
++      buildAttempt({ questionId: 'q-1', missTags: ['edge_case'], title: 'Two Sum', createdAt: new Date('2026-07-02T00:00:00Z') }),
++      buildAttempt({ questionId: 'q-2', missTags: ['edge_case', 'time_pressure'], title: 'Merge Intervals' }),
++      buildAttempt({ questionId: 'q-3', selfRating: 5, title: 'Clean solve' }),
++    ]);
++
++    const summary = await service.summary('user-1');
++
++    expect(summary.totalAttempts).toBe(3);
++    expect(summary.totalStruggles).toBe(2);
++    const edgeCase = summary.reasons.find((reason) => reason.reason === 'edge_case');
++    expect(edgeCase).toMatchObject({ count: 2, label: 'Missed an edge case' });
++    expect(edgeCase?.sampleTitles).toEqual(expect.arrayContaining(['Two Sum', 'Merge Intervals']));
++    expect(edgeCase?.questionIds).toEqual(expect.arrayContaining(['q-1', 'q-2']));
++  });
++
++  it('keys weak topics by topic id with a human label, and only areas with struggles appear', async () => {
++    const { service } = serviceWith([
++      buildAttempt({ questionId: 'q-1', selfRating: 1, topic: { id: 'topic-db', name: 'Databases' } }),
++      buildAttempt({ questionId: 'q-2', selfRating: 5, topic: { id: 'topic-net', name: 'Networking' } }),
++      buildAttempt({ questionId: 'q-3', selfRating: 2, patternTags: ['sliding-window'], topic: { id: 'topic-dsa', name: 'DSA' } }),
++    ]);
++
++    const summary = await service.summary('user-1');
++
++    expect(summary.topics.map((topic) => topic.key)).toEqual(expect.arrayContaining(['topic-db', 'topic-dsa']));
++    expect(summary.topics.map((topic) => topic.key)).not.toContain('topic-net');
++    expect(summary.topics.find((topic) => topic.key === 'topic-db')?.label).toBe('Databases');
++    expect(summary.patterns).toEqual([
++      expect.objectContaining({ key: 'sliding-window', struggles: 1, attempts: 1 }),
++    ]);
++  });
++});
++
++describe('WeaknessesService.struggledQuestionIds', () => {
++  it('excludes questions repaired by a later clean attempt (attempts arrive newest-first)', async () => {
++    const { service } = serviceWith([
++      // Newest first: q-1 was solved cleanly after an earlier struggle.
++      buildAttempt({ questionId: 'q-1', selfRating: 4, createdAt: new Date('2026-07-03T00:00:00Z') }),
++      buildAttempt({ questionId: 'q-1', selfRating: 1, createdAt: new Date('2026-07-01T00:00:00Z') }),
++      buildAttempt({ questionId: 'q-2', missTags: ['concept_gap'], createdAt: new Date('2026-07-02T00:00:00Z') }),
++    ]);
++
++    const ids = await service.struggledQuestionIds('user-1');
++
++    expect(ids).toEqual(['q-2']);
++  });
++});
+-- 
+2.43.0
+
+
+From 3d33d3bc5199822c0f0201f96b97ff942bda956b Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Tue, 7 Jul 2026 18:03:15 +0000
+Subject: [PATCH 4/6] =?UTF-8?q?feat(web):=20answer=20=E2=86=92=20reveal=20?=
+ =?UTF-8?q?=E2=86=92=20rate=20session=20lifecycle=20(plan=20=C2=A77.2)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The session flow asked for self-rating and miss-tags before the reference
+answer was ever shown — and never showed it at all. Rating blind is guessing,
+and FSRS scheduled from guesses drifts. AnswerForm is now recall-only; the new
+RevealPanel carries everything after submit: reference answer, rubric, the
+user's answer side-by-side, reflection (moved here, where 'what did I miss' is
+answerable), labeled Again/Hard/Good/Easy grading via PATCH /attempts/:id, and
+the existing AiFeedbackCard. Answered questions reopen in their reveal (keyed
+remount per attempt); ReviewQuestionCard deleted as superseded. Summary gains
+collapsible reference answers, grade chips, and 'Retry N missed' via a
+questionIds-pinned session.
+---
+ .../session/[id]/__tests__/page.test.tsx      | 169 +++++++++-----
+ .../practice/session/[id]/page.tsx            | 180 +++++++++------
+ .../practice/session/[id]/summary/page.tsx    |  81 +++++--
+ .../web/app/components/session/AnswerForm.tsx |  59 +----
+ .../components/session/ReflectionPanel.tsx    |  23 +-
+ .../app/components/session/RevealPanel.tsx    | 206 ++++++++++++++++++
+ .../components/session/ReviewQuestionCard.tsx |  54 -----
+ apps/web/app/lib/api-client.ts                |  30 +++
+ 8 files changed, 541 insertions(+), 261 deletions(-)
+ create mode 100644 apps/web/app/components/session/RevealPanel.tsx
+ delete mode 100644 apps/web/app/components/session/ReviewQuestionCard.tsx
+
+diff --git a/apps/web/app/(authenticated)/practice/session/[id]/__tests__/page.test.tsx b/apps/web/app/(authenticated)/practice/session/[id]/__tests__/page.test.tsx
+index f1c850d..5453c53 100644
+--- a/apps/web/app/(authenticated)/practice/session/[id]/__tests__/page.test.tsx
++++ b/apps/web/app/(authenticated)/practice/session/[id]/__tests__/page.test.tsx
+@@ -1,7 +1,7 @@
+ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import ActiveSessionPage from '../page';
+-import { sessionsApi, type SessionDetailResponse } from '../../../../../lib/api-client';
++import { aiApi, attemptsApi, sessionsApi, type SessionDetailResponse } from '../../../../../lib/api-client';
+ 
+ const push = vi.fn();
+ const replace = vi.fn();
+@@ -18,6 +18,31 @@ vi.mock('next/navigation', () => ({
+   useRouter: () => router,
+ }));
+ 
++function buildQuestion(overrides: { referenceAnswer?: string | null } = {}) {
++  return {
++    id: 'q-1',
++    title: 'Leading without formal authority',
++    prompt: 'Describe a time you led without formal authority.',
++    type: 'behavioral',
++    difficulty: 'hard',
++    topicId: 'topic-1',
++    referenceAnswer: overrides.referenceAnswer ?? 'Strong answers anchor on influence through credibility and outcomes.',
++    notes: null,
++    sourceUrl: null,
++    roleTags: [],
++    areaTags: [],
++    patternTags: [],
++    estimatedMinutes: null,
++    rubric: null,
++    importance: 1,
++    createdByUserId: 'user-1',
++    createdAt: new Date().toISOString(),
++    updatedAt: new Date().toISOString(),
++    topic: { id: 'topic-1', name: 'Behavioral' },
++    companies: [],
++  };
++}
++
+ function buildSession(): SessionDetailResponse {
+   return {
+     id: 'session-1',
+@@ -30,94 +55,126 @@ function buildSession(): SessionDetailResponse {
+     createdAt: new Date().toISOString(),
+     updatedAt: new Date().toISOString(),
+     sessionQuestions: [
+-      {
+-        id: 'sq-1',
+-        sessionId: 'session-1',
+-        questionId: 'q-1',
+-        order: 1,
+-        question: {
+-          id: 'q-1',
+-          title: 'Leading without formal authority',
+-          prompt: 'Describe a time you led without formal authority.',
+-          type: 'behavioral',
+-          difficulty: 'hard',
+-          topicId: 'topic-1',
+-          referenceAnswer: null,
+-          notes: null,
+-          sourceUrl: null,
+-          roleTags: [],
+-          areaTags: [],
+-          patternTags: [],
+-          estimatedMinutes: null,
+-          rubric: null,
+-          importance: 1,
+-          createdByUserId: 'user-1',
+-          createdAt: new Date().toISOString(),
+-          updatedAt: new Date().toISOString(),
+-          topic: { id: 'topic-1', name: 'Behavioral' },
+-          companies: [],
+-        },
+-      },
++      { id: 'sq-1', sessionId: 'session-1', questionId: 'q-1', order: 1, question: buildQuestion() },
+     ],
+     answerAttempts: [],
+   } as unknown as SessionDetailResponse;
+ }
+ 
+-describe('ActiveSessionPage — answer submit payload', () => {
++function buildAttempt() {
++  return {
++    id: 'attempt-1',
++    userId: 'user-1',
++    sessionId: 'session-1',
++    questionId: 'q-1',
++    answerText: 'I organized a cross-team migration without direct authority.',
++    selfRating: null,
++    aiScore: null,
++    aiFeedback: null,
++    missTags: [],
++    reflectionNote: null,
++    createdAt: new Date().toISOString(),
++    updatedAt: new Date().toISOString(),
++  };
++}
++
++function mockAiUnavailable() {
++  // RevealPanel embeds AiFeedbackCard, which probes /ai/usage on mount — keep
++  // tests offline and deterministic.
++  vi.spyOn(aiApi, 'usage').mockResolvedValue({ available: false } as never);
++}
++
++describe('ActiveSessionPage — answer → reveal → rate lifecycle (plan §7.2)', () => {
+   afterEach(() => {
+     vi.restoreAllMocks();
+     push.mockClear();
+     replace.mockClear();
+   });
+ 
+-  it('submits self-rating, miss tags, and reflection note alongside the answer text', async () => {
++  it('withholds the reference answer and rating until the answer is submitted, then reveals both', async () => {
++    mockAiUnavailable();
+     vi.spyOn(sessionsApi, 'get').mockResolvedValue(buildSession());
+-    const answerSpy = vi.spyOn(sessionsApi, 'answer').mockResolvedValue({} as never);
++    const answerSpy = vi.spyOn(sessionsApi, 'answer').mockResolvedValue(buildAttempt() as never);
+ 
+     render(<ActiveSessionPage />);
+ 
+     const textarea = await screen.findByLabelText('Your Answer');
++    // Answer phase: no reference answer, no rating buttons.
++    expect(screen.queryByText(/Strong answers anchor on influence/)).not.toBeInTheDocument();
++    expect(screen.queryByText('Again')).not.toBeInTheDocument();
++
+     fireEvent.change(textarea, { target: { value: 'I organized a cross-team migration without direct authority.' } });
++    fireEvent.click(screen.getByText('Submit & reveal answer'));
++
++    await waitFor(() => expect(answerSpy).toHaveBeenCalledTimes(1));
++    const [sessionId, payload] = answerSpy.mock.calls[0];
++    expect(sessionId).toBe('session-1');
++    // The submit carries only the recall — the grade comes after the reveal.
++    expect(payload).toMatchObject({
++      questionId: 'q-1',
++      answerText: 'I organized a cross-team migration without direct authority.',
++    });
++    expect(payload.selfRating).toBeUndefined();
++    expect(typeof payload.timeSpentSeconds).toBe('number');
++
++    // Reveal phase: reference answer, the user's own answer, and the labeled grades.
++    expect(await screen.findByText(/Strong answers anchor on influence/)).toBeInTheDocument();
++    expect(screen.getByText('I organized a cross-team migration without direct authority.')).toBeInTheDocument();
++    for (const label of ['Again', 'Hard', 'Good', 'Easy']) {
++      expect(screen.getByText(label)).toBeInTheDocument();
++    }
++  });
+ 
+-    // Self-rating: click the "4/5" star.
+-    fireEvent.click(screen.getByTitle('4 / 5'));
++  it('saves rating with post-reveal reflection through PATCH /attempts/:id', async () => {
++    mockAiUnavailable();
++    vi.spyOn(sessionsApi, 'get').mockResolvedValue(buildSession());
++    vi.spyOn(sessionsApi, 'answer').mockResolvedValue(buildAttempt() as never);
++    const updateSpy = vi.spyOn(attemptsApi, 'update').mockResolvedValue({
++      ...buildAttempt(),
++      selfRating: 3,
++      missTags: ['communication_gap'],
++      reflectionNote: 'Should have led with the outcome.',
++    } as never);
++
++    render(<ActiveSessionPage />);
++
++    fireEvent.change(await screen.findByLabelText('Your Answer'), {
++      target: { value: 'I organized a cross-team migration without direct authority.' },
++    });
++    fireEvent.click(screen.getByText('Submit & reveal answer'));
+ 
+-    // Expand reflection, tag one miss reason, add a note.
+-    fireEvent.click(screen.getByText('+ Add reflection (optional)'));
++    // In the reveal, tag a miss reason and add a note *after* seeing the reference.
++    fireEvent.click(await screen.findByText('+ Add reflection (optional)'));
+     fireEvent.click(screen.getByText('Struggled to explain it'));
+     fireEvent.change(screen.getByPlaceholderText('Anything else worth remembering next time?'), {
+       target: { value: 'Should have led with the outcome.' },
+     });
+ 
+-    fireEvent.click(screen.getByText('Submit Answer'));
++    fireEvent.click(screen.getByText('Good'));
+ 
+-    await waitFor(() => expect(answerSpy).toHaveBeenCalledTimes(1));
+-    const [sessionId, payload] = answerSpy.mock.calls[0];
+-    expect(sessionId).toBe('session-1');
++    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
++    const [attemptId, payload] = updateSpy.mock.calls[0];
++    expect(attemptId).toBe('attempt-1');
+     expect(payload).toMatchObject({
+-      questionId: 'q-1',
+-      answerText: 'I organized a cross-team migration without direct authority.',
+-      selfRating: 4,
++      selfRating: 3,
+       missTags: ['communication_gap'],
+       reflectionNote: 'Should have led with the outcome.',
+     });
+-    expect(typeof payload.timeSpentSeconds).toBe('number');
++    expect(await screen.findByText(/next review scheduled/)).toBeInTheDocument();
+   });
+ 
+-  it('omits selfRating/missTags/reflectionNote entirely when left at their defaults', async () => {
+-    vi.spyOn(sessionsApi, 'get').mockResolvedValue(buildSession());
+-    const answerSpy = vi.spyOn(sessionsApi, 'answer').mockResolvedValue({} as never);
++  it('resumes an answered question in the reveal phase instead of asking for a new answer', async () => {
++    mockAiUnavailable();
++    const session = buildSession();
++    (session as unknown as { answerAttempts: unknown[] }).answerAttempts = [buildAttempt()];
++    vi.spyOn(sessionsApi, 'get').mockResolvedValue(session);
+ 
+     render(<ActiveSessionPage />);
+ 
+-    const textarea = await screen.findByLabelText('Your Answer');
+-    fireEvent.change(textarea, { target: { value: 'A minimal answer with no extras.' } });
+-    fireEvent.click(screen.getByText('Submit Answer'));
+-
+-    await waitFor(() => expect(answerSpy).toHaveBeenCalledTimes(1));
+-    const [, payload] = answerSpy.mock.calls[0];
+-    expect(payload.selfRating).toBeUndefined();
+-    expect(payload.missTags).toBeUndefined();
+-    expect(payload.reflectionNote).toBeUndefined();
++    // Loads straight into the reveal for the already-answered question.
++    expect(await screen.findByText(/Strong answers anchor on influence/)).toBeInTheDocument();
++    expect(screen.queryByLabelText('Your Answer')).not.toBeInTheDocument();
++    // And the whole-session completion CTA is available.
++    expect(screen.getByText('Complete Session')).toBeInTheDocument();
+   });
+ });
+diff --git a/apps/web/app/(authenticated)/practice/session/[id]/page.tsx b/apps/web/app/(authenticated)/practice/session/[id]/page.tsx
+index 1c62ffa..8e7504a 100644
+--- a/apps/web/app/(authenticated)/practice/session/[id]/page.tsx
++++ b/apps/web/app/(authenticated)/practice/session/[id]/page.tsx
+@@ -1,15 +1,27 @@
+ 'use client';
+ 
+-import { useState, useEffect, useCallback } from 'react';
++import { useState, useEffect, useCallback, useMemo } from 'react';
+ import { useParams, useRouter } from 'next/navigation';
+-import { sessionsApi, type SessionDetailResponse } from '../../../../lib/api-client';
+-import type { MissTagReason, SessionQuestionResponse } from '@momito/shared';
++import { attemptsApi, sessionsApi, type SessionDetailResponse } from '../../../../lib/api-client';
++import type { AnswerAttemptResponse, MissTagReason, SessionQuestionResponse } from '@momito/shared';
+ import { Spinner, ErrorBanner } from '../../../../components/ui';
+ import { SessionHeader } from '../../../../components/session/SessionHeader';
+ import { AnswerForm } from '../../../../components/session/AnswerForm';
+ import { AllAnsweredPanel } from '../../../../components/session/AllAnsweredPanel';
+-import { ReviewQuestionCard } from '../../../../components/session/ReviewQuestionCard';
++import { RevealPanel } from '../../../../components/session/RevealPanel';
+ 
++// Attempt lifecycle (plan §7.2), now actually in this order:
++//
++//   read prompt → answer → submit
++//   → REVEAL reference/rubric (new)
++//   → reflect (moved here — after the reveal, where it can be honest)
++//   → rate Again/Hard/Good/Easy (moved here — schedules the FSRS review)
++//   → next question
++//
++// Each question is therefore in one of two phases: 'answer' (no attempt yet)
++// or 'reveal' (attempt exists). Navigating back to an answered question
++// reopens its reveal, where the rating/reflection can still be revised —
++// the PATCH reschedules the review from the newest grade.
+ export default function ActiveSessionPage() {
+   const params = useParams();
+   const router = useRouter();
+@@ -20,12 +32,12 @@ export default function ActiveSessionPage() {
+   const [error, setError] = useState('');
+   const [currentIndex, setCurrentIndex] = useState(0);
+   const [answerText, setAnswerText] = useState('');
+-  const [selfRating, setSelfRating] = useState<number>(0);
+-  const [missTags, setMissTags] = useState<MissTagReason[]>([]);
+-  const [reflectionNote, setReflectionNote] = useState('');
+   const [submitting, setSubmitting] = useState(false);
+-  const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set());
++  const [attemptsByQuestion, setAttemptsByQuestion] = useState<Map<string, AnswerAttemptResponse>>(new Map());
+   const [completing, setCompleting] = useState(false);
++  // Once every question is answered, the same index navigation switches into a
++  // browse mode over reveals; this flag keeps the "all answered" banner up.
++  const [browseAll, setBrowseAll] = useState(false);
+ 
+   const fetchSession = useCallback(async () => {
+     setLoading(true);
+@@ -38,15 +50,15 @@ export default function ActiveSessionPage() {
+         return;
+       }
+       setSession(s);
+-      // Pre-populate answered questions from existing attempts
+-      const answered = new Set(s.answerAttempts.map((a) => a.questionId));
+-      setAnsweredQuestions(answered);
++      // answerAttempts arrive oldest-first; overwriting keeps the latest per question.
++      const byQuestion = new Map<string, AnswerAttemptResponse>();
++      for (const attempt of s.answerAttempts) byQuestion.set(attempt.questionId, attempt as AnswerAttemptResponse);
++      setAttemptsByQuestion(byQuestion);
+       // Resume from the first unanswered question
+       if (s.sessionQuestions.length > 0) {
+-        const firstUnanswered = s.sessionQuestions.findIndex(
+-          (sq) => !answered.has(sq.questionId)
+-        );
+-        setCurrentIndex(firstUnanswered >= 0 ? firstUnanswered : s.sessionQuestions.length - 1);
++        const firstUnanswered = s.sessionQuestions.findIndex((sq) => !byQuestion.has(sq.questionId));
++        setCurrentIndex(firstUnanswered >= 0 ? firstUnanswered : 0);
++        setBrowseAll(firstUnanswered < 0);
+       }
+     } catch (err: unknown) {
+       setError(err instanceof Error ? err.message : 'Failed to load session');
+@@ -60,39 +72,35 @@ export default function ActiveSessionPage() {
+     fetchSession();
+   }, [fetchSession]);
+ 
++  const questions = useMemo(() => session?.sessionQuestions ?? [], [session]);
++  const totalQuestions = questions.length;
++  const answeredCount = useMemo(
++    () => questions.filter((sq) => attemptsByQuestion.has(sq.questionId)).length,
++    [questions, attemptsByQuestion],
++  );
++  const allAnswered = totalQuestions > 0 && answeredCount >= totalQuestions;
++  const currentQuestion: SessionQuestionResponse | null =
++    currentIndex >= 0 && currentIndex < totalQuestions ? questions[currentIndex] : null;
++  const currentAttempt = currentQuestion ? attemptsByQuestion.get(currentQuestion.questionId) ?? null : null;
++
+   async function handleSubmitAnswer(timeSpentSeconds: number) {
+-    if (!session || !answerText.trim() || submitting) return;
+-    const currentQuestion = session.sessionQuestions[currentIndex];
+-    if (!currentQuestion) return;
++    if (!session || !currentQuestion || !answerText.trim() || submitting) return;
+ 
+     setSubmitting(true);
++    setError('');
+     try {
+-      await sessionsApi.answer(id, {
++      const attempt = await sessionsApi.answer(id, {
+         questionId: currentQuestion.questionId,
+         answerText: answerText.trim(),
+-        selfRating: selfRating > 0 ? selfRating : undefined,
+         timeSpentSeconds,
+-        missTags: missTags.length > 0 ? missTags : undefined,
+-        reflectionNote: reflectionNote.trim() || undefined,
+       });
+-      const newAnswered = new Set(answeredQuestions);
+-      newAnswered.add(currentQuestion.questionId);
+-      setAnsweredQuestions(newAnswered);
++      setAttemptsByQuestion((current) => {
++        const next = new Map(current);
++        next.set(currentQuestion.questionId, attempt);
++        return next;
++      });
+       setAnswerText('');
+-      setSelfRating(0);
+-      setMissTags([]);
+-      setReflectionNote('');
+-
+-      // Move to next unanswered question
+-      const nextUnanswered = session.sessionQuestions.findIndex((sq, i) =>
+-        i > currentIndex && !newAnswered.has(sq.questionId)
+-      );
+-      if (nextUnanswered >= 0) {
+-        setCurrentIndex(nextUnanswered);
+-      } else {
+-        // All answered — prompt completion
+-        setCurrentIndex(session.sessionQuestions.length); // "all done" state
+-      }
++      // Stay on this question — the reveal phase renders now that an attempt exists.
+     } catch (err: unknown) {
+       setError(err instanceof Error ? err.message : 'Failed to submit answer');
+     } finally {
+@@ -100,6 +108,40 @@ export default function ActiveSessionPage() {
+     }
+   }
+ 
++  async function handleRated(
++    attempt: AnswerAttemptResponse,
++    payload: { selfRating: number; missTags: MissTagReason[]; reflectionNote: string },
++  ) {
++    const updated = await attemptsApi.update(attempt.id, {
++      selfRating: payload.selfRating,
++      missTags: payload.missTags,
++      reflectionNote: payload.reflectionNote || undefined,
++    });
++    setAttemptsByQuestion((current) => {
++      const next = new Map(current);
++      next.set(attempt.questionId, { ...attempt, ...updated });
++      return next;
++    });
++  }
++
++  function goToNext() {
++    // Prefer the next unanswered question after the current one, then any
++    // unanswered earlier one; when none remain, enter browse-all mode.
++    const nextUnanswered = questions.findIndex(
++      (sq, i) => i > currentIndex && !attemptsByQuestion.has(sq.questionId),
++    );
++    if (nextUnanswered >= 0) {
++      setCurrentIndex(nextUnanswered);
++      return;
++    }
++    const anyUnanswered = questions.findIndex((sq) => !attemptsByQuestion.has(sq.questionId));
++    if (anyUnanswered >= 0) {
++      setCurrentIndex(anyUnanswered);
++      return;
++    }
++    setBrowseAll(true);
++  }
++
+   async function handleComplete() {
+     setCompleting(true);
+     try {
+@@ -147,20 +189,15 @@ export default function ActiveSessionPage() {
+     );
+   }
+ 
+-  if (!session || session.sessionQuestions.length === 0) {
++  if (!session || totalQuestions === 0) {
+     return null;
+   }
+ 
+-  const questions = session.sessionQuestions;
+-  const totalQuestions = questions.length;
+-  const allAnswered = answeredQuestions.size >= totalQuestions;
+-  const currentQuestion: SessionQuestionResponse | null = currentIndex < totalQuestions ? questions[currentIndex] : null;
+-
+   return (
+     <div className="mx-auto max-w-3xl">
+       <SessionHeader
+         title={session.title}
+-        answeredCount={answeredQuestions.size}
++        answeredCount={answeredCount}
+         totalQuestions={totalQuestions}
+         completing={completing}
+         onAbandon={handleAbandon}
+@@ -172,49 +209,48 @@ export default function ActiveSessionPage() {
+         </div>
+       )}
+ 
+-      {currentQuestion && !allAnswered && (
++      {allAnswered && browseAll && (
++        <AllAnsweredPanel questions={questions} currentIndex={currentIndex} onSelect={setCurrentIndex} />
++      )}
++
++      {currentQuestion && !currentAttempt && (
+         <AnswerForm
+           currentQuestion={currentQuestion}
+           currentIndex={currentIndex}
+           totalQuestions={totalQuestions}
+           answerText={answerText}
+           onAnswerTextChange={setAnswerText}
+-          selfRating={selfRating}
+-          onSelfRatingChange={setSelfRating}
+-          missTags={missTags}
+-          onMissTagsChange={setMissTags}
+-          reflectionNote={reflectionNote}
+-          onReflectionNoteChange={setReflectionNote}
+           submitting={submitting}
+-          isAlreadyAnswered={answeredQuestions.has(currentQuestion.questionId)}
+-          onPrevious={() => setCurrentIndex(currentIndex - 1)}
++          onPrevious={currentIndex > 0 ? () => setCurrentIndex(currentIndex - 1) : undefined}
+           onSubmit={handleSubmitAnswer}
+         />
+       )}
+ 
+-      {allAnswered && (
+-        <AllAnsweredPanel questions={questions} currentIndex={currentIndex} onSelect={setCurrentIndex} />
+-      )}
+-
+-      {currentQuestion && allAnswered && (
+-        <ReviewQuestionCard
++      {currentQuestion && currentAttempt && (
++        <RevealPanel
++          key={currentAttempt.id}
+           currentQuestion={currentQuestion}
+           currentIndex={currentIndex}
+           totalQuestions={totalQuestions}
+-          onPrevious={() => setCurrentIndex(currentIndex - 1)}
+-          onNext={() => setCurrentIndex(currentIndex + 1)}
++          attempt={currentAttempt}
++          onRated={(payload) => handleRated(currentAttempt, payload)}
++          onPrevious={currentIndex > 0 ? () => setCurrentIndex(currentIndex - 1) : undefined}
++          onNext={allAnswered && currentIndex >= totalQuestions - 1 ? undefined : goToNext}
++          nextLabel={allAnswered ? 'Next →' : 'Next question →'}
+         />
+       )}
+ 
+-      <div className="flex justify-center">
+-        <button
+-          onClick={handleComplete}
+-          disabled={completing}
+-          className="rounded-lg bg-green-600 px-8 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+-        >
+-          {completing ? <Spinner className="h-4 w-4" /> : 'Complete Session'}
+-        </button>
+-      </div>
++      {allAnswered && (
++        <div className="flex justify-center">
++          <button
++            onClick={handleComplete}
++            disabled={completing}
++            className="rounded-lg bg-green-600 px-8 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
++          >
++            {completing ? <Spinner className="h-4 w-4" /> : 'Complete Session'}
++          </button>
++        </div>
++      )}
+     </div>
+   );
+ }
+diff --git a/apps/web/app/(authenticated)/practice/session/[id]/summary/page.tsx b/apps/web/app/(authenticated)/practice/session/[id]/summary/page.tsx
+index 3ec7bb7..41da928 100644
+--- a/apps/web/app/(authenticated)/practice/session/[id]/summary/page.tsx
++++ b/apps/web/app/(authenticated)/practice/session/[id]/summary/page.tsx
+@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
+ import { sessionsApi, type SessionDetailResponse } from '../../../../../lib/api-client';
+ import { Card, Badge, Spinner, ErrorBanner, EmptyState } from '../../../../../components/ui';
+ import { MISS_TAG_LABELS } from '../../../../../components/session/ReflectionPanel';
++import { Markdown } from '../../../../../components/Markdown';
+ import type { MissTagReason } from '@momito/shared';
+ 
+ const TYPE_LABELS: Record<string, string> = {
+@@ -21,6 +22,10 @@ const TYPE_LABELS: Record<string, string> = {
+   behavioral: 'Behavioral',
+ };
+ 
++// Mirrors SELF_RATING_SCALE (1 Again / 2 Hard / 3-4 Good / 5 Easy) plus the
++// legacy value 4 from the old star UI.
++const RATING_LABELS: Record<number, string> = { 1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Good', 5: 'Easy' };
++
+ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+   completed: { label: 'Completed', color: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400' },
+   abandoned: { label: 'Abandoned', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400' },
+@@ -45,6 +50,7 @@ export default function SessionSummaryPage() {
+   const [session, setSession] = useState<SessionDetailResponse | null>(null);
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState('');
++  const [retrying, setRetrying] = useState(false);
+ 
+   const fetchSession = useCallback(async () => {
+     setLoading(true);
+@@ -97,6 +103,37 @@ export default function SessionSummaryPage() {
+   const attemptMap = new Map(attempts.map((a) => [a.questionId, a]));
+   const answeredCount = attemptMap.size;
+   const totalCount = questions.length;
++
++  // "Missed" = never answered, or the reveal-phase grade said Again/Hard, or
++  // the user tagged what went wrong. These are exactly the items worth an
++  // immediate second pass while the gap is fresh.
++  const missedQuestionIds = questions
++    .filter((q) => {
++      const attempt = attemptMap.get(q.questionId);
++      if (!attempt) return true;
++      if ((attempt.selfRating ?? 0) > 0 && (attempt.selfRating ?? 0) <= 2) return true;
++      if ((attempt.missTags?.length ?? 0) > 0) return true;
++      return false;
++    })
++    .map((q) => q.questionId);
++
++  async function handleRetryMissed() {
++    if (missedQuestionIds.length === 0 || retrying) return;
++    setRetrying(true);
++    try {
++      const created = await sessionsApi.create({
++        sessionType: 'weak_area_review',
++        title: `Retry: ${session?.title ?? 'missed questions'}`,
++        questionIds: missedQuestionIds,
++        questionCount: missedQuestionIds.length,
++      });
++      router.push(`/practice/session/${created.session.id}`);
++    } catch (err: unknown) {
++      setError(err instanceof Error ? err.message : 'Failed to start retry session');
++      setRetrying(false);
++    }
++  }
++
+   const statusInfo = STATUS_LABELS[session.status] ?? { label: session.status, color: 'bg-zinc-100 text-zinc-700' };
+ 
+   return (
+@@ -189,20 +226,17 @@ export default function SessionSummaryPage() {
+                     </p>
+                   )}
+                   {attempt.selfRating && (
+-                    <div>
+-                      <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Self Rating</p>
+-                      <div className="mt-1 flex gap-0.5">
+-                        {[1, 2, 3, 4, 5].map((r) => (
+-                          <span
+-                            key={r}
+-                            className={`text-lg ${
+-                              r <= attempt.selfRating! ? 'text-indigo-500' : 'text-zinc-200'
+-                            }`}
+-                          >
+-                            ★
+-                          </span>
+-                        ))}
+-                      </div>
++                    <div className="mt-2">
++                      <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Recall grade</p>
++                      <span
++                        className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${
++                          attempt.selfRating <= 2
++                            ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400'
++                            : 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400'
++                        }`}
++                      >
++                        {RATING_LABELS[attempt.selfRating] ?? `${attempt.selfRating}/5`}
++                      </span>
+                     </div>
+                   )}
+                   {attempt.missTags && attempt.missTags.length > 0 && (
+@@ -226,6 +260,16 @@ export default function SessionSummaryPage() {
+                       <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-400">{attempt.reflectionNote}</p>
+                     </div>
+                   )}
++                  {q.question.referenceAnswer && (
++                    <details className="mt-3 rounded-lg border border-emerald-200 dark:border-emerald-900">
++                      <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
++                        Reference answer
++                      </summary>
++                      <div className="border-t border-emerald-200 px-3 py-2 dark:border-emerald-900">
++                        <Markdown className="prose-sm">{q.question.referenceAnswer}</Markdown>
++                      </div>
++                    </details>
++                  )}
+                   <div className="mt-2">
+                     <button
+                       onClick={() => router.push(`/questions/${q.questionId}`)}
+@@ -249,6 +293,15 @@ export default function SessionSummaryPage() {
+         >
+           Back to Questions
+         </button>
++        {missedQuestionIds.length > 0 && (
++          <button
++            onClick={handleRetryMissed}
++            disabled={retrying}
++            className="rounded-lg bg-amber-600 px-5 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
++          >
++            {retrying ? 'Starting…' : `Retry ${missedQuestionIds.length} missed →`}
++          </button>
++        )}
+         <button
+           onClick={() => router.push('/practice/new')}
+           className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+diff --git a/apps/web/app/components/session/AnswerForm.tsx b/apps/web/app/components/session/AnswerForm.tsx
+index 0383f15..4226512 100644
+--- a/apps/web/app/components/session/AnswerForm.tsx
++++ b/apps/web/app/components/session/AnswerForm.tsx
+@@ -1,29 +1,26 @@
+ 'use client';
+ 
+ import { useEffect } from 'react';
+-import type { MissTagReason, SessionQuestionResponse } from '@momito/shared';
++import type { SessionQuestionResponse } from '@momito/shared';
+ import { Card, Badge, Spinner } from '../ui';
+ import { useTimer } from '../../lib/use-timer';
+ import { TYPE_LABELS } from './question-type-labels';
+ import { TextAnswerPanel } from './answer-panels/TextAnswerPanel';
+ import { SystemDesignAnswerPanel } from './answer-panels/SystemDesignAnswerPanel';
+ import { CodeAnswerPanel } from './answer-panels/CodeAnswerPanel';
+-import { ReflectionPanel } from './ReflectionPanel';
+ 
++// Attempt lifecycle (plan §7.2): this form is only the *recall* half —
++// read the prompt, write the answer, submit. Self-rating and reflection
++// deliberately moved to RevealPanel: they can only be answered honestly after
++// the reference answer is on screen (rating blind is guessing; "what did I
++// miss" is unanswerable before seeing what a strong answer contains).
+ export function AnswerForm({
+   currentQuestion,
+   currentIndex,
+   totalQuestions,
+   answerText,
+   onAnswerTextChange,
+-  selfRating,
+-  onSelfRatingChange,
+-  missTags,
+-  onMissTagsChange,
+-  reflectionNote,
+-  onReflectionNoteChange,
+   submitting,
+-  isAlreadyAnswered,
+   onPrevious,
+   onSubmit,
+ }: {
+@@ -32,15 +29,8 @@ export function AnswerForm({
+   totalQuestions: number;
+   answerText: string;
+   onAnswerTextChange: (value: string) => void;
+-  selfRating: number;
+-  onSelfRatingChange: (value: number) => void;
+-  missTags: MissTagReason[];
+-  onMissTagsChange: (tags: MissTagReason[]) => void;
+-  reflectionNote: string;
+-  onReflectionNoteChange: (value: string) => void;
+   submitting: boolean;
+-  isAlreadyAnswered: boolean;
+-  onPrevious: () => void;
++  onPrevious?: () => void;
+   onSubmit: (timeSpentSeconds: number) => void;
+ }) {
+   // MOM-036: timer restarts for each new question so timeSpentSeconds reflects
+@@ -107,40 +97,9 @@ export function AnswerForm({
+           <TextAnswerPanel value={answerText} onChange={onAnswerTextChange} />
+         )}
+ 
+-        <div className="mt-3">
+-          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+-            Self Rating <span className="text-zinc-400">(optional)</span>
+-          </span>
+-          <div className="mt-1 flex gap-2">
+-            {[1, 2, 3, 4, 5].map((r) => (
+-              <button
+-                key={r}
+-                type="button"
+-                onClick={() => onSelfRatingChange(selfRating === r ? 0 : r)}
+-                className={`h-8 w-8 rounded-full text-sm font-medium transition-colors ${
+-                  selfRating >= r
+-                    ? 'bg-indigo-600 text-white'
+-                    : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400'
+-                }`}
+-                title={`${r} / 5`}
+-              >
+-                {r}
+-              </button>
+-            ))}
+-            <span className="ml-1 self-center text-xs text-zinc-400">1-5</span>
+-          </div>
+-        </div>
+-
+-        <ReflectionPanel
+-          missTags={missTags}
+-          onMissTagsChange={onMissTagsChange}
+-          reflectionNote={reflectionNote}
+-          onReflectionNoteChange={onReflectionNoteChange}
+-        />
+-
+         <div className="mt-4 flex items-center justify-between">
+           <div className="flex gap-2">
+-            {currentIndex > 0 && (
++            {onPrevious && (
+               <button
+                 type="button"
+                 onClick={onPrevious}
+@@ -156,7 +115,7 @@ export function AnswerForm({
+             disabled={!answerText.trim() || submitting}
+             className="rounded-lg bg-indigo-600 px-5 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+           >
+-            {submitting ? <Spinner className="h-4 w-4" /> : isAlreadyAnswered ? 'Update Answer' : 'Submit Answer'}
++            {submitting ? <Spinner className="h-4 w-4" /> : 'Submit & reveal answer'}
+           </button>
+         </div>
+       </div>
+diff --git a/apps/web/app/components/session/ReflectionPanel.tsx b/apps/web/app/components/session/ReflectionPanel.tsx
+index bd0c0f1..c626f9b 100644
+--- a/apps/web/app/components/session/ReflectionPanel.tsx
++++ b/apps/web/app/components/session/ReflectionPanel.tsx
+@@ -1,22 +1,15 @@
+ 'use client';
+ 
+ import { useState } from 'react';
+-import { MISS_TAG_REASONS, type MissTagReason } from '@momito/shared';
++import { MISS_TAG_LABELS, MISS_TAG_REASONS, type MissTagReason } from '@momito/shared';
+ 
+-// MOM-039: optional reflection step (plan §5.4's WeaknessSignal.reason taxonomy,
+-// added to AnswerAttempt by MOM-028). Collapsed by default so it never gets in
+-// the way of a quick answer — most attempts won't need it.
+-export const MISS_TAG_LABELS: Record<MissTagReason, string> = {
+-  misread: 'Misread the question',
+-  wrong_pattern: 'Used the wrong approach',
+-  edge_case: 'Missed an edge case',
+-  time_pressure: 'Ran out of time',
+-  blank: "Didn't know where to start",
+-  implementation_bug: 'Implementation bug',
+-  concept_gap: "Didn't know the concept",
+-  communication_gap: 'Struggled to explain it',
+-  tradeoff_gap: 'Missed a tradeoff',
+-};
++// MOM-039: optional reflection step (plan §5.4's WeaknessSignal.reason
++// taxonomy, added to AnswerAttempt by MOM-028). Shown in the *reveal* phase —
++// after the reference answer — since "what did I miss" can only be answered
++// honestly once the user has seen what a strong answer contains. Labels live
++// in @momito/shared so the API's weakness recommendations quote the exact
++// wording the user tapped.
++export { MISS_TAG_LABELS };
+ 
+ export function ReflectionPanel({
+   missTags,
+diff --git a/apps/web/app/components/session/RevealPanel.tsx b/apps/web/app/components/session/RevealPanel.tsx
+new file mode 100644
+index 0000000..215d31a
+--- /dev/null
++++ b/apps/web/app/components/session/RevealPanel.tsx
+@@ -0,0 +1,206 @@
++'use client';
++
++import { useState } from 'react';
++import {
++  isRubric,
++  SELF_RATING_SCALE,
++  type AnswerAttemptResponse,
++  type MissTagReason,
++  type SessionQuestionResponse,
++} from '@momito/shared';
++import { Badge, Card, Spinner } from '../ui';
++import { Markdown } from '../Markdown';
++import { AiFeedbackCard } from '../ai-feedback-card';
++import { ReflectionPanel } from './ReflectionPanel';
++import { TYPE_LABELS } from './question-type-labels';
++
++// Attempt lifecycle (plan §7.2): Submit → **Reveal reference/rubric** →
++// Reflect → Self-rate → Schedule review. This panel is everything after
++// Submit. Rating is deliberately withheld until the reference answer is on
++// screen — a grade chosen before seeing the reference is a guess, and FSRS
++// scheduled from guesses drifts. The Again/Hard/Good/Easy labels mirror
++// exactly how fsrs-scheduler maps selfRating (1→Again, 2→Hard, 3→Good,
++// 5→Easy). Callers must set key={attempt.id} so navigating between answered
++// questions remounts the panel with that attempt's saved reflection state.
++export function RevealPanel({
++  currentQuestion,
++  currentIndex,
++  totalQuestions,
++  attempt,
++  onRated,
++  onPrevious,
++  onNext,
++  nextLabel,
++}: {
++  currentQuestion: SessionQuestionResponse;
++  currentIndex: number;
++  totalQuestions: number;
++  attempt: AnswerAttemptResponse;
++  /** Persist rating + reflection; resolves when saved. */
++  onRated: (payload: { selfRating: number; missTags: MissTagReason[]; reflectionNote: string }) => Promise<void>;
++  onPrevious?: () => void;
++  onNext?: () => void;
++  nextLabel?: string;
++}) {
++  const question = currentQuestion.question;
++  const [missTags, setMissTags] = useState<MissTagReason[]>(attempt.missTags ?? []);
++  const [reflectionNote, setReflectionNote] = useState(attempt.reflectionNote ?? '');
++  const [saving, setSaving] = useState(false);
++  const [savedRating, setSavedRating] = useState<number | null>(attempt.selfRating ?? null);
++  const [error, setError] = useState('');
++
++  async function rate(selfRating: number) {
++    if (saving) return;
++    setSaving(true);
++    setError('');
++    try {
++      await onRated({ selfRating, missTags, reflectionNote: reflectionNote.trim() });
++      setSavedRating(selfRating);
++    } catch (err: unknown) {
++      setError(err instanceof Error ? err.message : 'Failed to save rating');
++    } finally {
++      setSaving(false);
++    }
++  }
++
++  const rubric = isRubric(question.rubric) ? question.rubric : null;
++
++  return (
++    <Card className="mb-4">
++      <div className="mb-3 flex items-center justify-between">
++        <span className="text-sm font-medium text-zinc-400">
++          Question {currentIndex + 1} of {totalQuestions}
++        </span>
++        <div className="flex items-center gap-2">
++          {question.type && (
++            <Badge label={TYPE_LABELS[question.type] ?? question.type} variant={question.type} />
++          )}
++          <Badge label={question.difficulty} variant={question.difficulty} />
++        </div>
++      </div>
++
++      <h2 className="mb-2 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{question.title}</h2>
++      <div className="mb-4 whitespace-pre-wrap rounded-lg bg-zinc-50 p-4 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
++        {question.prompt}
++      </div>
++
++      {/* Your answer — kept visible so the comparison is side by side, not from memory. */}
++      <div className="mb-4">
++        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">Your answer</p>
++        <div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-zinc-200 p-3 text-sm text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
++          {attempt.answerText}
++        </div>
++      </div>
++
++      {/* Reference answer — the reveal. */}
++      <div className="mb-4">
++        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
++          Reference answer
++        </p>
++        {question.referenceAnswer ? (
++          <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
++            <Markdown className="prose-sm">{question.referenceAnswer}</Markdown>
++          </div>
++        ) : (
++          <p className="rounded-lg border border-dashed border-zinc-300 p-3 text-sm text-zinc-400 dark:border-zinc-700">
++            This question has no reference answer yet — grade yourself on correctness and completeness, and
++            consider adding one from the question page.
++          </p>
++        )}
++      </div>
++
++      {/* Rubric — what a strong answer must cover. */}
++      {rubric && rubric.criteria.length > 0 && (
++        <div className="mb-4">
++          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">
++            Rubric — did your answer cover these?
++          </p>
++          <ul className="space-y-1.5 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
++            {rubric.criteria.map((criterion) => (
++              <li key={criterion.id} className="text-sm text-zinc-700 dark:text-zinc-300">
++                <span className="font-medium">{criterion.title}</span>
++                <span className="text-zinc-400"> · {criterion.weight}/{rubric.maxScore}</span>
++                <span className="block text-xs text-zinc-500">{criterion.description}</span>
++              </li>
++            ))}
++          </ul>
++        </div>
++      )}
++
++      {/* Reflect — now that the gap is visible, tag what actually happened. */}
++      <div className="mb-4">
++        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Reflect</p>
++        <ReflectionPanel
++          missTags={missTags}
++          onMissTagsChange={setMissTags}
++          reflectionNote={reflectionNote}
++          onReflectionNoteChange={setReflectionNote}
++        />
++      </div>
++
++      {/* Rate — schedules the next FSRS review. */}
++      <div className="mb-2">
++        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
++          How was your recall? <span className="normal-case font-normal">(schedules your next review)</span>
++        </p>
++        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
++          {SELF_RATING_SCALE.map((option) => (
++            <button
++              key={option.value}
++              type="button"
++              disabled={saving}
++              onClick={() => rate(option.value)}
++              className={`rounded-lg border px-3 py-2 text-left transition-colors disabled:opacity-50 ${
++                savedRating === option.value
++                  ? 'border-indigo-600 bg-indigo-600 text-white'
++                  : 'border-zinc-300 text-zinc-700 hover:border-indigo-400 dark:border-zinc-700 dark:text-zinc-300'
++              }`}
++            >
++              <span className="block text-sm font-semibold">{option.label}</span>
++              <span className={`block text-xs ${savedRating === option.value ? 'text-indigo-100' : 'text-zinc-400'}`}>
++                {option.description}
++              </span>
++            </button>
++          ))}
++        </div>
++        {saving && (
++          <p className="mt-2 flex items-center gap-2 text-xs text-zinc-400">
++            <Spinner className="h-3 w-3" /> Saving…
++          </p>
++        )}
++        {savedRating !== null && !saving && (
++          <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
++            Rated — next review scheduled. You can change the rating or add reflection any time before moving on.
++          </p>
++        )}
++        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
++      </div>
++
++      {/* Optional AI grade — rubric-grounded second opinion; hides itself when no key is configured. */}
++      <AiFeedbackCard attemptId={attempt.id} aiScore={attempt.aiScore} aiFeedback={attempt.aiFeedback} />
++
++      <div className="mt-4 flex items-center justify-between">
++        <div>
++          {onPrevious && (
++            <button
++              type="button"
++              onClick={onPrevious}
++              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
++            >
++              ← Previous
++            </button>
++          )}
++        </div>
++        {onNext && (
++          <button
++            type="button"
++            onClick={onNext}
++            className="rounded-lg bg-indigo-600 px-5 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
++          >
++            {nextLabel ?? 'Next question →'}
++          </button>
++        )}
++      </div>
++    </Card>
++  );
++}
+diff --git a/apps/web/app/components/session/ReviewQuestionCard.tsx b/apps/web/app/components/session/ReviewQuestionCard.tsx
+deleted file mode 100644
+index c947080..0000000
+--- a/apps/web/app/components/session/ReviewQuestionCard.tsx
++++ /dev/null
+@@ -1,54 +0,0 @@
+-import type { SessionQuestionResponse } from '@momito/shared';
+-import { Card, Badge } from '../ui';
+-
+-export function ReviewQuestionCard({
+-  currentQuestion,
+-  currentIndex,
+-  totalQuestions,
+-  onPrevious,
+-  onNext,
+-}: {
+-  currentQuestion: SessionQuestionResponse;
+-  currentIndex: number;
+-  totalQuestions: number;
+-  onPrevious: () => void;
+-  onNext: () => void;
+-}) {
+-  return (
+-    <Card className="mb-4">
+-      <div className="mb-3 flex items-center justify-between">
+-        <span className="text-sm font-medium text-zinc-400">
+-          Question {currentIndex + 1} of {totalQuestions}
+-        </span>
+-        <div className="flex gap-2">
+-          <Badge label={currentQuestion.question.difficulty} variant={currentQuestion.question.difficulty} />
+-          {currentQuestion.question.topic && <Badge label={currentQuestion.question.topic.name} />}
+-        </div>
+-      </div>
+-      <h2 className="mb-3 text-lg font-semibold text-zinc-800 dark:text-zinc-100">
+-        {currentQuestion.question.title}
+-      </h2>
+-      <div className="mb-4 whitespace-pre-wrap rounded-lg bg-zinc-50 p-4 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+-        {currentQuestion.question.prompt}
+-      </div>
+-      <div className="flex gap-2">
+-        {currentIndex > 0 && (
+-          <button
+-            onClick={onPrevious}
+-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+-          >
+-            ← Previous
+-          </button>
+-        )}
+-        {currentIndex < totalQuestions - 1 && (
+-          <button
+-            onClick={onNext}
+-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+-          >
+-            Next →
+-          </button>
+-        )}
+-      </div>
+-    </Card>
+-  );
+-}
+diff --git a/apps/web/app/lib/api-client.ts b/apps/web/app/lib/api-client.ts
+index 7c73ae4..9aaafd3 100644
+--- a/apps/web/app/lib/api-client.ts
++++ b/apps/web/app/lib/api-client.ts
+@@ -222,6 +222,7 @@ import type {
+   SessionQuestionResponse,
+   AnswerAttemptResponse,
+   MissTagReason,
++  WeaknessSummaryResponse,
+ } from '@momito/shared';
+ 
+ export interface CreateSessionResponse {
+@@ -312,6 +313,35 @@ export const attemptsApi = {
+     const query = qs.toString();
+     return request<PaginatedResponse<AnswerAttemptResponse>>(`/questions/${questionId}/attempts${query ? `?${query}` : ''}`);
+   },
++
++  // Standalone attempt (no session) — the Today queue's inline recall flow
++  // records a typed recall as a real attempt so it feeds streak, history, and
++  // weakness signals like any session answer.
++  create: (body: {
++    questionId: string;
++    answerText: string;
++    selfRating?: number;
++    timeSpentSeconds?: number;
++    missTags?: MissTagReason[];
++    reflectionNote?: string;
++  }) =>
++    request<AnswerAttemptResponse>('/attempts', { method: 'POST', body: JSON.stringify(body) }),
++
++  // Post-reveal rate/reflect (attempt lifecycle §7.2: Submit → Reveal →
++  // Reflect → Self-rate). Rating here schedules the FSRS review server-side.
++  update: (id: string, body: {
++    selfRating?: number;
++    correctness?: string;
++    confidence?: number;
++    missTags?: MissTagReason[];
++    reflectionNote?: string;
++  }) =>
++    request<AnswerAttemptResponse>(`/attempts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
++};
++
++// ── Weakness signals (plan §5.4/§6.1) ───────────────────────────────────────
++export const weaknessesApi = {
++  summary: () => request<WeaknessSummaryResponse>('/weaknesses'),
+ };
+ 
+ // ── AI grading (Workstream C: dormant until ANTHROPIC_API_KEY is set) ──────
+-- 
+2.43.0
+
+
+From 0f32441c6c9bedc08ecca8ca6dfd0a2fe9129111 Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Tue, 7 Jul 2026 18:03:15 +0000
+Subject: [PATCH 5/6] feat(web): Today reviews become real recall practice;
+ weakness repair entry points
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Today's 'Review now' expanded into bare 1-5 buttons — a grade with no prompt,
+no recall attempt, no reveal. TodayReviewCard now runs the loop inline:
+expand → prompt → optional typed recall → reveal → Again/Hard/Good/Easy. A
+typed recall posts a real standalone attempt (streak/history/weakness signals
+all count it); a mental-only recall records just the grade. Practice hub shows
+live weak spots from GET /weaknesses with a one-tap repair session; the
+weak_area_review description now matches what it actually does.
+---
+ .../app/(authenticated)/practice/new/page.tsx |   2 +-
+ .../web/app/(authenticated)/practice/page.tsx |  85 ++++++-
+ apps/web/app/(authenticated)/today/page.tsx   |  71 +-----
+ apps/web/app/components/TodayReviewCard.tsx   | 231 ++++++++++++++++++
+ .../__tests__/today-review-card.test.tsx      |  89 +++++++
+ 5 files changed, 412 insertions(+), 66 deletions(-)
+ create mode 100644 apps/web/app/components/TodayReviewCard.tsx
+ create mode 100644 apps/web/app/components/__tests__/today-review-card.test.tsx
+
+diff --git a/apps/web/app/(authenticated)/practice/new/page.tsx b/apps/web/app/(authenticated)/practice/new/page.tsx
+index 5569d42..4910a40 100644
+--- a/apps/web/app/(authenticated)/practice/new/page.tsx
++++ b/apps/web/app/(authenticated)/practice/new/page.tsx
+@@ -24,7 +24,7 @@ const SESSION_TYPE_DESCRIPTIONS: Record<string, string> = {
+   company_practice: 'Practice questions asked by a specific company',
+   mixed_mock: 'Mix of question types and difficulties',
+   role_drill: 'Focus on one role track and area',
+-  weak_area_review: 'Revisit low-confidence areas',
++  weak_area_review: 'Redo recent misses plus sibling questions from your weak patterns and topics',
+   daily_mixed_set: 'Small balanced set for today',
+   job_prep: 'Practice against a target job',
+   spaced_review: 'Practice everything currently due for spaced-repetition review',
+diff --git a/apps/web/app/(authenticated)/practice/page.tsx b/apps/web/app/(authenticated)/practice/page.tsx
+index e1650df..483ad82 100644
+--- a/apps/web/app/(authenticated)/practice/page.tsx
++++ b/apps/web/app/(authenticated)/practice/page.tsx
+@@ -2,22 +2,32 @@
+ 
+ import { useCallback, useEffect, useState } from 'react';
+ import Link from 'next/link';
+-import { sessionsApi } from '../../lib/api-client';
+-import type { InterviewSessionResponse } from '@momito/shared';
++import { useRouter } from 'next/navigation';
++import { sessionsApi, weaknessesApi } from '../../lib/api-client';
++import type { InterviewSessionResponse, WeaknessSummaryResponse } from '@momito/shared';
+ import { Card, Spinner, Badge } from '../../components/ui';
+ 
+ // MOM-041: practice hub — the landing page for the "Practice" primary nav tab.
+-// Surfaces an in-progress session (if any) plus entry points into every
+-// practice mode, instead of dropping straight into the session-creation form.
++// Surfaces an in-progress session (if any), the user's current weak spots
++// (plan §5.4/§6.1 — the signals their reflections have been feeding), plus
++// entry points into every practice mode.
+ export default function PracticeHubPage() {
++  const router = useRouter();
+   const [activeSessions, setActiveSessions] = useState<InterviewSessionResponse[]>([]);
++  const [weaknesses, setWeaknesses] = useState<WeaknessSummaryResponse | null>(null);
+   const [loading, setLoading] = useState(true);
++  const [startingRepair, setStartingRepair] = useState(false);
++  const [repairError, setRepairError] = useState('');
+ 
+   const load = useCallback(async () => {
+     setLoading(true);
+     try {
+-      const { data } = await sessionsApi.list({ status: 'active', limit: 3 });
+-      setActiveSessions(data);
++      const [sessions, weaknessSummary] = await Promise.all([
++        sessionsApi.list({ status: 'active', limit: 3 }),
++        weaknessesApi.summary().catch(() => null),
++      ]);
++      setActiveSessions(sessions.data);
++      setWeaknesses(weaknessSummary);
+     } catch {
+       // Non-critical for the hub — the "start new session" path still works.
+       setActiveSessions([]);
+@@ -31,6 +41,25 @@ export default function PracticeHubPage() {
+     load();
+   }, [load]);
+ 
++  async function startRepairSession() {
++    if (startingRepair) return;
++    setStartingRepair(true);
++    setRepairError('');
++    try {
++      const created = await sessionsApi.create({
++        sessionType: 'weak_area_review',
++        title: 'Weakness repair',
++        questionCount: 5,
++      });
++      router.push(`/practice/session/${created.session.id}`);
++    } catch (err: unknown) {
++      setRepairError(err instanceof Error ? err.message : 'Failed to start repair session');
++      setStartingRepair(false);
++    }
++  }
++
++  const hasWeaknesses = (weaknesses?.totalStruggles ?? 0) > 0;
++
+   return (
+     <div className="space-y-6">
+       <div>
+@@ -69,6 +98,50 @@ export default function PracticeHubPage() {
+         </div>
+       ) : null}
+ 
++      {!loading && hasWeaknesses && weaknesses && (
++        <div>
++          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
++            Weak spots — last {weaknesses.windowDays} days
++          </h2>
++          <Card>
++            <div className="flex flex-wrap gap-2">
++              {weaknesses.reasons.slice(0, 3).map((reason) => (
++                <span
++                  key={reason.reason}
++                  className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-400"
++                  title={reason.sampleTitles.join(' · ')}
++                >
++                  {reason.label} ×{reason.count}
++                </span>
++              ))}
++              {[...weaknesses.patterns, ...weaknesses.topics]
++                .sort((left, right) => right.struggles - left.struggles)
++                .slice(0, 3)
++                .map((area) => (
++                  <span
++                    key={area.key}
++                    className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400"
++                  >
++                    {area.label} · {area.struggles}/{area.attempts} struggled
++                  </span>
++                ))}
++            </div>
++            <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
++              A repair session redoes your recent misses and drills sibling questions from the same
++              patterns and topics.
++            </p>
++            <button
++              onClick={startRepairSession}
++              disabled={startingRepair}
++              className="mt-3 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
++            >
++              {startingRepair ? 'Starting…' : 'Start repair session →'}
++            </button>
++            {repairError && <p className="mt-2 text-xs text-red-600">{repairError}</p>}
++          </Card>
++        </div>
++      )}
++
+       <div>
+         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+           Start Practicing
+diff --git a/apps/web/app/(authenticated)/today/page.tsx b/apps/web/app/(authenticated)/today/page.tsx
+index f894206..102f7d7 100644
+--- a/apps/web/app/(authenticated)/today/page.tsx
++++ b/apps/web/app/(authenticated)/today/page.tsx
+@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
+ import { dashboardApi, recommendationsApi, remindersApi, reviewsApi } from '../../lib/api-client';
+ import type { PracticeRecommendationResponse, ReminderResponse, ReviewStateResponse } from '@momito/shared';
+ import { Card, Badge, ErrorBanner, ListSkeleton } from '../../components/ui';
++import { TodayReviewCard } from '../../components/TodayReviewCard';
+ 
+ // MOM-032/033 (Today integration): a single priority-ranked queue (plan §6.1)
+ // merging due FSRS reviews (MOM-027/029/030/031), real recommendations (active
+@@ -103,22 +104,12 @@ export default function TodayPage() {
+     }
+   }
+ 
+-  // MOM-032 follow-up: a due item can be re-rated right from Today, without
+-  // opening a full session — self-rating alone is enough to reschedule its
+-  // next FSRS review, closing the loop back to "answer -> reflect -> return
+-  // to Today" without a dedicated review-session UI.
+-  const [expandedReviewId, setExpandedReviewId] = useState<string | null>(null);
+-
+-  async function submitReview(review: ReviewStateResponse, selfRating: number) {
+-    const previous = dueReviews;
+-    setExpandedReviewId(null);
++  // The inline review used to expand into bare rating buttons — a grade with
++  // no prompt, no recall attempt, no reveal. TodayReviewCard now runs the real
++  // loop (prompt → recall → reveal → grade) in place; this handler just drops
++  // the item from the queue once its grade is saved.
++  function completeReview(review: ReviewStateResponse) {
+     setDueReviews((current) => current.filter((r) => r.objectId !== review.objectId));
+-    try {
+-      await reviewsApi.record(review.objectType, review.objectId, selfRating);
+-    } catch (err: unknown) {
+-      setDueReviews(previous);
+-      setError(err instanceof Error ? err.message : 'Failed to record review');
+-    }
+   }
+ 
+   return (
+@@ -168,51 +159,13 @@ export default function TodayPage() {
+           {queue.map((entry) => {
+             if (entry.kind === 'review') {
+               const review = entry.data;
+-              // MOM-067: due reviews now include Story rehearsals, not just
+-              // Questions — objectId is only meaningful within its own
+-              // objectType's table, so the navigate target must branch on it.
+-              // There's no per-story detail route yet (MOM-065 shipped list +
+-              // inline expand only), so a story review links to the Story
+-              // Bank list rather than a route that doesn't exist.
+-              const reviewHref = review.objectType === 'story' ? '/stories' : `/questions/${review.objectId}`;
+               return (
+-                <Card key={`review:${review.id}`}>
+-                  <div className="flex items-start justify-between gap-3">
+-                    <button
+-                      onClick={() => router.push(reviewHref)}
+-                      className="min-w-0 flex-1 text-left"
+-                    >
+-                      <p className="font-medium text-zinc-800 hover:underline dark:text-zinc-100">
+-                        {review.title ?? 'Review item'}
+-                      </p>
+-                      <p className="mt-1 text-xs text-zinc-400">Due {new Date(review.due).toLocaleString()}</p>
+-                    </button>
+-                    <div className="flex shrink-0 items-center gap-2">
+-                      <Badge label={review.objectType === 'story' ? 'Story' : 'Review'} />
+-                      <button
+-                        onClick={() => setExpandedReviewId((current) => (current === review.id ? null : review.id))}
+-                        className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+-                      >
+-                        Review now
+-                      </button>
+-                    </div>
+-                  </div>
+-                  {expandedReviewId === review.id && (
+-                    <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+-                      <span className="text-xs text-zinc-500">How did it go?</span>
+-                      {[1, 2, 3, 4, 5].map((rating) => (
+-                        <button
+-                          key={rating}
+-                          onClick={() => submitReview(review, rating)}
+-                          className="h-8 w-8 rounded-full bg-zinc-100 text-sm font-medium text-zinc-500 hover:bg-indigo-600 hover:text-white disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-400"
+-                          title={`${rating} / 5`}
+-                        >
+-                          {rating}
+-                        </button>
+-                      ))}
+-                    </div>
+-                  )}
+-                </Card>
++                <TodayReviewCard
++                  key={`review:${review.id}`}
++                  review={review}
++                  onDone={() => completeReview(review)}
++                  onError={setError}
++                />
+               );
+             }
+ 
+diff --git a/apps/web/app/components/TodayReviewCard.tsx b/apps/web/app/components/TodayReviewCard.tsx
+new file mode 100644
+index 0000000..32403e2
+--- /dev/null
++++ b/apps/web/app/components/TodayReviewCard.tsx
+@@ -0,0 +1,231 @@
++'use client';
++
++import { useState } from 'react';
++import Link from 'next/link';
++import {
++  SELF_RATING_SCALE,
++  type QuestionResponse,
++  type ReviewStateResponse,
++  type StoryResponse,
++} from '@momito/shared';
++import { attemptsApi, questionsApi, reviewsApi, storiesApi } from '../lib/api-client';
++import { useTimer } from '../lib/use-timer';
++import { Badge, Card, Spinner } from './ui';
++import { Markdown } from './Markdown';
++
++// A due review on Today used to expand into bare 1-5 buttons — a grade with no
++// prompt, no recall, no reveal. That is spaced-repetition theater: FSRS gets a
++// grade, the user gets nothing. This card is the real loop inline
++// (plan §12.1 Learning Golden Path, 2 taps from Today per UX invariant §2.3.5):
++//
++//   expand → read the prompt → try to recall (optionally typing it)
++//   → reveal the reference → grade Again/Hard/Good/Easy
++//
++// A typed recall is stored as a real standalone AnswerAttempt (history,
++// streak, weakness signals); a mental-only recall records just the review
++// grade. Story reviews rehearse the STAR content the same way.
++export function TodayReviewCard({
++  review,
++  onDone,
++  onError,
++}: {
++  review: ReviewStateResponse;
++  /** Called after a grade is saved so the queue can drop the item. */
++  onDone: () => void;
++  onError: (message: string) => void;
++}) {
++  const [phase, setPhase] = useState<'collapsed' | 'recall' | 'revealed'>('collapsed');
++  const [loading, setLoading] = useState(false);
++  const [question, setQuestion] = useState<QuestionResponse | null>(null);
++  const [story, setStory] = useState<StoryResponse | null>(null);
++  const [recallText, setRecallText] = useState('');
++  const [saving, setSaving] = useState(false);
++  // Same interval-based timing as session AnswerForm (MOM-036) — started when
++  // the prompt appears, read when the grade is saved.
++  const timer = useTimer(false);
++
++  const detailHref = review.objectType === 'story' ? '/stories' : `/questions/${review.objectId}`;
++
++  async function expand() {
++    if (phase !== 'collapsed') {
++      setPhase('collapsed');
++      return;
++    }
++    setLoading(true);
++    try {
++      if (review.objectType === 'question') {
++        setQuestion(await questionsApi.get(review.objectId));
++      } else if (review.objectType === 'story') {
++        setStory(await storiesApi.get(review.objectId));
++      }
++      timer.reset();
++      timer.start();
++      setPhase('recall');
++    } catch (err: unknown) {
++      onError(err instanceof Error ? err.message : 'Failed to load review item');
++    } finally {
++      setLoading(false);
++    }
++  }
++
++  async function grade(selfRating: number) {
++    if (saving) return;
++    setSaving(true);
++    try {
++      const timeSpentSeconds = timer.elapsedSeconds > 0 ? timer.elapsedSeconds : undefined;
++      if (review.objectType === 'question' && recallText.trim()) {
++        // A written recall is a first-class attempt — it schedules the review
++        // server-side and counts toward streak/history/weakness signals.
++        await attemptsApi.create({
++          questionId: review.objectId,
++          answerText: recallText.trim(),
++          selfRating,
++          timeSpentSeconds,
++        });
++      } else {
++        await reviewsApi.record(review.objectType, review.objectId, selfRating);
++      }
++      onDone();
++    } catch (err: unknown) {
++      onError(err instanceof Error ? err.message : 'Failed to record review');
++      setSaving(false);
++    }
++  }
++
++  return (
++    <Card>
++      <div className="flex items-start justify-between gap-3">
++        <Link href={detailHref} className="min-w-0 flex-1 text-left">
++          <p className="font-medium text-zinc-800 hover:underline dark:text-zinc-100">
++            {review.title ?? 'Review item'}
++          </p>
++          <p className="mt-1 text-xs text-zinc-400">Due {new Date(review.due).toLocaleString()}</p>
++        </Link>
++        <div className="flex shrink-0 items-center gap-2">
++          <Badge label={review.objectType === 'story' ? 'Story' : 'Review'} />
++          <button
++            onClick={expand}
++            disabled={loading}
++            className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
++          >
++            {loading ? <Spinner className="h-3 w-3" /> : phase === 'collapsed' ? 'Review now' : 'Collapse'}
++          </button>
++        </div>
++      </div>
++
++      {phase !== 'collapsed' && question && (
++        <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
++          <div className="whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
++            {question.prompt}
++          </div>
++
++          {phase === 'recall' && (
++            <>
++              <textarea
++                value={recallText}
++                onChange={(event) => setRecallText(event.target.value)}
++                rows={3}
++                placeholder="Recall it from memory — type your answer to log a real attempt, or recall silently and reveal."
++                className="mt-3 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
++              />
++              <button
++                onClick={() => setPhase('revealed')}
++                className="mt-3 rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
++              >
++                Show answer
++              </button>
++            </>
++          )}
++
++          {phase === 'revealed' && (
++            <div className="mt-3">
++              {recallText.trim() && (
++                <div className="mb-3">
++                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">Your recall</p>
++                  <div className="whitespace-pre-wrap rounded-lg border border-zinc-200 p-2 text-sm text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
++                    {recallText}
++                  </div>
++                </div>
++              )}
++              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
++                Reference answer
++              </p>
++              {question.referenceAnswer ? (
++                <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
++                  <Markdown className="prose-sm">{question.referenceAnswer}</Markdown>
++                </div>
++              ) : (
++                <p className="rounded-lg border border-dashed border-zinc-300 p-3 text-sm text-zinc-400 dark:border-zinc-700">
++                  No reference answer yet — grade yourself on what you know is required.
++                </p>
++              )}
++            </div>
++          )}
++        </div>
++      )}
++
++      {phase !== 'collapsed' && story && (
++        <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
++          {phase === 'recall' && (
++            <>
++              <p className="text-sm text-zinc-600 dark:text-zinc-300">
++                Rehearse this story out loud from memory — situation, task, action, result — then reveal it to
++                check what you dropped.
++              </p>
++              <button
++                onClick={() => setPhase('revealed')}
++                className="mt-3 rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
++              >
++                Reveal story
++              </button>
++            </>
++          )}
++          {phase === 'revealed' && (
++            <dl className="space-y-2 text-sm">
++              {(
++                [
++                  ['Situation', story.situation],
++                  ['Task', story.task],
++                  ['Action', story.action],
++                  ['Result', story.result],
++                  ['Metrics', story.metrics],
++                ] as const
++              )
++                .filter(([, value]) => Boolean(value))
++                .map(([label, value]) => (
++                  <div key={label}>
++                    <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{label}</dt>
++                    <dd className="whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">{value}</dd>
++                  </div>
++                ))}
++            </dl>
++          )}
++        </div>
++      )}
++
++      {phase === 'revealed' && (
++        <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
++          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">How was your recall?</p>
++          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
++            {SELF_RATING_SCALE.map((option) => (
++              <button
++                key={option.value}
++                disabled={saving}
++                onClick={() => grade(option.value)}
++                className="rounded-lg border border-zinc-300 px-3 py-2 text-left transition-colors hover:border-indigo-400 disabled:opacity-50 dark:border-zinc-700"
++              >
++                <span className="block text-sm font-semibold text-zinc-700 dark:text-zinc-300">{option.label}</span>
++                <span className="block text-xs text-zinc-400">{option.description}</span>
++              </button>
++            ))}
++          </div>
++          {saving && (
++            <p className="mt-2 flex items-center gap-2 text-xs text-zinc-400">
++              <Spinner className="h-3 w-3" /> Saving…
++            </p>
++          )}
++        </div>
++      )}
++    </Card>
++  );
++}
+diff --git a/apps/web/app/components/__tests__/today-review-card.test.tsx b/apps/web/app/components/__tests__/today-review-card.test.tsx
+new file mode 100644
+index 0000000..c632d4e
+--- /dev/null
++++ b/apps/web/app/components/__tests__/today-review-card.test.tsx
+@@ -0,0 +1,89 @@
++import { fireEvent, render, screen, waitFor } from '@testing-library/react';
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import { TodayReviewCard } from '../TodayReviewCard';
++import { attemptsApi, questionsApi, reviewsApi } from '../../lib/api-client';
++import type { ReviewStateResponse } from '@momito/shared';
++
++const review: ReviewStateResponse = {
++  id: 'rs-1',
++  objectType: 'question',
++  objectId: 'q-1',
++  stability: 1,
++  difficulty: 5,
++  due: new Date().toISOString(),
++  state: 2,
++  reps: 3,
++  lapses: 0,
++  suspended: false,
++  lastReviewedAt: null,
++  title: 'Two Sum',
++};
++
++function mockQuestion() {
++  vi.spyOn(questionsApi, 'get').mockResolvedValue({
++    id: 'q-1',
++    title: 'Two Sum',
++    prompt: 'Given an array and a target, return indices of two numbers adding to target.',
++    referenceAnswer: 'Use a hash map from value to index for a single O(n) pass.',
++    rubric: null,
++  } as never);
++}
++
++describe('TodayReviewCard — recall → reveal → grade (plan §12.1)', () => {
++  afterEach(() => vi.restoreAllMocks());
++
++  it('shows the prompt on expand but withholds the reference and grades until revealed', async () => {
++    mockQuestion();
++    render(<TodayReviewCard review={review} onDone={vi.fn()} onError={vi.fn()} />);
++
++    fireEvent.click(screen.getByText('Review now'));
++
++    expect(await screen.findByText(/Given an array and a target/)).toBeInTheDocument();
++    expect(screen.queryByText(/Use a hash map/)).not.toBeInTheDocument();
++    expect(screen.queryByText('Again')).not.toBeInTheDocument();
++
++    fireEvent.click(screen.getByText('Show answer'));
++
++    expect(await screen.findByText(/Use a hash map/)).toBeInTheDocument();
++    expect(screen.getByText('Again')).toBeInTheDocument();
++    expect(screen.getByText('Easy')).toBeInTheDocument();
++  });
++
++  it('records a typed recall as a real attempt carrying the grade', async () => {
++    mockQuestion();
++    const createSpy = vi.spyOn(attemptsApi, 'create').mockResolvedValue({} as never);
++    const recordSpy = vi.spyOn(reviewsApi, 'record').mockResolvedValue({} as never);
++    const onDone = vi.fn();
++    render(<TodayReviewCard review={review} onDone={onDone} onError={vi.fn()} />);
++
++    fireEvent.click(screen.getByText('Review now'));
++    fireEvent.change(await screen.findByPlaceholderText(/Recall it from memory/), {
++      target: { value: 'Hash map value→index, one pass.' },
++    });
++    fireEvent.click(screen.getByText('Show answer'));
++    fireEvent.click(await screen.findByText('Good'));
++
++    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
++    expect(createSpy).toHaveBeenCalledWith(
++      expect.objectContaining({ questionId: 'q-1', answerText: 'Hash map value→index, one pass.', selfRating: 3 }),
++    );
++    // The attempt schedules the review server-side — no duplicate grade write.
++    expect(recordSpy).not.toHaveBeenCalled();
++  });
++
++  it('records only the review grade when the recall was mental-only', async () => {
++    mockQuestion();
++    const createSpy = vi.spyOn(attemptsApi, 'create').mockResolvedValue({} as never);
++    const recordSpy = vi.spyOn(reviewsApi, 'record').mockResolvedValue({} as never);
++    const onDone = vi.fn();
++    render(<TodayReviewCard review={review} onDone={onDone} onError={vi.fn()} />);
++
++    fireEvent.click(screen.getByText('Review now'));
++    fireEvent.click(await screen.findByText('Show answer'));
++    fireEvent.click(await screen.findByText('Again'));
++
++    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
++    expect(recordSpy).toHaveBeenCalledWith('question', 'q-1', 1);
++    expect(createSpy).not.toHaveBeenCalled();
++  });
++});
+-- 
+2.43.0
+
+
+From 21b81228bd4cfd0d3069aeab2121acaa6dd18aca Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Tue, 7 Jul 2026 18:03:15 +0000
+Subject: [PATCH 6/6] docs: log the learning-loop integrity session
+
+---
+ docs/agent/LOG.MD | 56 +++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 56 insertions(+)
+
+diff --git a/docs/agent/LOG.MD b/docs/agent/LOG.MD
+index 869feb9..f3fa507 100644
+--- a/docs/agent/LOG.MD
++++ b/docs/agent/LOG.MD
+@@ -2168,3 +2168,59 @@ push-receive path (needs the real HTTPS deploy), MOM-088's Lighthouse audit (nee
+ deployed origin), MOM-049 (LeetCode import, disclosed judgment call), and the V2 plan's
+ `WeaknessSignal`/quality-gating vision chunk (net-new feature depth, not a readiness gap —
+ flagged for a future scoped plan, not started).
++
++---
++
++## 2026-07-07 — Learning-loop integrity: reveal-then-rate, real Today recall, live weakness engine
++
++**Diagnosis first, code second.** Read the full repo against plan §7.2's attempt lifecycle
++(`Submit → Reveal reference → Reflect → Rate → Schedule`) and found the loop implemented
++*out of order* in three places: (1) sessions asked for self-rating and miss-tags **before**
++the reference answer was ever shown — and never showed it at all, in-session or after; (2)
++Today's "Review now" expanded into bare 1-5 buttons — a grade with no prompt, no recall, no
++reveal; (3) `missTags` (§5.4 WeaknessSignal taxonomy, MOM-028) were written but read by
++nothing — the prior session's log itself flagged this chunk as "not started". Blind grades
++degrade FSRS scheduling; unread reflections make the reflection UI theater.
++
++**Phase 1 — shared:** `MISS_TAG_LABELS` moved to `@momito/shared` (API recommendation
++reasons now quote the exact wording the reflection UI showed); `SELF_RATING_SCALE`
++(Again=1/Hard=2/Good=3/Easy=5, mirroring `fsrs-scheduler`'s existing 1→Again 2→Hard 3-4→Good
++5→Easy map — value 4 intentionally absent, historical 4s untouched); weakness summary types.
++
++**Phase 2 — API:** `POST /attempts` (standalone, sessionless — `sessionId` was already
++nullable) and `PATCH /attempts/:id` (post-reveal rate/reflect; `answerText` deliberately
++immutable — the attempt is a record of pre-reveal recall). Both schedule FSRS reviews on
++rating, same non-fatal contract as `sessions.answer`. New `weaknesses` module: `GET
++/weaknesses` derives reason/pattern/topic signals on the fly from windowed attempts
++(§2.1.8 "derived from real attempts" — no new table, no migration). `RecommendationsService`
++gains weakness-repair items at priority 95 (§6.1 slot 3: under overdue tasks, over readiness
++gaps) with §6.2-style concrete reasons ("You struggled with 3 sliding-window questions
++recently."), gated at ≥2 struggles so one bad attempt is noise, not a pattern.
++`weak_area_review` sessions — previously identical to `quick_practice` — now redo recent
++unrepaired misses (a later clean ≥3-rated attempt clears the flag) and fill with siblings
++from the weakest patterns/topics; falls back to the filtered draw for new users.
++
++**Phase 3 — web:** Session page rebuilt as a two-phase machine: `AnswerForm` is recall-only
++(prompt → answer → "Submit & reveal answer"); new `RevealPanel` carries everything after —
++reference answer, rubric criteria, the user's own answer side-by-side, reflection (moved
++here, where "what did I miss" is answerable), labeled Again/Hard/Good/Easy grading via
++`PATCH`, and the existing `AiFeedbackCard` (self-hides without a key). Navigating back to an
++answered question reopens its reveal (keyed remount by attempt id); `ReviewQuestionCard`
++deleted as superseded. Today's review card became `TodayReviewCard`: expand → prompt →
++optional typed recall → reveal → grade; a *typed* recall posts a real standalone attempt
++(streak/history/weakness all count it), a mental-only recall records just the grade. Summary
++page: collapsible reference answers, Again/Hard/Good/Easy grade chips, and "Retry N missed →"
++(unanswered ∪ rated ≤2 ∪ any miss-tag) via `questionIds`-pinned session. Practice hub shows
++live weak spots + one-tap repair session.
++
++**Checks:** `pnpm -r lint/typecheck/test` green — **146 API + 24 web tests** (was 132 + 20).
++New coverage: attempt create/update scheduling + ownership, weakness aggregation +
++repaired-miss exclusion, weak_area_review composition + fallback, weakness recommendations
++(incl. noise gate), session reveal-order lifecycle, Today recall flow (typed-vs-mental
++paths). `next build`/`nest build` compile (web verified with a temporary font stub — Google
++Fonts is unreachable from this sandbox; stub reverted, not committed).
++
++**Deliberately not done:** no `WeaknessSignal` table (derive-don't-store until decay/dismiss
++is needed); no FSRS interval preview on grade buttons (needs an API surface — candidate
++follow-up); DSA-ladder per-pattern drill links and dashboard weakness panel deferred (hub
++card covers the entry point).
+-- 
+2.43.0
+
