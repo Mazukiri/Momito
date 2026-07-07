@@ -1177,6 +1177,73 @@ export const MISS_TAG_REASONS = [
 ] as const;
 export type MissTagReason = (typeof MISS_TAG_REASONS)[number];
 
+// Human labels for MissTagReason, shared so the API can compose recommendation
+// reasons ("You logged 'Missed an edge case' on 3 recent attempts") with the
+// exact same wording the reflection UI showed when the tag was captured.
+export const MISS_TAG_LABELS: Record<MissTagReason, string> = {
+  misread: 'Misread the question',
+  wrong_pattern: 'Used the wrong approach',
+  edge_case: 'Missed an edge case',
+  time_pressure: 'Ran out of time',
+  blank: "Didn't know where to start",
+  implementation_bug: 'Implementation bug',
+  concept_gap: "Didn't know the concept",
+  communication_gap: 'Struggled to explain it',
+  tradeoff_gap: 'Missed a tradeoff',
+};
+
+// ── Self-rating scale (learning loop §7.2) ──────────────────────────────────
+// The API stores selfRating 1-5 and fsrs-scheduler maps it 1→Again, 2→Hard,
+// 3/4→Good, 5→Easy. Rating UIs should present these four labeled grades —
+// shown *after* the reference answer is revealed — instead of an unlabeled
+// star row, so the grade the user picks means the same thing FSRS thinks it
+// means. Value 4 is intentionally absent from the scale (it schedules
+// identically to 3); historical 4s remain valid data.
+export const SELF_RATING_SCALE = [
+  { value: 1, label: 'Again', description: 'Got it wrong — show me again soon' },
+  { value: 2, label: 'Hard', description: 'Got there, but it was a struggle' },
+  { value: 3, label: 'Good', description: 'Solid recall with minor gaps' },
+  { value: 5, label: 'Easy', description: 'Knew it cold' },
+] as const;
+export type SelfRatingValue = (typeof SELF_RATING_SCALE)[number]['value'];
+
+// ── Weakness signals (plan §5.4 / §6.1 priority 3) ──────────────────────────
+// Derived on the fly from AnswerAttempt.missTags + low selfRating within a
+// recent window — "Progress is derived from real attempts" (§2.1.8), so there
+// is no separate weakness table to drift out of sync.
+
+export interface WeaknessReasonSummary {
+  reason: MissTagReason;
+  label: string;
+  count: number;
+  lastAt: string;
+  /** Up to 3 recent question titles that carried this tag. */
+  sampleTitles: string[];
+  /** Question ids behind this signal, most recent first (capped). */
+  questionIds: string[];
+}
+
+export interface WeaknessAreaSummary {
+  /** patternTag (e.g. 'sliding-window') or topic name, depending on the list. */
+  key: string;
+  label: string;
+  /** Attempts in the window that struggled (low rating or any miss tag). */
+  struggles: number;
+  /** Total attempts in the window touching this area. */
+  attempts: number;
+  lastAt: string;
+  questionIds: string[];
+}
+
+export interface WeaknessSummaryResponse {
+  windowDays: number;
+  totalAttempts: number;
+  totalStruggles: number;
+  reasons: WeaknessReasonSummary[];
+  patterns: WeaknessAreaSummary[];
+  topics: WeaknessAreaSummary[];
+}
+
 // ── Rubric (MOM-023) ────────────────────────────────────────────────────────
 // Matches the Json shape already stored in Question.rubric (plan §5.3). Existing
 // rows may not conform yet — treat this as the target shape for new/updated rubrics,
