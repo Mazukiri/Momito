@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { dashboardApi, recommendationsApi, remindersApi, reviewsApi } from '../../lib/api-client';
 import type { PracticeRecommendationResponse, ReminderResponse, ReviewStateResponse } from '@momito/shared';
 import { Card, Badge, ErrorBanner, ListSkeleton } from '../../components/ui';
+import { TodayReviewCard } from '../../components/TodayReviewCard';
 
 // MOM-032/033 (Today integration): a single priority-ranked queue (plan §6.1)
 // merging due FSRS reviews (MOM-027/029/030/031), real recommendations (active
@@ -103,22 +104,12 @@ export default function TodayPage() {
     }
   }
 
-  // MOM-032 follow-up: a due item can be re-rated right from Today, without
-  // opening a full session — self-rating alone is enough to reschedule its
-  // next FSRS review, closing the loop back to "answer -> reflect -> return
-  // to Today" without a dedicated review-session UI.
-  const [expandedReviewId, setExpandedReviewId] = useState<string | null>(null);
-
-  async function submitReview(review: ReviewStateResponse, selfRating: number) {
-    const previous = dueReviews;
-    setExpandedReviewId(null);
+  // The inline review used to expand into bare rating buttons — a grade with
+  // no prompt, no recall attempt, no reveal. TodayReviewCard now runs the real
+  // loop (prompt → recall → reveal → grade) in place; this handler just drops
+  // the item from the queue once its grade is saved.
+  function completeReview(review: ReviewStateResponse) {
     setDueReviews((current) => current.filter((r) => r.objectId !== review.objectId));
-    try {
-      await reviewsApi.record(review.objectType, review.objectId, selfRating);
-    } catch (err: unknown) {
-      setDueReviews(previous);
-      setError(err instanceof Error ? err.message : 'Failed to record review');
-    }
   }
 
   return (
@@ -168,51 +159,13 @@ export default function TodayPage() {
           {queue.map((entry) => {
             if (entry.kind === 'review') {
               const review = entry.data;
-              // MOM-067: due reviews now include Story rehearsals, not just
-              // Questions — objectId is only meaningful within its own
-              // objectType's table, so the navigate target must branch on it.
-              // There's no per-story detail route yet (MOM-065 shipped list +
-              // inline expand only), so a story review links to the Story
-              // Bank list rather than a route that doesn't exist.
-              const reviewHref = review.objectType === 'story' ? '/stories' : `/questions/${review.objectId}`;
               return (
-                <Card key={`review:${review.id}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <button
-                      onClick={() => router.push(reviewHref)}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <p className="font-medium text-zinc-800 hover:underline dark:text-zinc-100">
-                        {review.title ?? 'Review item'}
-                      </p>
-                      <p className="mt-1 text-xs text-zinc-400">Due {new Date(review.due).toLocaleString()}</p>
-                    </button>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Badge label={review.objectType === 'story' ? 'Story' : 'Review'} />
-                      <button
-                        onClick={() => setExpandedReviewId((current) => (current === review.id ? null : review.id))}
-                        className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                      >
-                        Review now
-                      </button>
-                    </div>
-                  </div>
-                  {expandedReviewId === review.id && (
-                    <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                      <span className="text-xs text-zinc-500">How did it go?</span>
-                      {[1, 2, 3, 4, 5].map((rating) => (
-                        <button
-                          key={rating}
-                          onClick={() => submitReview(review, rating)}
-                          className="h-8 w-8 rounded-full bg-zinc-100 text-sm font-medium text-zinc-500 hover:bg-indigo-600 hover:text-white disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-400"
-                          title={`${rating} / 5`}
-                        >
-                          {rating}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </Card>
+                <TodayReviewCard
+                  key={`review:${review.id}`}
+                  review={review}
+                  onDone={() => completeReview(review)}
+                  onError={setError}
+                />
               );
             }
 
