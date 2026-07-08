@@ -33,14 +33,18 @@ LOOP-CLOSING EDGE** (debrief → area+reason `WeaknessSignal`s + one `interview_
 row per round, per-round idempotent; 182 API tests, live-verified: a bombed Meta round now lands 3
 job-scoped open weakness signals).
 
-**Active PR-sized task: MOM-128** — tag study signals on create + implement the missing `job_prep`
-session branch. Two parts: (1) populate `AnswerAttempt.roleTrackId`/`area` when an attempt is created
-inside a job- or role-scoped session so study signals carry the target dimension the readiness rollup
-(MOM-130) needs; (2) implement the `job_prep` session type in `sessions.service` — derive the question
-set from the session's `jobApplicationId` (that job's company question tags + this target's open
-weakness signals). No schema change (columns landed in MOM-127). After it: MOM-142 (rank openSignals as
-first-class Today items), then MOM-129 (one FSRS-grounded readiness engine) + MOM-130 ("am I ready for
-Meta?").
+**Shipped since:** **MOM-128** (attempts now tagged with `area`/`roleTrackId` on create; the `job_prep`
+session branch draws the company bank with this target's open-weakness areas leading — live-verified: a
+Meta job_prep returned only `system_design` after that round was bombed).
+
+**Active PR-sized task: MOM-142** — register career-target items as first-class ranked items in
+`recommendations.service` (not a new silo). Surface the open `WeaknessSignal`s (from `weaknesses.summary`
+→ `openSignals`, fed by the MOM-113 debrief edge) as ranked Today cards — a bombed round's weakness now
+appears in Today with a "repair" action (link to a `weak_area_review`/`job_prep` session). Also fold in
+pipeline stalls if cheap (MOM-105 territory) but the weakness-signal surfacing is the Gate-1 must. Small,
+no schema. After it: MOM-129 (consolidate `career.service` + `missions.service` readiness into one
+FSRS-grounded helper) → MOM-130 ("am I ready for Meta?" verdict) → MOM-131 (story gap map). Then Phase 1D
+company-FK migration (MOM-120→121→122), last.
 
 **Gate 1:** bombing a round demonstrably reshapes tomorrow's prep; an "am I ready for Meta?" verdict
 exists. Each schema task = SPIKE + DESIGN-doc PR **then** human-approved implementer PR (D-004),

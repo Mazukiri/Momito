@@ -1,5 +1,44 @@
 # LOG
 
+## 2026-07-09 - MOM-128: tag attempts with target dimension + the job_prep session branch (CLAUDE)
+
+**Actor:** CLAUDE (implementer). No schema change (the `AnswerAttempt.roleTrackId`/`area` columns
+landed in MOM-127). Branch `feat/careeros-phase-0`. Two loop wires: study signals now carry the target
+dimension the readiness rollup (MOM-129/130) needs, and a target-scoped mock session type exists.
+
+**Part 1 — tag attempts on create (`sessions.service.answer()`):** every graded attempt is now
+attributed — `area` from the *question actually practiced* (its first `areaTags` entry that is a known
+`CAREER_ROLE_AREA_ID`, falling back to the session's `area`), `roleTrackId` from the session's declared
+target. Both stay `null` for untargeted global practice, which is correct — a random quick-practice
+attempt isn't attributable to a specific target. The question's `areaTags` are read via the existing
+session lookup (added to the `sessionQuestions` select), so no extra query.
+
+**Part 2 — the `job_prep` session branch (`selectJobPrepQuestions`):** `job_prep` was in `SESSION_TYPES`
+but silently fell through to a plain filtered draw. It now assembles *this application's* mock: candidates
+are the target company's linked question bank (company matched by name until the MOM-122 FK lands) and,
+leading the set, questions in the target's **exposed weak areas** — the open `WeaknessSignal`s scoped to
+that `jobApplicationId`, i.e. what the MOM-113 debrief edge recorded. Weak-area questions sort first, so a
+bombed round demonstrably reshapes the next prep set. Degrades to the job's role-track filtered draw, then
+a plain draw (never dead-ends).
+
+**Checks:** `pnpm --filter @momito/api lint/typecheck/test` green — **187 API tests** (+5: job_prep
+weak-area-first from the company bank, role-track filtering when the company isn't catalogued, no-job
+degradation; attempt tagging from session+question, and the untargeted-null fallback). **Live round-trip**:
+a `job_prep` session scoped to the Meta job (whose only open weakness is `system_design`, from MOM-113's
+bombed round) returned **4 questions, all `system_design`, from Meta's bank** — the debrief visibly
+reshaped the prep set. Answering one produced an attempt tagged `area=system_design` (roleTrackId null —
+Meta has no role track); a `role_drill` attempt scoped to `big-tech-swe` was tagged
+`roleTrackId=big-tech-swe`, `area=dsa`.
+
+**Loop status:** OUTCOME → PREP now closes end-to-end through study sessions too (not just the signal
+store): bomb a round → its area becomes an open signal → the next `job_prep` for that target leads with
+that area. Remaining Gate-1 wires: surface signals on Today (MOM-142), one grounded readiness engine +
+"am I ready for Meta?" verdict (MOM-129/130).
+
+**Next:** MOM-142 (register open weakness signals + pipeline stalls as first-class ranked
+`recommendations` items on Today), then MOM-129 (consolidate the two readiness engines into one
+FSRS-grounded helper) → MOM-130 (company-scoped readiness verdict).
+
 ## 2026-07-09 - MOM-113: debrief → WeaknessSignal + LearningEvidence — THE LOOP-CLOSING EDGE (CLAUDE)
 
 **Actor:** CLAUDE (implementer). The single most important PR of Phase 1: the edge that makes an
