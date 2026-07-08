@@ -483,6 +483,7 @@ model Reminder {
   userId           String          @map("user_id") @db.Uuid
   taskId           String?         @map("task_id") @db.Uuid
   jobApplicationId String?         @map("job_application_id") @db.Uuid
+  interviewRoundId String?         @map("interview_round_id") @db.Uuid
   type             String
   title            String
   dueAt            DateTime        @map("due_at") @db.Timestamptz(6)
@@ -494,12 +495,14 @@ model Reminder {
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   task             Task?           @relation(fields: [taskId], references: [id], onDelete: Cascade)
   jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+  interviewRound   InterviewRound? @relation(fields: [interviewRoundId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([status])
   @@index([dueAt])
   @@index([taskId])
   @@index([jobApplicationId])
+  @@index([interviewRoundId])
   @@map("reminders")
 }
 
@@ -860,6 +863,7 @@ model InterviewRound {
   user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobApplication   JobApplication @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
   tasks            Task[]
+  reminders        Reminder[]
 
   @@index([userId])
   @@index([jobApplicationId])

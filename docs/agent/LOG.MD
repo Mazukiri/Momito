@@ -1,5 +1,32 @@
 # LOG
 
+## 2026-07-09 - MOM-112: per-round interview-date reminder automation (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Additive migration under the D-004 gate (blanket approval). Branch
+`feat/careeros-phase-0`. A scheduled round now auto-lands a countdown reminder on Today/calendar —
+reusing the existing `ensureDeadlineReminder` sentinel-upsert idea, keyed per round.
+
+**Schema (additive migration `20260708202903_reminder_interview_round`, rollback = drop):** `reminders`
+gains a nullable `interview_round_id` UUID + index + FK to `interview_rounds` (`ON DELETE CASCADE` — a
+deleted round takes its reminder with it). Back-relation `reminders Reminder[]` on `InterviewRound`.
+
+**Logic (`InterviewRoundsService.ensureRoundReminder`):** idempotent upsert of one `type:'interview_round'`
+reminder per round, found by `interviewRoundId`, due **09:00 UTC the day before** the round's `scheduledAt`,
+titled *"Prep for your \<company\> \<RoundType\> on \<date\>"*. Called from `create()` (always) and from
+`update()` when `scheduledAt` or `roundType` changed. No `scheduledAt` → no reminder, and any stale one is
+deleted (so clearing the date cleans up). Surfaces through the existing reminders UI (job detail, Today,
+calendar) with **no web change**.
+
+**Checks:** `pnpm -r lint/typecheck/test` green — **205 API tests** (+3: scheduled create makes a reminder
+due the day before; a dateless round makes none; clearing the date deletes the stale reminder). **Live**:
+creating an onsite scheduled 2026-08-15 produced reminder *"Prep for your Meta Onsite on 2026-08-15"* due
+2026-08-14; PATCH `scheduledAt:null` removed it; deleting the round cleaned up. Migration applied to the
+running DB; client regenerated after killing the API node process (Windows DLL lock).
+
+**Next:** MOM-141 — auto-assemble the round-scoped prep queue on an approaching date (fire MOM-111's
+`generatePrep` for imminent rounds) + surface the interview countdown on Today (recommendations). Deps
+111 ✓ / 128 ✓ / 131 (story gap — role-scoped version doable now).
+
 ## 2026-07-09 - MOM-111: round-scoped prep task generation + Task.interviewRoundId (CLAUDE, migration)
 
 **Actor:** CLAUDE (implementer). Additive migration under the D-004 gate (blanket approval). Branch

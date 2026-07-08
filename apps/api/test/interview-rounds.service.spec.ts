@@ -43,6 +43,12 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
       create: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
     },
+    reminder: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+      delete: vi.fn().mockResolvedValue({}),
+    },
     ...overrides,
   };
 }
@@ -221,6 +227,56 @@ describe('InterviewRoundsService.update debrief → weakness signals', () => {
 
     expect(weaknesses.recordSignal).toHaveBeenCalledTimes(1);
     expect(weaknesses.recordSignal.mock.calls[0][1]).toMatchObject({ signalType: 'area', key: 'behavioral' });
+  });
+});
+
+describe('InterviewRoundsService interview-date reminders (MOM-112)', () => {
+  it('creates a per-round reminder when a scheduled round is created', async () => {
+    const create = vi.fn().mockResolvedValue({});
+    const prisma = makePrisma({
+      jobApplication: { findFirst: vi.fn().mockResolvedValue({ id: 'job-1' }), findUnique: vi.fn().mockResolvedValue({ company: 'Meta' }) },
+      interviewRound: { create: vi.fn().mockImplementation(({ data }) => roundRow(data)) },
+      reminder: { findFirst: vi.fn().mockResolvedValue(null), create, update: vi.fn(), delete: vi.fn() },
+    });
+    const service = makeService(prisma);
+
+    await service.create('job-1', { roundType: 'system_design', scheduledAt: '2026-08-01T15:00:00.000Z' }, 'user-1');
+
+    expect(create).toHaveBeenCalledTimes(1);
+    const data = create.mock.calls[0][0].data;
+    expect(data).toMatchObject({ interviewRoundId: 'round-1', type: 'interview_round', jobApplicationId: 'job-1' });
+    // Due a day before the round (2026-07-31), not on it.
+    expect(data.dueAt.toISOString().slice(0, 10)).toBe('2026-07-31');
+  });
+
+  it('does not create a reminder for a round with no date', async () => {
+    const create = vi.fn();
+    const prisma = makePrisma({
+      jobApplication: { findFirst: vi.fn().mockResolvedValue({ id: 'job-1' }), findUnique: vi.fn().mockResolvedValue({ company: 'Meta' }) },
+      interviewRound: { create: vi.fn().mockImplementation(({ data }) => roundRow(data)) },
+      reminder: { findFirst: vi.fn().mockResolvedValue(null), create, update: vi.fn(), delete: vi.fn() },
+    });
+    const service = makeService(prisma);
+
+    await service.create('job-1', { roundType: 'system_design' }, 'user-1');
+
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('removes a stale reminder when the date is cleared on update', async () => {
+    const remove = vi.fn().mockResolvedValue({});
+    const prisma = makePrisma({
+      interviewRound: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue(roundRow({ scheduledAt: null })),
+      },
+      reminder: { findFirst: vi.fn().mockResolvedValue({ id: 'rem-1' }), create: vi.fn(), update: vi.fn(), delete: remove },
+    });
+    const service = makeService(prisma);
+
+    await service.update('job-1', 'round-1', { scheduledAt: null }, 'user-1');
+
+    expect(remove).toHaveBeenCalledWith({ where: { id: 'rem-1' } });
   });
 });
 

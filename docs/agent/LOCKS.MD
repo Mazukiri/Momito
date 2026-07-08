@@ -19,6 +19,7 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-112 | CLAUDE | `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**`, `apps/api/src/interview-rounds/interview-rounds.service.ts`, `apps/api/test/interview-rounds.service.spec.ts`, `docs/agent/*.MD` | 2026-07-09 |
 | MOM-111 | CLAUDE | `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**`, `apps/api/src/interview-rounds/**`, `apps/web/app/lib/api-client.ts`, `apps/web/app/components/InterviewRoundsCard.tsx`, `apps/api/test/interview-rounds.service.spec.ts`, `docs/agent/*.MD` | 2026-07-09 |
 | MOM-130 | CLAUDE | `apps/api/src/career/**`, `apps/api/src/weaknesses/weaknesses.service.ts`, `packages/shared/src/index.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/components/JobReadinessCard.tsx` (new), `apps/web/app/(authenticated)/jobs/[id]/page.tsx`, `apps/api/test/career.service.spec.ts`, `docs/agent/*.MD` | 2026-07-09 |
 | MOM-129 | CLAUDE | `apps/api/src/readiness/**` (new), `apps/api/src/career/**`, `apps/api/src/missions/missions.service.ts`, `apps/api/src/missions/missions.module.ts`, `packages/shared/src/index.ts`, `apps/api/test/{readiness,career}.service.spec.ts` (new), `docs/agent/*.MD` | 2026-07-09 |

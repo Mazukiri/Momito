@@ -76,6 +76,8 @@ export class InterviewRoundsService {
         interviewer: dto.interviewer ?? null,
       },
     });
+    // MOM-112: keep a per-round interview-date reminder in sync.
+    await this.ensureRoundReminder(round);
     return this.serialize(round);
   }
 
@@ -97,6 +99,11 @@ export class InterviewRoundsService {
     });
     if (result.count === 0) throw new NotFoundException('Interview round not found');
     const round = await this.prisma.interviewRound.findUniqueOrThrow({ where: { id: roundId } });
+
+    // MOM-112: re-sync the interview-date reminder when the date or type changed.
+    if (dto.scheduledAt !== undefined || dto.roundType !== undefined) {
+      await this.ensureRoundReminder(round);
+    }
 
     // MOM-113 — the loop-closing edge. When this update carried debrief content
     // (the "Save debrief" action, not a bare outcome toggle), turn what the round
@@ -167,6 +174,51 @@ export class InterviewRoundsService {
 
   private offsetDays(base: Date, days: number): Date {
     return new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+  }
+
+  // MOM-112: keep one idempotent "prep for this round" reminder per round, due a
+  // day before its scheduledAt (reusing jobs.service's sentinel-upsert idea, keyed
+  // by interviewRoundId). No date → no reminder (and any stale one is removed).
+  private async ensureRoundReminder(round: InterviewRound): Promise<void> {
+    const existing = await this.prisma.reminder.findFirst({
+      where: { interviewRoundId: round.id, type: 'interview_round' },
+      select: { id: true },
+    });
+    if (!round.scheduledAt) {
+      if (existing) await this.prisma.reminder.delete({ where: { id: existing.id } });
+      return;
+    }
+    const job = await this.prisma.jobApplication.findUnique({
+      where: { id: round.jobApplicationId },
+      select: { company: true },
+    });
+    const roundLabel = INTERVIEW_ROUND_TYPE_LABELS[round.roundType as InterviewRoundType] ?? round.roundType;
+    const dueAt = this.reminderLeadTime(round.scheduledAt);
+    const title = `Prep for your ${job?.company ?? 'interview'} ${roundLabel} on ${round.scheduledAt.toISOString().slice(0, 10)}`;
+    if (existing) {
+      await this.prisma.reminder.update({
+        where: { id: existing.id },
+        data: { dueAt, title, status: 'pending', dismissedAt: null },
+      });
+    } else {
+      await this.prisma.reminder.create({
+        data: {
+          userId: round.userId,
+          jobApplicationId: round.jobApplicationId,
+          interviewRoundId: round.id,
+          type: 'interview_round',
+          title,
+          dueAt,
+        },
+      });
+    }
+  }
+
+  // A day before the round, at 09:00 UTC (mirrors jobs.service's deadline lead).
+  private reminderLeadTime(scheduledAt: Date): Date {
+    const date = new Date(scheduledAt.getTime() - 24 * 60 * 60 * 1000);
+    date.setUTCHours(9, 0, 0, 0);
+    return date;
   }
 
   // Convert the round's current debrief into target-scoped weakness signals and a
