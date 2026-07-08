@@ -766,8 +766,8 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 - **MOM-108** Quick-add / paste-JD rapid capture (reuse `extractJdSkills`) · READY · EITHER · *no schema*
 
 ### Track N — Interview Rounds, Debriefs & Offers · CareerOS Gate 3
-- **MOM-109** SPIKE-010 + DESIGN: `InterviewRound` (roundType, interviewer, scheduledAt, outcome, debrief; optional `InterviewSession`/`Task` links) · NEEDS_SPIKE · CLAUDE
-- **MOM-110** Implement `InterviewRound` + CRUD + timeline UI upgrade in place · BLOCKED on MOM-109 · *migration*
+- **MOM-109** SPIKE-010 + DESIGN: `InterviewRound` (roundType, interviewer, scheduledAt, outcome, debrief) · **DESIGN DONE** (ADR-0013 / D-016, 2026-07-09) · CLAUDE. SPIKE-010 resolved: round owns no prep/practice — attaches via a nullable `interviewRoundId` back-ref on `Task`/`InterviewSession` (added in MOM-111/141), no dual-write; reminders keyed per-round; coexists with `JobEvent` (no backfill); outcome independent of pipeline status. Additive migration → MOM-110 awaits D-004.
+- **MOM-110** Implement `InterviewRound` + CRUD + timeline UI upgrade in place · **READY** (design in ADR-0013) · *migration, D-004 gate*
 - **MOM-111** Round-scoped prep task generation (extend `generatePrep`) · BLOCKED on MOM-110
 - **MOM-112** Interview-date reminder automation (reuse `ensureDeadlineReminder`) · BLOCKED on MOM-110
 - **MOM-113** Debrief → `WeaknessSignal`/`LearningEvidence` emission — **the loop-closing edge** · BLOCKED on MOM-110,127
@@ -835,7 +835,7 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 | SPIKE-007 | `StudyPlanItem` → `Task` field mapping + backfill — **DONE 2026-07-06**, see MOM-075/076/077 | MOM-075 |
 | SPIKE-008 | Render cold-start reality + keep-warm — **DESIGNED, dormant** 2026-07-06: `.github/workflows/keepwarm.yml` pings `/health` every 10 min during study hours (07:00-24:59 ICT), skips cleanly if `API_HEALTH_URL` isn't set. Real cold-start behavior unverified (no live Render deploy in this environment). | MOM-021 |
 | SPIKE-009 | (CareerOS) Per-stage timestamps vs a normalized `StatusTransition` history table — which shape supports funnel timing + stall detection without bloating `JobApplication`? | MOM-103 |
-| SPIKE-010 | (CareerOS) `InterviewRound` + interview-date modeling + reminder idempotency; link to `InterviewSession`/`Task` **without repeating the PlanItem/Task dual-write anti-pattern** | MOM-109 |
+| SPIKE-010 | (CareerOS) `InterviewRound` + interview-date modeling + reminder idempotency; link to `InterviewSession`/`Task` **without repeating the PlanItem/Task dual-write anti-pattern** · **RESOLVED 2026-07-09** (ADR-0013 §SPIKE-010): round owns no rows — back-ref `interviewRoundId` FK on Task/Session (deferred to MOM-111/141); reminder sentinel keyed per-round; JobEvent coexists, no backfill; outcome ⟂ status. | MOM-109 |
 | SPIKE-011 | (CareerOS) Migrate `referralName` String → `Contact` rows without data loss | MOM-116 |
 | SPIKE-012 | (CareerOS) `JobApplication.company` free-text → `companyId` FK backfill by name-match with free-text fallback; structure `Company` focus-area weights vs `CAREER_ROLE_AREA_IDS`. **Highest-risk migration** (busiest table + seed) | MOM-120 |
 | SPIKE-013 | (CareerOS) `WeaknessSignal` schema + tagging attempts with `roleTrackId/area`; is FSRS retrievability cheaply queryable to ground readiness per area? · **RESOLVED 2026-07-08** (ADR-0011 §SPIKE-013 findings): table stores only event-sourced signals (derived path kept for practice struggles); FSRS-per-area = bounded indexed service-layer join, no `ReviewState` denorm; tags on `AnswerAttempt` not `ReviewState`; `companyId` deferred to post-MOM-122, `jobApplicationId` scoping for now. | MOM-126 |

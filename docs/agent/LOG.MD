@@ -1,5 +1,35 @@
 # LOG
 
+## 2026-07-09 - MOM-109 DESIGN + SPIKE-010 resolved: InterviewRound + the outcome→weakness edge (CLAUDE)
+
+**Actor:** CLAUDE (planner — design only, no migration). Second design PR of Phase 1. Produces
+**ADR-0013** (new) + **D-016**; the model lands in MOM-110 under D-004. Branch `feat/careeros-phase-0`.
+
+**Grounding:** an interview can currently only be a free-form `JobEvent` note — no roundType, date,
+outcome, or debrief — so outcomes feed nothing. MOM-127 just landed the `WeaknessSignal` store
+(`recordSignal`) the debrief needs; the missing piece is the first-class interview object.
+
+**SPIKE-010 resolved (ADR-0013):**
+1. *No dual-write.* `InterviewRound` owns no prep/practice rows — a round's prep is an ordinary `Task`,
+   its mock an ordinary `InterviewSession`, each attributed by a single nullable `interviewRoundId`
+   back-reference FK **added when needed** (MOM-111 / MOM-141), never a copy. Avoids the PlanItem/Task
+   anti-pattern that motivated the missions freeze (D-015).
+2. *Reminder idempotency* keys the `ensureDeadlineReminder` sentinel **per round** (a job has many
+   rounds), so each round's `scheduledAt` gets its own reminder (MOM-112).
+3. *`JobEvent` coexists* — no backfill; the upgraded timeline (MOM-110) merges structured rounds with
+   free-form events chronologically.
+4. *Round outcome ⟂ pipeline status* — no coupled state machines in MOM-110.
+
+**Finalized schema (for MOM-110):** `interview_rounds` table (roundType, sequence, scheduledAt,
+durationMinutes, interviewer, outcome, debrief, areasWeak[], missTags[]) off `JobApplication` (cascade)
++ `User`; shared `INTERVIEW_ROUND_TYPES` / `INTERVIEW_ROUND_OUTCOMES`; `areasWeak`/`missTags` reuse
+`CAREER_ROLE_AREA_IDS` / `MISS_TAG_REASONS`. Migration is additive; rollback = drop. The debrief→weakness
+edge itself is MOM-113 (calls MOM-127's `recordSignal` + emits `LearningEvidence`).
+
+**Files:** `docs/adr/0013-interview-rounds-debriefs.md` (new), `docs/agent/DECISIONS.MD` (D-016),
+`BACKLOG.md` (SPIKE-010 RESOLVED, MOM-109 DESIGN DONE, MOM-110 READY), `NEXT.MD`. No app code, no schema,
+no migrate. **Next:** MOM-110 implementer PR (the additive migration + CRUD + timeline UI).
+
 ## 2026-07-09 - MOM-127: WeaknessSignal store + mixed_interview session type (CLAUDE, migration)
 
 **Actor:** CLAUDE (implementer). **Migration** — crossed the D-004 gate under the owner's standing

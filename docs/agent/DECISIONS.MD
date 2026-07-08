@@ -203,3 +203,16 @@ tasks MOM-143 (mission auto-diagnose) and MOM-144 (mission-plan visa weighting) 
 lives in the pipeline loop (MOM-141/142) and targeting score (MOM-125).
 **Consequences:** No mission schema/behavior changes; the recommendations service + weakness engine
 carry the outcome→prep reshaping that mission re-diagnosis would have.
+
+### D-016 — Interview is a first-class `InterviewRound`; prep/practice attach by back-reference
+**Context:** An interview could only be recorded as a free-form `JobEvent` note — no round type, date,
+outcome, or debrief — so interview outcomes fed nothing (the open half of the loop). ADR-0013 / SPIKE-010.
+**Decision:** Model `InterviewRound` as a child of `JobApplication` (roundType, scheduledAt, interviewer,
+outcome, debrief, areasWeak, missTags). It **owns no prep/practice rows** — a round's prep is an ordinary
+`Task` and a round's mock is an ordinary `InterviewSession`, each attributed to the round by a single
+nullable `interviewRoundId` back-reference FK added when needed (MOM-111/141), never a copy. This avoids
+the PlanItem/Task dual-write anti-pattern (cross-links D-015). `InterviewRound` coexists with `JobEvent`
+(no backfill); round outcome and pipeline `status` stay independent (no coupled state machines). A
+failed/mixed debrief emits `WeaknessSignal`/`LearningEvidence` (D-013), closing the loop.
+**Consequences:** Additive migration (D-004). Enables interview-date reminders (MOM-112), countdown
+(MOM-140-full), auto-prep (MOM-141), and the outcome→weakness edge (MOM-113).
