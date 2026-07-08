@@ -152,3 +152,54 @@ untouched everywhere else; this mapping only applies inside the FSRS scheduler.
 **Consequences:** No schema change, no change to any existing selfRating consumer. If a
 future need arises to distinguish 3 from 4 for FSRS specifically, revisit here first
 rather than guessing again at the call site.
+
+---
+
+## CareerOS decisions (2026-07-08) — see docs/plans/MOMITO_CAREEROS_PLAN.md
+
+### D-011 — CareerOS pipeline is a stage machine with transition history
+**Context:** `JobApplication.status` is a flat string with no timestamps or history, so no funnel,
+time-in-stage, or conversion analytics are possible (the core absent CareerOS value).
+**Decision:** Record every status transition (from→to, when) — first as auto-created `JobEvent`s
+(MOM-102, no schema), then as per-stage timestamps / a `StatusTransition` table (SPIKE-009 / MOM-103-104).
+The 8-value `JOB_APPLICATION_STATUSES` const stays the source of truth for allowed stages.
+**Consequences:** Enables funnel, stall detection, rejection-reason analysis. **ADR-0009.**
+
+### D-012 — Company is a first-class catalog referenced by FK
+**Context:** `JobApplication.company` is free text disconnected from the curated `Company` catalog, and
+`Company` is `name/region/notes` only — no interview process, focus weights, comp, or sponsorship data.
+**Decision:** Add structured `Company` columns + a nullable `JobApplication.companyId` FK with a
+free-text fallback and name-match backfill (SPIKE-012 / MOM-120-122). Company context (questions,
+focus areas, sponsorship) then flows into the pipeline and target-scoped readiness.
+**Consequences:** Highest-risk migration (busiest table + seed). Free-text column retained as fallback.
+**ADR-0010.**
+
+### D-013 — One FSRS-grounded, target-scoped readiness engine (supersedes the dual engines)
+**Context:** Readiness is substring keyword-matching computed by TWO divergent engines
+(`career.service` binary-weighted vs `missions.service` leveled), so the "am I ready" number is
+untrustworthy and can contradict itself. `WeaknessSignal` (V2 §5.4) and `weakness_repair`/
+`mixed_interview` sessions (§7.1) were specced but never built.
+**Decision:** Build `WeaknessSignal` + target tags on attempts/reviews (MOM-126-128); ground readiness
+in FSRS retrievability + graded attempts and **collapse the two engines into one shared helper**
+(MOM-129); add a company-scoped rollup (MOM-130). Cross-links ADR-0003 (learning/mission coexistence).
+**Consequences:** Missions readiness becomes a view over the single engine, not a parallel computation.
+**ADR-0011.**
+
+### D-014 — Résumé is a versioned artifact decoupled from the unique Profile
+**Context:** `Profile.userId` is `@unique`; re-upload overwrites, so there is no per-target résumé, no
+record of which résumé was sent per application, no export, no tailoring.
+**Decision:** Add `ResumeVersion` (many per user/target, linkable to a `JobApplication`), deterministic
+ATS coverage + Markdown/PDF export, and AI tailoring/bullet-rewrite/cover-letter built dormant-until-key
+reusing `grading.service` (SPIKE-014 / MOM-132-139). AI stays VERIFICATION-BLOCKED until a real key.
+**Consequences:** The base `Profile` remains the master; versions derive from it. **ADR-0012.**
+
+### D-015 — Missions frozen; pipeline-driven loop is primary
+**Context:** The weekly-plan/competency/check-in mission engine (~774 lines) is heavy ceremony a solo
+job-seeker will not maintain, and it duplicates readiness computation.
+**Decision:** Freeze the mission engine — no new investment in weekly-plan ceremony. The new
+pipeline-driven career loop (target → prep → outcome → learn) is primary and self-running; readiness
+consolidates into the single engine (D-013). Missions keep working and remain optional/legacy. Synthesis
+tasks MOM-143 (mission auto-diagnose) and MOM-144 (mission-plan visa weighting) are dropped; their intent
+lives in the pipeline loop (MOM-141/142) and targeting score (MOM-125).
+**Consequences:** No mission schema/behavior changes; the recommendations service + weakness engine
+carry the outcome→prep reshaping that mission re-diagnosis would have.

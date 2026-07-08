@@ -745,6 +745,83 @@ this section is the BACKLOG-native summary.
 
 ---
 
+## 4b. CareerOS tracks (M–S) — turn the study tool into a role-landing OS
+
+Full plan: `docs/plans/MOMITO_CAREEROS_PLAN.md`. **Thesis:** the study loop closes; the *career* loop
+does not. Every task serves the North-Star Career Loop `TARGET → TAILOR → APPLY → PREP → INTERVIEW →
+OUTCOME → LEARN → re-TARGET`, and must make an OUTCOME reshape the next PREP or a TARGET/conversion
+decision sharper. Owner decisions: (1) **close the study↔target loop first**; (2) résumé track is
+**AI-first, dormant-until-key** (MOM-068 pattern); (3) **missions frozen** — pipeline-driven loop is
+primary, the two readiness engines consolidate into one FSRS-grounded engine (MOM-129). Every schema
+task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), tested on fresh + existing DB.
+
+### Track M — Pipeline Truth & Funnel Analytics · CareerOS Gate 2
+- **MOM-101** Funnel & conversion endpoint + dashboard card (saved→…→offer, response rate, per-source/per-visaTag) · READY · EITHER · *small, no schema*
+- **MOM-102** Auto-create `JobEvent` on status transition (from→to, ts) via `update()` · READY · EITHER · *small, no schema*
+- **MOM-103** SPIKE-009 + migration DESIGN: per-stage timestamps / `StatusTransition` history · NEEDS_SPIKE · CLAUDE
+- **MOM-104** Implement timestamp + transition-history migration + service writes · BLOCKED on MOM-103 · *migration*
+- **MOM-105** Time-in-stage stall detection on job list + Today · BLOCKED on MOM-104,117
+- **MOM-106** Rejection-reason + loss-analysis capture (`REJECTION_REASONS` enum on transition) · BLOCKED on MOM-104
+- **MOM-107** Kanban board pipeline view (drag → existing status `update()`) · READY · EITHER
+- **MOM-108** Quick-add / paste-JD rapid capture (reuse `extractJdSkills`) · READY · EITHER · *no schema*
+
+### Track N — Interview Rounds, Debriefs & Offers · CareerOS Gate 3
+- **MOM-109** SPIKE-010 + DESIGN: `InterviewRound` (roundType, interviewer, scheduledAt, outcome, debrief; optional `InterviewSession`/`Task` links) · NEEDS_SPIKE · CLAUDE
+- **MOM-110** Implement `InterviewRound` + CRUD + timeline UI upgrade in place · BLOCKED on MOM-109 · *migration*
+- **MOM-111** Round-scoped prep task generation (extend `generatePrep`) · BLOCKED on MOM-110
+- **MOM-112** Interview-date reminder automation (reuse `ensureDeadlineReminder`) · BLOCKED on MOM-110
+- **MOM-113** Debrief → `WeaknessSignal`/`LearningEvidence` emission — **the loop-closing edge** · BLOCKED on MOM-110,127
+- **MOM-114** SPIKE-015 + structured `Offer` model (base/equity/bonus/location/visa/deadline) · NEEDS_SPIKE · CLAUDE · *migration*
+- **MOM-115** Offer comparison decision view (normalized, visa-adjusted) · BLOCKED on MOM-114
+
+### Track O — Contacts, Referrals & Follow-up Cadence · CareerOS Gate 3
+- **MOM-116** SPIKE-011 + DESIGN: `Contact` model; migrate `referralName` · NEEDS_SPIKE · CLAUDE
+- **MOM-117** Implement `Contact` CRUD + attach to job + `referralName` backfill · BLOCKED on MOM-116 · *migration*
+- **MOM-118** Stage-driven follow-up cadence reminders · BLOCKED on MOM-104,117
+- **MOM-119** Referral network view + Today thank-you nudges · BLOCKED on MOM-117
+
+### Track P — Company Intelligence & Job↔Company Linkage · CareerOS Gate 2/5
+- **MOM-120** SPIKE-012 + DESIGN: structured `Company` (rounds, focus-area weights vs `CAREER_ROLE_AREA_IDS`, `sponsorshipStatus`, `compBand`) + nullable `JobApplication.companyId` FK · NEEDS_SPIKE · CLAUDE
+- **MOM-121** Implement structured `Company` columns + migrate 20 seed packs' focus/track prose · BLOCKED on MOM-120 · *migration*
+- **MOM-122** Add `companyId` FK + link/backfill UI (**highest-risk migration**) · BLOCKED on MOM-120 · *migration*
+- **MOM-123** Company detail page (interview process, focus, sponsorship, linked content) · BLOCKED on MOM-121
+- **MOM-124** Visa/sponsorship filter + sort on catalog + job list · BLOCKED on MOM-121
+- **MOM-125** Company targeting/fit shortlist (fit × company-readiness × sponsorship × region) · BLOCKED on MOM-121,130
+
+### Track R — Target-Scoped Readiness & Weakness Engine · CareerOS Gate 1 *(spine; owner's first focus)*
+- **MOM-126** SPIKE-013 + DESIGN: `WeaknessSignal` (V2 §5.4) + `roleTrackId/area/companyId` tags on `AnswerAttempt`/`ReviewState` · NEEDS_SPIKE · CLAUDE
+- **MOM-127** Implement `WeaknessSignal` + `weakness_repair`/`mixed_interview` session types (reuse `selectWeaknessQuestions`) · BLOCKED on MOM-126 · *migration*
+- **MOM-128** Tag study signals on create + implement missing `job_prep` session branch · BLOCKED on MOM-127,122
+- **MOM-129** **Ground readiness in FSRS retrievability + graded attempts; consolidate the two readiness engines into one** · BLOCKED on MOM-127 · *large*
+- **MOM-130** Company-scoped readiness rollup ("am I ready for Meta?" go/no-go) · BLOCKED on MOM-129,121
+- **MOM-131** Story coverage → specific-interview behavioral gap map · BLOCKED on MOM-110,121
+
+### Track Q — Résumé Versioning, Tailoring & Artifacts · CareerOS Gate 4 *(AI-first; key coming)*
+- **MOM-132** SPIKE-014 + DESIGN: `ResumeVersion` decoupled from `@unique Profile` · NEEDS_SPIKE · CLAUDE
+- **MOM-133** Implement `ResumeVersion` CRUD + link to `JobApplication` · BLOCKED on MOM-132 · *migration*
+- **MOM-134** ATS keyword coverage vs a JD (deterministic; extend `extractJdSkills`) · READY (lite form in Phase 0) · EITHER
+- **MOM-135** Gap → Task bridge from `score-profile`/ATS (reuse `generatePrep` pattern) · READY · EITHER · *no schema*
+- **MOM-136** AI résumé/bullet analysis service (dormant-until-key; reuse `grading.service`) · BLOCKED on MOM-133 · *AI-dormant*
+- **MOM-137** AI bullet rewriting per JD · BLOCKED on MOM-136 · *AI-dormant*
+- **MOM-138** AI cover-letter drafting per job (visa-context framing) · BLOCKED on MOM-136 · *AI-dormant*
+- **MOM-139** Résumé export — Markdown then ATS-safe PDF · BLOCKED on MOM-133
+
+### Track S — Career Today, Automation & Loop Closure · CareerOS Gate 1/5
+- **MOM-140** Stage-aware Today cards + interview countdown · READY (lite copy in Phase 0) · EITHER
+- **MOM-141** Auto-assembled company/round-scoped prep queue on approaching date · BLOCKED on MOM-111,128,131
+- **MOM-142** Register career-target items (readiness gaps, stalls) in `recommendations.service` · BLOCKED on MOM-130,105
+- **MOM-145** Conversion analytics by source **and** résumé version · BLOCKED on MOM-101,133
+- *(MOM-143 mission auto-diagnose, MOM-144 mission-plan visa weighting — **DROPPED** under missions-frozen (D-015); intent lives in MOM-141/142 and MOM-125.)*
+
+### CareerOS Phase Gates (continue the product Gate sequence 1–6)
+- **CareerOS Gate 1 — Loop Closes:** target carries structured company context; an interview debrief emits a weakness signal that changes Today's prep; FSRS-grounded company-scoped readiness verdict renders; auto prep-queue counts down. *(First — owner's loop-closure-first choice.)* Tracks R + N(113) + P(120-122) + S(140-142).
+- **CareerOS Gate 2 — Pipeline Truth:** stage machine + transition history live; funnel card real; stalls + rejection reasons captured. Track M.
+- **CareerOS Gate 3 — Relationships & Rounds:** `InterviewRound` + debrief live; `Contact` replaces `referralName`; follow-up cadence fires; offers structured + comparable. Tracks N + O.
+- **CareerOS Gate 4 — Artifacts:** `ResumeVersion` + per-application linkage; ATS coverage + export; AI tailoring dormant (mocked tests), live path VERIFICATION-BLOCKED pending key. Track Q.
+- **CareerOS Gate 5 — Targeting & Decision:** company detail + sponsorship filter + targeting shortlist; conversion-by-source-and-résumé analytics. Tracks P + S(145).
+
+---
+
 ## 5. Risk spikes (run before the dangerous task)
 
 | Spike | Question to answer | Gates |
@@ -757,6 +834,13 @@ this section is the BACKLOG-native summary.
 | SPIKE-006 | LeetCode GraphQL response shape (metadata/links only) — **DEFERRED**, human judgment call (third-party GraphQL scope; not required for the study-loop-depth priority) | MOM-049 |
 | SPIKE-007 | `StudyPlanItem` → `Task` field mapping + backfill — **DONE 2026-07-06**, see MOM-075/076/077 | MOM-075 |
 | SPIKE-008 | Render cold-start reality + keep-warm — **DESIGNED, dormant** 2026-07-06: `.github/workflows/keepwarm.yml` pings `/health` every 10 min during study hours (07:00-24:59 ICT), skips cleanly if `API_HEALTH_URL` isn't set. Real cold-start behavior unverified (no live Render deploy in this environment). | MOM-021 |
+| SPIKE-009 | (CareerOS) Per-stage timestamps vs a normalized `StatusTransition` history table — which shape supports funnel timing + stall detection without bloating `JobApplication`? | MOM-103 |
+| SPIKE-010 | (CareerOS) `InterviewRound` + interview-date modeling + reminder idempotency; link to `InterviewSession`/`Task` **without repeating the PlanItem/Task dual-write anti-pattern** | MOM-109 |
+| SPIKE-011 | (CareerOS) Migrate `referralName` String → `Contact` rows without data loss | MOM-116 |
+| SPIKE-012 | (CareerOS) `JobApplication.company` free-text → `companyId` FK backfill by name-match with free-text fallback; structure `Company` focus-area weights vs `CAREER_ROLE_AREA_IDS`. **Highest-risk migration** (busiest table + seed) | MOM-120 |
+| SPIKE-013 | (CareerOS) `WeaknessSignal` schema + tagging `AnswerAttempt`/`ReviewState` with `roleTrackId/area/companyId`; is FSRS retrievability cheaply queryable to ground readiness per area? | MOM-126 |
+| SPIKE-014 | (CareerOS) `ResumeVersion` decoupling from `@unique Profile`; ATS-safe PDF-export library choice (new dep); AI tailoring cost/prompt/structured-output budget mirroring MOM-068 | MOM-132, MOM-136 |
+| SPIKE-015 | (CareerOS) Offer/comp normalization (multi-currency, equity vesting, visa-adjusted) — enough structure to compare without over-modeling | MOM-114 |
 
 ---
 

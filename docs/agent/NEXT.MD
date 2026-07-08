@@ -2,7 +2,24 @@
 
 > The single active PR-sized task. Only one at a time (Engineering Invariant 2.4.1).
 
-## Current state (2026-07-07 session)
+## Active initiative (2026-07-08): CareerOS transformation
+
+New plan `docs/plans/MOMITO_CAREEROS_PLAN.md` — turn the study tool into a role-landing OS.
+Thesis: the study loop closes; the career loop does not. Tracks **M–S / MOM-101…145** appended to
+`BACKLOG.md` §4b. Owner decisions locked: (1) **close the study↔target loop first**; (2) résumé track
+is **AI-first, dormant-until-key**; (3) **missions frozen** (D-015) — pipeline-driven loop primary, the
+two readiness engines consolidate into one FSRS-grounded engine (MOM-129).
+
+**Executing now — Phase 0 quick wins (schema-free, on branch `feat/careeros-phase-0`):**
+MOM-101 (funnel card) → MOM-102 (auto-log status transition) → MOM-135 (gap→task) →
+MOM-108 + MOM-134-lite (paste-JD capture + ATS coverage) → MOM-140-lite (stage-aware Today copy).
+Then Phase 1 (loop closure): company FK + WeaknessSignal + interview rounds/debrief + grounded
+company-scoped readiness + auto prep queue. Each schema task = DESIGN-doc PR then human-approved
+implementer PR (D-004). New registries: SPIKE-009…015, ADR-0009…0012, D-011…D-015.
+
+---
+
+## Prior state (2026-07-07 session)
 
 A second audit pass (three parallel research agents: docs/agent hygiene, API
 production-readiness, web UX/quality) found and closed the highest-impact remaining gaps —
