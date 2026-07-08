@@ -56,6 +56,74 @@ describe('JobsService.generatePrep', () => {
   });
 });
 
+describe('JobsService.update — status transition logging (MOM-102)', () => {
+  function fullJob(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'job-1',
+      userId: 'user-1',
+      company: 'Meta',
+      roleTitle: 'E4 SWE',
+      url: null,
+      location: null,
+      status: 'interview',
+      roleTrackId: null,
+      jdText: null,
+      appliedDate: null,
+      deadline: null, // null → ensureDeadlineReminder returns early, no reminder mocks needed
+      source: null,
+      referralName: null,
+      visaTag: 'unknown',
+      h1bCountLastYear: null,
+      compensationNotes: null,
+      notes: null,
+      createdAt: new Date('2026-07-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-07-08T00:00:00.000Z'),
+      _count: { events: 0, tasks: 0, reminders: 0 },
+      ...overrides,
+    };
+  }
+
+  function makeService(previousStatus: string) {
+    const create = vi.fn().mockResolvedValue({});
+    const prisma = {
+      jobApplication: {
+        findFirst: vi.fn().mockResolvedValue({ status: previousStatus }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue(fullJob()),
+      },
+      jobEvent: { create },
+    };
+    return { service: new JobsService(prisma as never, {} as never), create, prisma };
+  }
+
+  it('logs a status_change JobEvent when the status actually changes', async () => {
+    const { service, create } = makeService('applied');
+    await service.update('job-1', { status: 'interview' } as never, 'user-1');
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'user-1',
+        jobApplicationId: 'job-1',
+        type: 'status_change',
+        title: 'applied → interview',
+      }),
+    });
+  });
+
+  it('does not log when the status is unchanged', async () => {
+    const { service, create } = makeService('interview');
+    await service.update('job-1', { status: 'interview' } as never, 'user-1');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('does not query previous status or log when no status is in the update', async () => {
+    const { service, create, prisma } = makeService('applied');
+    await service.update('job-1', { notes: 'recruiter call went well' } as never, 'user-1');
+    expect(prisma.jobApplication.findFirst).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+});
+
 describe('JobsService.funnel', () => {
   function serviceWith(jobs: Array<{ status: string; source: string | null; visaTag: string | null }>) {
     const prisma = { jobApplication: { findMany: vi.fn().mockResolvedValue(jobs) } };

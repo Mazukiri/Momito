@@ -162,11 +162,31 @@ export class JobsService {
 
   async update(id: string, dto: UpdateJobDto, userId: string): Promise<JobApplicationResponse> {
     if (dto.roleTrackId) this.ensureRole(dto.roleTrackId);
+    // MOM-102: capture the prior status *before* the write so a transition can
+    // be logged. Only queried when the caller is actually changing status.
+    const previousStatus =
+      dto.status !== undefined
+        ? (await this.prisma.jobApplication.findFirst({ where: { id, userId }, select: { status: true } }))?.status
+        : undefined;
     const result = await this.prisma.jobApplication.updateMany({
       where: { id, userId },
       data: this.updateData(dto),
     });
     if (result.count === 0) throw new NotFoundException('Job not found');
+    // A status change becomes a structured JobEvent — every stage transition
+    // gets an automatic audit trail (the foundation for funnel timing, MOM-104),
+    // instead of a silent field overwrite.
+    if (dto.status !== undefined && previousStatus !== undefined && dto.status !== previousStatus) {
+      await this.prisma.jobEvent.create({
+        data: {
+          userId,
+          jobApplicationId: id,
+          type: 'status_change',
+          title: `${previousStatus} → ${dto.status}`,
+          eventAt: new Date(),
+        },
+      });
+    }
     const job = await this.prisma.jobApplication.findUniqueOrThrow({ where: { id }, include: jobInclude });
     await this.ensureDeadlineReminder(job);
     return this.serializeJob(job);
