@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Mission, MissionCheckIn, MissionCompetencyState, PlanItem, Prisma, Task, WeeklyPlan } from '@prisma/client';
 import { CAREER_ROLE_TRACKS, CareerRoleTrackId, CareerRoleTrack, PlanItemResponse, WeeklyPlanResponse } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { ReadinessService } from '../readiness/readiness.service';
 import { CreateCheckInDto } from './dto/create-check-in.dto';
 import { CreateMissionDto } from './dto/create-mission.dto';
 import { ReviewPlanDto } from './dto/review-plan.dto';
@@ -20,7 +21,10 @@ type PlanRecord = Prisma.WeeklyPlanGetPayload<{ include: typeof planInclude }>;
 
 @Injectable()
 export class MissionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly readiness: ReadinessService,
+  ) {}
 
   async list(userId: string, stage?: string) {
     const missions = await this.prisma.mission.findMany({
@@ -529,12 +533,9 @@ export class MissionsService {
     const inMission = attempt.session?.missionId === missionId;
     const roleMatch = inMission || roleTags.length === 0 || roleTags.includes(roleTrackId) || attempt.session?.roleTrackId === roleTrackId;
     const areaMatch = areaTags.length === 0 || areaTags.includes(area) || attempt.session?.area === area;
-    // 'partial' correctness (a valid, reachable CreateAnswerDto value) means attempted-but-
-    // not-there-yet, not a clean/strong result — excluded here to match the same
-    // solved/positive semantics as career.service.ts's isPositiveAttempt and
-    // dsa.service.ts's isSolvedAttempt.
-    const positive = (attempt.rubricScore ?? 0) >= 0.6 || (attempt.aiScore ?? 0) >= 0.6 || (attempt.selfRating ?? 0) >= 3 || ['correct', 'strong'].includes((attempt.correctness ?? '').toLowerCase());
-    return roleMatch && areaMatch && positive;
+    // MOM-129: the one canonical positive-attempt rule (was duplicated here and in
+    // career.service). 'partial' correctness stays excluded (attempted, not there yet).
+    return roleMatch && areaMatch && this.readiness.isPositiveAttempt(attempt);
   }
 
   private lastEvidenceAt(

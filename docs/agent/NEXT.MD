@@ -38,20 +38,25 @@ company bank weak-area-first); **MOM-142** (open `WeaknessSignal`s surface as ra
 — live + Playwright verified). **★ CareerOS Gate 1 loop is now visible end-to-end**: bomb a round → a
 target-scoped weakness is stored → it shows on Today AND leads the next `job_prep` for that job.
 
-**Active PR-sized task: MOM-129** *(large)* — consolidate the two readiness engines into one FSRS-grounded
-helper. Today `career.service` (binary keyword-substring matching over profile JSON — never decays) and
-`missions.service.diagnose` (count-based currentLevel 0–3) compute readiness *differently*, so Gate 1
-would otherwise ship contradictory numbers. Build one shared helper that grounds per-area readiness in
-**FSRS retrievability** (`ReviewState`) + **graded attempts** (now tagged by area via MOM-128), and route
-both callers through it. Preserve the existing response shapes (`listActiveReadiness` consumers, mission
-diagnosis) — this is an internal consolidation, not an API change. File ADR note if the scoring formula is
-decision-worthy. After it: MOM-130 (company-scoped rollup → "am I ready for Meta?" go/no-go) → MOM-131
-(story gap map). Then Phase 1D company-FK migration (MOM-120→121→122), **last**.
+**Shipped since:** **MOM-129** — one FSRS-grounded `ReadinessService` (canonical `isPositiveAttempt` +
+`areaMastery`); career now blends coverage with retrievability-grounded mastery and exposes
+`masteryScore`/`retrievability`; missions shares the positive-attempt rule. Live-verified on
+career/dashboard; 197 API tests.
 
-**Watch-outs for MOM-129:** this is the riskiest non-migration task — it touches the two most-used
-services. Keep it behind the existing method signatures; add characterization coverage before refactoring;
-verify the dashboard + career page + mission diagnosis all still render live. `missions` is frozen (D-015)
-— consolidate its readiness math onto the shared helper but do **not** expand mission features.
+**Active PR-sized task: MOM-130** — company-scoped readiness rollup, the "am I ready for Meta?" go/no-go.
+Build on `readiness.areaMastery(userId)`: for a given `JobApplication`, weight per-area mastery by the
+target's focus areas and dock it for that job's **open weakness signals** (the MOM-113 debrief output),
+producing a single 0–100 verdict + the 2–3 areas dragging it down. Company focus-area weights don't exist
+yet (that's the deferred MOM-121 structured-Company migration), so for now derive focus from the role
+track's checklist weights (+ the job's `roleTrackId`), and treat every open `area` signal scoped to the
+job as a readiness drag. Expose it via a career/job endpoint and surface the verdict on the job detail
+page. Small–medium, **no schema**. After it: MOM-131 (story gap map), then Phase 1D company-FK migration
+(MOM-120→121→122), **last**.
+
+**Note on remaining Phase 1:** MOM-131 (story coverage → behavioral gap map) depends on MOM-121 (company
+structure) per the backlog, but a role-track-scoped version is doable now; re-check its dependency when
+picking it up. The company-FK migration trio (MOM-120→121→122) is deliberately **last** and is the
+highest-risk migration (busiest table + seed) — do the SPIKE-012 + DESIGN PR before the implementer PR.
 
 **Gate 1:** bombing a round demonstrably reshapes tomorrow's prep; an "am I ready for Meta?" verdict
 exists. Each schema task = SPIKE + DESIGN-doc PR **then** human-approved implementer PR (D-004),

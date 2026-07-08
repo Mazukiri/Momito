@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MissionsService } from '../src/missions/missions.service';
+import { ReadinessService } from '../src/readiness/readiness.service';
 
 // missions.service.ts has no other test coverage yet (flagged in the
 // production-readiness audit as one of the largest untested services). This
@@ -11,7 +12,9 @@ import { MissionsService } from '../src/missions/missions.service';
 // full mission-evidence pipeline this method is buried inside.
 describe('MissionsService.matchesAttempt (aiScore scale contract)', () => {
   function callMatchesAttempt(attempt: Record<string, unknown>) {
-    const service = new MissionsService({} as never) as unknown as {
+    // The positive-attempt rule now lives in the shared ReadinessService (MOM-129);
+    // it needs no Prisma, so a real instance stands in and pins the same contract.
+    const service = new MissionsService({} as never, new ReadinessService({} as never)) as unknown as {
       matchesAttempt: (attempt: unknown, missionId: string, roleTrackId: string, area: string) => boolean;
     };
     return service.matchesAttempt(

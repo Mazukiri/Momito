@@ -10,6 +10,7 @@ import {
   RoleReadinessResponse,
 } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { ReadinessService, type AreaMastery } from '../readiness/readiness.service';
 import { UpsertCareerGoalDto } from './dto/upsert-career-goal.dto';
 
 type EvidenceContext = {
@@ -23,7 +24,10 @@ type EvidenceContext = {
 
 @Injectable()
 export class CareerService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly readiness: ReadinessService,
+  ) {}
 
   listRoleTracks() {
     return Object.values(CAREER_ROLE_TRACKS);
@@ -75,15 +79,23 @@ export class CareerService {
 
   async getReadiness(roleTrackId: CareerRoleTrackId, userId: string): Promise<RoleReadinessResponse> {
     const roleTrack = this.getRoleTrack(roleTrackId);
-    const context = await this.loadEvidenceContext(roleTrackId, userId);
-    const areas = this.computeAreas(roleTrack, context);
+    const [context, mastery] = await Promise.all([
+      this.loadEvidenceContext(roleTrackId, userId),
+      this.readiness.areaMastery(userId),
+    ]);
+    const areas = this.computeAreas(roleTrack, context, mastery);
     const totalWeight = areas.reduce((sum, area) => sum + area.totalWeight, 0);
-    const completedWeight = areas.reduce((sum, area) => sum + area.completedWeight, 0);
     const topGaps = areas.flatMap((area) => area.gapItems).sort((left, right) => right.weight - left.weight).slice(0, 5);
+    // MOM-129: the headline is the weight-weighted mean of the (grounded) area
+    // percentages, so FSRS retrievability + graded attempts move the number, not
+    // just keyword coverage. Falls back to coverage where an area has no history.
+    const overallPercentage = totalWeight
+      ? Math.round(areas.reduce((sum, area) => sum + area.percentage * area.totalWeight, 0) / totalWeight)
+      : 0;
     return {
       roleTrackId,
       roleTrack,
-      overallPercentage: totalWeight ? Math.round((completedWeight / totalWeight) * 100) : 0,
+      overallPercentage,
       areas,
       topGaps,
       nextActions: topGaps.slice(0, 3).map((gap) => this.nextAction(gap)),
@@ -146,7 +158,7 @@ export class CareerService {
       profileText: profile ? this.profileText(profile) : '',
       projectText: profile ? this.jsonText(profile.projects) : '',
       practice: attempts
-        .filter((attempt) => this.isPositiveAttempt(attempt))
+        .filter((attempt) => this.readiness.isPositiveAttempt(attempt))
         .map((attempt) => ({
           roleTags: this.asStringArray(attempt.question.roleTags),
           areaTags: this.asStringArray(attempt.question.areaTags),
@@ -174,20 +186,37 @@ export class CareerService {
     };
   }
 
-  private computeAreas(roleTrack: CareerRoleTrack, context: EvidenceContext): RoleAreaReadiness[] {
+  private computeAreas(
+    roleTrack: CareerRoleTrack,
+    context: EvidenceContext,
+    mastery: Map<string, AreaMastery>,
+  ): RoleAreaReadiness[] {
     const areaIds = [...new Set(roleTrack.checklist.map((item) => item.area))];
     return areaIds.map((area) => {
       const items = roleTrack.checklist.filter((item) => item.area === area);
       const completedItems = items.filter((item) => this.hasEvidence(roleTrack.id, item, context));
       const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
       const completedWeight = completedItems.reduce((sum, item) => sum + item.weight, 0);
+      const coverage = totalWeight ? Math.round((completedWeight / totalWeight) * 100) : 0;
+
+      // MOM-129: ground the area percentage. When the area has real review/attempt
+      // history, blend keyword coverage 50/50 with the FSRS-grounded mastery score
+      // so recall + graded performance count (and decay). With no history, keep the
+      // coverage number so profile/project-only areas aren't zeroed out.
+      const areaMastery = mastery.get(area) ?? null;
+      const hasHistory = areaMastery !== null && (areaMastery.gradedAttempts > 0 || areaMastery.reviewedCount > 0);
+      const masteryScore = areaMastery ? Math.round(areaMastery.score * 100) : null;
+      const percentage = hasHistory ? Math.round(0.5 * coverage + 0.5 * (masteryScore ?? 0)) : coverage;
+
       return {
         area,
         totalWeight,
         completedWeight,
-        percentage: totalWeight ? Math.round((completedWeight / totalWeight) * 100) : 0,
+        percentage,
         completedItems: completedItems.map((item) => item.id),
         gapItems: items.filter((item) => !completedItems.includes(item)),
+        masteryScore,
+        retrievability: areaMastery?.retrievability ?? null,
       };
     });
   }
@@ -246,14 +275,6 @@ export class CareerService {
   private parseDate(value: string | null | undefined): Date | null | undefined {
     if (value === undefined || value === null) return value;
     return new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
-  }
-
-  private isPositiveAttempt(attempt: {
-    selfRating: number | null;
-    correctness: string | null;
-    rubricScore: number | null;
-  }): boolean {
-    return (attempt.selfRating ?? 0) >= 3 || attempt.correctness === 'correct' || (attempt.rubricScore ?? 0) >= 0.6;
   }
 
   private profileText(profile: { skills: Prisma.JsonValue; experience: Prisma.JsonValue; projects: Prisma.JsonValue; education: Prisma.JsonValue }): string {

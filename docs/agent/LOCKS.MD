@@ -19,6 +19,7 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-129 | CLAUDE | `apps/api/src/readiness/**` (new), `apps/api/src/career/**`, `apps/api/src/missions/missions.service.ts`, `apps/api/src/missions/missions.module.ts`, `packages/shared/src/index.ts`, `apps/api/test/{readiness,career}.service.spec.ts` (new), `docs/agent/*.MD` | 2026-07-09 |
 | MOM-142 | CLAUDE | `apps/api/src/recommendations/recommendations.service.ts`, `apps/api/test/recommendations.service.spec.ts`, `docs/agent/*.MD` | 2026-07-09 |
 | MOM-128 | CLAUDE | `apps/api/src/sessions/sessions.service.ts`, `apps/api/test/sessions.service.spec.ts`, `docs/agent/*.MD` | 2026-07-09 |
 | MOM-113 | CLAUDE | `apps/api/src/interview-rounds/interview-rounds.service.ts`, `apps/api/src/interview-rounds/interview-rounds.module.ts`, `apps/api/test/interview-rounds.service.spec.ts`, `docs/agent/*.MD` | 2026-07-09 |

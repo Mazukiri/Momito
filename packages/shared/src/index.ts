@@ -553,6 +553,11 @@ export interface RoleAreaReadiness {
   percentage: number;
   completedItems: string[];
   gapItems: RoleChecklistItem[];
+  // MOM-129: FSRS-grounded signals. `masteryScore` (0–100) blends average
+  // retrievability with graded-attempt volume for the area; `retrievability`
+  // (0–1) is the raw average, null when the area has no review history.
+  masteryScore: number | null;
+  retrievability: number | null;
 }
 
 export interface RoleReadinessResponse {

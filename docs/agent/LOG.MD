@@ -1,5 +1,50 @@
 # LOG
 
+## 2026-07-09 - MOM-129: one FSRS-grounded readiness engine (consolidates the two) (CLAUDE)
+
+**Actor:** CLAUDE (implementer). The plan's *large* task and its riskiest non-migration change — it
+touches the two most-used services. No schema change; response shapes preserved (two additive fields).
+Branch `feat/careeros-phase-0`. Implements ADR-0011 / D-013 ("single engine; supersedes the dual
+readiness engines").
+
+**Problem:** readiness was computed two divergent ways over the same checklist — `career.service`
+(binary keyword *coverage*) and `missions.service.diagnose` (count-based *level 0–3*) — with **two
+different `isPositiveAttempt` definitions**, so identical history produced different numbers. Neither
+used FSRS; readiness never decayed and was gameable by keyword presence.
+
+**New `ReadinessService` (`readiness` module)** is the single engine:
+- `isPositiveAttempt()` — the one canonical rule (union of the old two: `rubricScore≥0.6 ||
+  aiScore≥0.6 || selfRating≥3 || correctness∈{correct,strong}`; 'partial' excluded).
+- `areaMastery(userId)` → per-area `{ retrievability, reviewedCount, gradedAttempts, positiveAttempts,
+  score }`. Retention half = average **FSRS retrievability** (via `ts-fsrs` `get_retrievability`) over
+  the user's question `ReviewState`s, mapped to areas by `Question.areaTags` — the bounded in-memory
+  join ADR-0011 Q2 specced, no `ReviewState` denormalization. Performance half = graded attempts grouped
+  by the MOM-128 `area` tag. `score = 0.6·retention + 0.4·min(1, positives/5)`; a New/zero-stability card
+  contributes no retrievability signal.
+
+**Consumers routed through it:** `career.service` injects it, drops its private `isPositiveAttempt`, and
+in `getReadiness` blends each area's keyword coverage 50/50 with `masteryScore` **when the area has
+review/attempt history** (else coverage-only, so profile/project areas aren't zeroed). Adds
+`masteryScore`/`retrievability` to `RoleAreaReadiness`; `overallPercentage` is now the weight-weighted
+mean of grounded area percentages. **`gapItems`/`topGaps`/`completedItems` logic is unchanged**, so the
+recommendations that depend on them (MOM-142) are unaffected. `missions.service` injects it and replaces
+its duplicated positive-attempt expression with the shared rule (missions stays frozen otherwise — D-015).
+
+**Scoring formula note:** the 0.6/0.4 retention/volume split and the 50/50 coverage/mastery blend are
+implementation choices under the ADR-0011 decision (single FSRS-grounded engine); recorded here rather
+than a new ADR since the architectural decision was already ACCEPTED in ADR-0011.
+
+**Checks:** `pnpm -r lint/typecheck/test` green (API + web + shared) — **197 API tests** (+7: readiness
+`isPositiveAttempt` matrix, `areaMastery` grounding/partial-credit/New-card-skip; career grounding blend +
+no-history fallback). **Live**: `GET /career/readiness` shows `dsa` and `language_runtime` (which have
+review history) carrying real retrievability (0.955, 0.947) and blended percentages, while
+`domain_knowledge`/`projects` (no history) stay coverage-only with `masteryScore: null`; `topGaps`
+unchanged. `GET /dashboard/summary` (200) returns the same grounded areas incl. `masteryScore`. A mission
+`diagnose` (200) still computes competency levels through the shared rule. No regression.
+
+**Next:** MOM-130 — company-scoped readiness rollup ("am I ready for Meta?" go/no-go), reusing
+`areaMastery` weighted by the target's focus areas + open weakness signals.
+
 ## 2026-07-09 - MOM-142: open WeaknessSignals as ranked Today items — Gate 1 loop visible (CLAUDE)
 
 **Actor:** CLAUDE (implementer). No schema change. Branch `feat/careeros-phase-0`. The last Gate-1 wire:
