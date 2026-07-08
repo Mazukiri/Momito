@@ -33,18 +33,25 @@ LOOP-CLOSING EDGE** (debrief → area+reason `WeaknessSignal`s + one `interview_
 row per round, per-round idempotent; 182 API tests, live-verified: a bombed Meta round now lands 3
 job-scoped open weakness signals).
 
-**Shipped since:** **MOM-128** (attempts now tagged with `area`/`roleTrackId` on create; the `job_prep`
-session branch draws the company bank with this target's open-weakness areas leading — live-verified: a
-Meta job_prep returned only `system_design` after that round was bombed).
+**Shipped since:** **MOM-128** (attempts tagged with `area`/`roleTrackId`; `job_prep` branch draws the
+company bank weak-area-first); **MOM-142** (open `WeaknessSignal`s surface as ranked `Repair:` Today cards
+— live + Playwright verified). **★ CareerOS Gate 1 loop is now visible end-to-end**: bomb a round → a
+target-scoped weakness is stored → it shows on Today AND leads the next `job_prep` for that job.
 
-**Active PR-sized task: MOM-142** — register career-target items as first-class ranked items in
-`recommendations.service` (not a new silo). Surface the open `WeaknessSignal`s (from `weaknesses.summary`
-→ `openSignals`, fed by the MOM-113 debrief edge) as ranked Today cards — a bombed round's weakness now
-appears in Today with a "repair" action (link to a `weak_area_review`/`job_prep` session). Also fold in
-pipeline stalls if cheap (MOM-105 territory) but the weakness-signal surfacing is the Gate-1 must. Small,
-no schema. After it: MOM-129 (consolidate `career.service` + `missions.service` readiness into one
-FSRS-grounded helper) → MOM-130 ("am I ready for Meta?" verdict) → MOM-131 (story gap map). Then Phase 1D
-company-FK migration (MOM-120→121→122), last.
+**Active PR-sized task: MOM-129** *(large)* — consolidate the two readiness engines into one FSRS-grounded
+helper. Today `career.service` (binary keyword-substring matching over profile JSON — never decays) and
+`missions.service.diagnose` (count-based currentLevel 0–3) compute readiness *differently*, so Gate 1
+would otherwise ship contradictory numbers. Build one shared helper that grounds per-area readiness in
+**FSRS retrievability** (`ReviewState`) + **graded attempts** (now tagged by area via MOM-128), and route
+both callers through it. Preserve the existing response shapes (`listActiveReadiness` consumers, mission
+diagnosis) — this is an internal consolidation, not an API change. File ADR note if the scoring formula is
+decision-worthy. After it: MOM-130 (company-scoped rollup → "am I ready for Meta?" go/no-go) → MOM-131
+(story gap map). Then Phase 1D company-FK migration (MOM-120→121→122), **last**.
+
+**Watch-outs for MOM-129:** this is the riskiest non-migration task — it touches the two most-used
+services. Keep it behind the existing method signatures; add characterization coverage before refactoring;
+verify the dashboard + career page + mission diagnosis all still render live. `missions` is frozen (D-015)
+— consolidate its readiness math onto the shared helper but do **not** expand mission features.
 
 **Gate 1:** bombing a round demonstrably reshapes tomorrow's prep; an "am I ready for Meta?" verdict
 exists. Each schema task = SPIKE + DESIGN-doc PR **then** human-approved implementer PR (D-004),

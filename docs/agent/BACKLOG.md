@@ -809,7 +809,7 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 ### Track S — Career Today, Automation & Loop Closure · CareerOS Gate 1/5
 - **MOM-140** Stage-aware Today cards + interview countdown · READY (lite copy in Phase 0) · EITHER
 - **MOM-141** Auto-assembled company/round-scoped prep queue on approaching date · BLOCKED on MOM-111,128,131
-- **MOM-142** Register career-target items (readiness gaps, stalls) in `recommendations.service` · BLOCKED on MOM-130,105
+- **MOM-142** Register career-target items in `recommendations.service` · **DONE** 2026-07-09 (open `WeaknessSignal`s — the MOM-113 debrief output — surface as ranked `Repair:` Today cards at priority 95–99, deduped against the derived path; readiness-gap cards already existed. 190 API tests; live + Playwright verified: 3 Meta debrief signals render on Today. **Completes CareerOS Gate 1 loop visibility.**) · *Stall-detection cards (the MOM-105 sub-part) fold in when MOM-105 lands in Phase 2.*
 - **MOM-145** Conversion analytics by source **and** résumé version · BLOCKED on MOM-101,133
 - *(MOM-143 mission auto-diagnose, MOM-144 mission-plan visa weighting — **DROPPED** under missions-frozen (D-015); intent lives in MOM-141/142 and MOM-125.)*
 

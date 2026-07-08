@@ -10,6 +10,7 @@ function buildService(
     patterns?: Array<{ key: string; label: string; struggles: number; attempts: number; lastAt: string; questionIds: string[] }>;
     topics?: Array<{ key: string; label: string; struggles: number; attempts: number; lastAt: string; questionIds: string[] }>;
     reasons?: Array<{ reason: string; label: string; count: number; lastAt: string; sampleTitles: string[]; questionIds: string[] }>;
+    openSignals?: Array<Record<string, unknown>>;
   },
   jobs: Array<Record<string, unknown>> = [],
 ) {
@@ -28,9 +29,28 @@ function buildService(
       reasons: weaknessSummary.reasons ?? [],
       patterns: weaknessSummary.patterns ?? [],
       topics: weaknessSummary.topics ?? [],
+      openSignals: weaknessSummary.openSignals ?? [],
     }),
   };
   return new RecommendationsService(prisma as never, career as never, missions as never, weaknesses as never);
+}
+
+function openSignal(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'sig-1',
+    signalType: 'area',
+    key: 'system_design',
+    label: 'System design — weak at Meta',
+    roleTrackId: null,
+    area: 'system_design',
+    jobApplicationId: 'job-1',
+    severity: 1,
+    occurrences: 1,
+    source: 'debrief',
+    status: 'open',
+    lastSignalAt: '2026-07-09T00:00:00.000Z',
+    ...overrides,
+  };
 }
 
 function job(overrides: Record<string, unknown>): Record<string, unknown> {
@@ -86,6 +106,45 @@ describe('RecommendationsService — weakness repair', () => {
     const service = buildService({});
     const recommendations = await service.list('user-1');
     expect(recommendations.some((item) => item.id.startsWith('weakness:'))).toBe(false);
+  });
+});
+
+describe('RecommendationsService — open weakness signals (MOM-142)', () => {
+  it('surfaces a debrief-emitted area signal as a ranked repair card', async () => {
+    const service = buildService({ openSignals: [openSignal({ severity: 2 })] });
+
+    const recommendations = await service.list('user-1');
+
+    const card = recommendations.find((item) => item.id === 'signal:area:system_design:job-1');
+    expect(card).toBeDefined();
+    expect(card).toMatchObject({
+      type: 'practice',
+      title: 'Repair: System design — weak at Meta',
+      area: 'system_design',
+      targetHref: '/practice/new?area=system_design&mode=weak_area_review',
+    });
+    // 94 + round(severity 2) = 96 — above derived weakness (95), below tasks (100).
+    expect(card?.priority).toBe(96);
+    expect(card?.reason).toBe('An interview debrief flagged this weakness.');
+  });
+
+  it('ranks a severe recurring signal higher and names the occurrence count', async () => {
+    const service = buildService({ openSignals: [openSignal({ severity: 9, occurrences: 3 })] });
+    const card = (await service.list('user-1')).find((item) => item.id.startsWith('signal:'));
+    expect(card?.priority).toBe(99); // capped at 94 + 5
+    expect(card?.reason).toBe('An interview debrief flagged this weakness (flagged 3×).');
+  });
+
+  it('does not double-count: a stored reason signal suppresses the derived reason card', async () => {
+    const service = buildService({
+      reasons: [{ reason: 'time_pressure', label: 'Ran out of time', count: 4, lastAt: '2026-07-05', sampleTitles: [], questionIds: [] }],
+      openSignals: [openSignal({ id: 'sig-r', signalType: 'reason', key: 'time_pressure', area: null, label: 'Ran out of time — System design at Meta', jobApplicationId: 'job-1' })],
+    });
+
+    const recommendations = await service.list('user-1');
+
+    expect(recommendations.some((item) => item.id === 'signal:reason:time_pressure:job-1')).toBe(true);
+    expect(recommendations.some((item) => item.id === 'weakness:reason:time_pressure')).toBe(false);
   });
 });
 

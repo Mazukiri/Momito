@@ -1,5 +1,39 @@
 # LOG
 
+## 2026-07-09 - MOM-142: open WeaknessSignals as ranked Today items — Gate 1 loop visible (CLAUDE)
+
+**Actor:** CLAUDE (implementer). No schema change. Branch `feat/careeros-phase-0`. The last Gate-1 wire:
+the debrief-emitted weaknesses now **appear on Today** with a repair action, so the loop is visible to
+the user, not just present in the database.
+
+**Change (`recommendations.service.list`):** the service already fetched `weaknesses.summary()`, which
+since MOM-127 carries `openSignals` — but only the *derived* struggle patterns/topics/reasons were
+surfaced; the *stored* interview-grounded signals were dropped. Now the top 3 open signals (by decayed
+severity) become first-class `type:'practice'` cards titled `Repair: {label}` (the label already carries
+area + company, e.g. *"System design — weak at Meta"*), with a provenance-aware reason ("An interview
+debrief flagged this weakness."). Area signals link to a `weak_area_review` filtered to that area; others
+to a generic repair. Priority `94 + clamp(round(severity),1,5)` = **95–99**, i.e. at/above derived
+weakness (95), below overdue tasks (100) and missions (110). The surfaced signal keys are recorded and
+the derived weakness/reason paths skip them, so a stored signal never double-counts with its derived echo.
+
+**Checks:** `pnpm --filter @momito/api lint/typecheck/test` green — **190 API tests** (+3: a debrief area
+signal becomes a ranked repair card with the right href/priority/reason; a severe recurring signal caps at
+99 and names its count; a stored reason signal suppresses the derived reason card). **Live**: `GET
+/practice/recommendations` for the demo user returns the three Meta debrief signals
+(`signal:area:system_design:…`, `signal:reason:time_pressure:…`, `signal:reason:concept_gap:…`) at
+priority 95, above the NVIDIA apply card. **Playwright** screenshot of `/today` shows all three "Repair:
+… at Meta" cards rendered in the priority queue.
+
+**★ CareerOS Gate 1 core behavior is now demonstrable end-to-end:** save a losing debrief on an interview
+round (MOM-110/113) → a target-scoped `WeaknessSignal` is stored (MOM-127) → it appears on Today as a
+ranked repair card (MOM-142) **and** the next `job_prep` session for that job leads with that weak area
+(MOM-128). Bombing a round provably reshapes tomorrow's prep. Remaining for the full gate: the FSRS-
+grounded "am I ready for Meta?" verdict (MOM-129 → 130).
+
+**Next:** MOM-129 — consolidate `career.service` + `missions.service` readiness into one FSRS-grounded
+helper (missions-frozen consolidation), grounding per-area readiness in retrievability + graded attempts
+(now tagged by area via MOM-128).
+
 ## 2026-07-09 - MOM-128: tag attempts with target dimension + the job_prep session branch (CLAUDE)
 
 **Actor:** CLAUDE (implementer). No schema change (the `AnswerAttempt.roleTrackId`/`area` columns

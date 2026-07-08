@@ -23,6 +23,14 @@ const RECOMMENDATION_REASONS = {
     `You logged "${label}" on ${count} recent attempt${count === 1 ? '' : 's'}.`,
   weakArea: (label: string, struggles: number) =>
     `You struggled with ${struggles} ${label} question${struggles === 1 ? '' : 's'} recently.`,
+  // MOM-142: an interview-grounded signal (a debrief / manual entry) explains its
+  // provenance so the user trusts why it outranks derived struggle patterns.
+  weaknessSignal: (source: string, occurrences: number) => {
+    const times = occurrences > 1 ? ` (flagged ${occurrences}×)` : '';
+    if (source === 'debrief') return `An interview debrief flagged this weakness${times}.`;
+    if (source === 'manual') return `You flagged this weakness to repair${times}.`;
+    return `A recurring weakness surfaced from your recent attempts${times}.`;
+  },
 };
 
 // A weak signal needs at least this many struggles before it drives a
@@ -94,13 +102,42 @@ export class RecommendationsService {
 
     const recommendations: PracticeRecommendationResponse[] = [];
 
+    // MOM-142: interview-grounded weaknesses come first. Open WeaknessSignals —
+    // emitted by the MOM-113 debrief edge (or manual entry), stored and decayed by
+    // MOM-127 — are first-class Today items ranked *above* derived struggle
+    // patterns, because a bombed real round is stronger evidence than practice
+    // noise. Severity (already decayed at read time) both orders them and nudges
+    // priority. Their keys are recorded so the derived path below doesn't repeat them.
+    const surfacedSignalKeys = new Set<string>();
+    const openSignals = (weaknessSummary.openSignals ?? [])
+      .slice()
+      .sort((left, right) => right.severity - left.severity)
+      .slice(0, 3);
+    for (const signal of openSignals) {
+      surfacedSignalKeys.add(signal.key);
+      const isArea = signal.signalType === 'area' && Boolean(signal.area);
+      recommendations.push({
+        id: `signal:${signal.signalType}:${signal.key}:${signal.jobApplicationId ?? 'global'}`,
+        type: 'practice',
+        title: `Repair: ${signal.label}`,
+        reason: RECOMMENDATION_REASONS.weaknessSignal(signal.source, signal.occurrences),
+        roleTrackId: signal.roleTrackId as PracticeRecommendationResponse['roleTrackId'],
+        area: (isArea ? signal.area : null) as PracticeRecommendationResponse['area'],
+        targetHref: isArea
+          ? `/practice/new?area=${signal.area}&mode=weak_area_review`
+          : '/practice/new?mode=weak_area_review',
+        // 95–99: at/above derived weakness (95), below overdue tasks (100).
+        priority: 94 + Math.min(5, Math.max(1, Math.round(signal.severity))),
+      });
+    }
+
     // Plan §6.1 queue priority 3: weakness repair sits above readiness gaps
     // (80+) and below overdue tasks (100). Patterns/topics with repeated
     // struggles come first (they map directly to a repair session); a
     // repeated miss reason without an area (e.g. "time_pressure" across mixed
     // topics) still surfaces once so the signal is never silently dropped.
     const weakAreas = [...weaknessSummary.patterns, ...weaknessSummary.topics]
-      .filter((area) => area.struggles >= WEAKNESS_MIN_COUNT)
+      .filter((area) => area.struggles >= WEAKNESS_MIN_COUNT && !surfacedSignalKeys.has(area.key))
       .sort((left, right) => right.struggles - left.struggles)
       .slice(0, 2);
     for (const area of weakAreas) {
@@ -116,7 +153,9 @@ export class RecommendationsService {
       });
     }
     if (weakAreas.length === 0) {
-      const topReason = weaknessSummary.reasons.find((reason) => reason.count >= WEAKNESS_MIN_COUNT);
+      const topReason = weaknessSummary.reasons.find(
+        (reason) => reason.count >= WEAKNESS_MIN_COUNT && !surfacedSignalKeys.has(reason.reason),
+      );
       if (topReason) {
         recommendations.push({
           id: `weakness:reason:${topReason.reason}`,
