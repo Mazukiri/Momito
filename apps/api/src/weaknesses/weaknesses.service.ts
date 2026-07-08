@@ -1,12 +1,36 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import type { WeaknessSignal } from '@prisma/client';
 import {
   MISS_TAG_LABELS,
   type MissTagReason,
   type WeaknessAreaSummary,
   type WeaknessReasonSummary,
+  type WeaknessSignalResponse,
+  type WeaknessSignalSource,
+  type WeaknessSignalStatus,
+  type WeaknessSignalType,
   type WeaknessSummaryResponse,
 } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
+
+// MOM-127 (ADR-0011): a stored signal's raw severity accrues +1 per event and
+// decays exponentially from its last event at read time. Half-life 21 days — a
+// debrief weakness you never repair fades over ~3 weeks; each recurrence resets
+// the clock and raises the raw value (capped). Below the floor it drops out.
+const SEVERITY_HALFLIFE_DAYS = 21;
+const SEVERITY_FLOOR = 0.15;
+const SEVERITY_CAP = 10;
+const OPEN_STATUSES = ['open', 'repairing'] as const;
+
+export interface RecordWeaknessSignalInput {
+  signalType: WeaknessSignalType;
+  key: string;
+  label: string;
+  source: WeaknessSignalSource;
+  roleTrackId?: string | null;
+  area?: string | null;
+  jobApplicationId?: string | null;
+}
 
 // Plan §5.4 WeaknessSignal + §6.1 queue priority 3 ("Weakness repair items").
 // Signals are derived on demand from AnswerAttempt rows — the reflection data
@@ -84,6 +108,110 @@ export class WeaknessesService {
       topics: this.aggregateAreas(attempts, (attempt) =>
         attempt.question.topic ? [{ key: attempt.question.topic.id, label: attempt.question.topic.name }] : [],
       ),
+      openSignals: await this.openSignals(userId),
+    };
+  }
+
+  // ── Persisted weakness signals (MOM-127) ──────────────────────────────────
+  // Event-sourced signals the derived path above can't represent (interview
+  // debriefs, manual entries). Called service-to-service by the debrief edge
+  // (MOM-113) and, later, a manual-entry endpoint.
+
+  async recordSignal(userId: string, input: RecordWeaknessSignalInput): Promise<WeaknessSignalResponse> {
+    const jobApplicationId = input.jobApplicationId ?? null;
+    // Accrue onto an existing *live* signal for the same target+key rather than
+    // inserting a duplicate; a resolved/dismissed one stays closed and a fresh
+    // recurrence opens a new row. Service-layer upsert (not a DB unique) because
+    // the nullable jobApplicationId makes a unique index treat NULLs as distinct.
+    const existing = await this.prisma.weaknessSignal.findFirst({
+      where: {
+        userId,
+        signalType: input.signalType,
+        key: input.key,
+        jobApplicationId,
+        status: { in: [...OPEN_STATUSES] },
+      },
+      orderBy: { lastSignalAt: 'desc' },
+    });
+
+    const now = new Date();
+    const signal = existing
+      ? await this.prisma.weaknessSignal.update({
+          where: { id: existing.id },
+          data: {
+            occurrences: existing.occurrences + 1,
+            severity: Math.min(SEVERITY_CAP, existing.severity + 1),
+            lastSignalAt: now,
+            label: input.label,
+            source: input.source,
+            ...(input.roleTrackId !== undefined && { roleTrackId: input.roleTrackId }),
+            ...(input.area !== undefined && { area: input.area }),
+          },
+        })
+      : await this.prisma.weaknessSignal.create({
+          data: {
+            userId,
+            signalType: input.signalType,
+            key: input.key,
+            label: input.label,
+            source: input.source,
+            roleTrackId: input.roleTrackId ?? null,
+            area: input.area ?? null,
+            jobApplicationId,
+            lastSignalAt: now,
+          },
+        });
+    return this.serializeSignal(signal);
+  }
+
+  async resolveSignal(id: string, userId: string): Promise<WeaknessSignalResponse> {
+    return this.setSignalStatus(id, userId, 'resolved');
+  }
+
+  async dismissSignal(id: string, userId: string): Promise<WeaknessSignalResponse> {
+    return this.setSignalStatus(id, userId, 'dismissed');
+  }
+
+  private async setSignalStatus(id: string, userId: string, status: WeaknessSignalStatus): Promise<WeaknessSignalResponse> {
+    const result = await this.prisma.weaknessSignal.updateMany({
+      where: { id, userId },
+      data: { status, resolvedAt: new Date() },
+    });
+    if (result.count === 0) throw new NotFoundException('Weakness signal not found');
+    const signal = await this.prisma.weaknessSignal.findUniqueOrThrow({ where: { id } });
+    return this.serializeSignal(signal);
+  }
+
+  private async openSignals(userId: string): Promise<WeaknessSignalResponse[]> {
+    const signals = await this.prisma.weaknessSignal.findMany({
+      where: { userId, status: { in: [...OPEN_STATUSES] } },
+    });
+    return signals
+      .map((signal) => this.serializeSignal(signal))
+      .filter((signal) => signal.severity >= SEVERITY_FLOOR)
+      .sort((left, right) => right.severity - left.severity || right.lastSignalAt.localeCompare(left.lastSignalAt));
+  }
+
+  // Effective severity = raw severity decayed exponentially from the last event.
+  private effectiveSeverity(severity: number, lastSignalAt: Date): number {
+    const ageDays = (Date.now() - lastSignalAt.getTime()) / (24 * 60 * 60 * 1000);
+    return severity * Math.pow(2, -Math.max(0, ageDays) / SEVERITY_HALFLIFE_DAYS);
+  }
+
+  private serializeSignal(signal: WeaknessSignal): WeaknessSignalResponse {
+    return {
+      id: signal.id,
+      signalType: signal.signalType as WeaknessSignalType,
+      key: signal.key,
+      label: signal.label,
+      roleTrackId: signal.roleTrackId,
+      area: signal.area,
+      jobApplicationId: signal.jobApplicationId,
+      severity: Number(this.effectiveSeverity(signal.severity, signal.lastSignalAt).toFixed(3)),
+      occurrences: signal.occurrences,
+      source: signal.source as WeaknessSignalSource,
+      status: signal.status as WeaknessSignalStatus,
+      lastSignalAt: signal.lastSignalAt.toISOString(),
     };
   }
 

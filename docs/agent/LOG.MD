@@ -1,5 +1,41 @@
 # LOG
 
+## 2026-07-09 - MOM-127: WeaknessSignal store + mixed_interview session type (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). **Migration** — crossed the D-004 gate under the owner's standing
+blanket approval; owner said "Yes" to proceeding this turn. Branch `feat/careeros-phase-0`.
+
+**What shipped (the store that lets interview outcomes become weaknesses):**
+- **Additive migration** `20260708170956_weakness_signals`: new `weakness_signals` table + nullable
+  `role_track_id`/`area` on `answer_attempts` + 5 indexes + 2 FKs. Verified purely additive (no ALTER
+  of existing data, no backfill); rollback = drop. Applied cleanly on the existing dev DB; Prisma
+  client regenerated (killed the API node processes first to dodge the Windows engine-DLL EPERM lock).
+- **`weaknesses.service` store:** `recordSignal` (service-to-service upsert-by-find — accrues
+  occurrences +1 and raw severity +1 capped at 10 onto a live signal for the same target+key, else
+  creates; a resolved/dismissed match stays closed and a recurrence opens a fresh row), `resolveSignal`
+  / `dismissSignal` (ownership-checked lifecycle), and `openSignals` — merged into `summary()` as the
+  new additive `openSignals` field. **Severity decays at read time** (`severity·2^(-ageDays/21)`),
+  dropping below a 0.15 floor — no cron. The derived practice-struggle path is untouched (SPIKE-013
+  Q1: store only what can't be re-derived).
+- **`POST /weaknesses/signals/:id/resolve|dismiss`** endpoints; web `weaknessesApi.resolveSignal/
+  dismissSignal`.
+- **`mixed_interview` session type** (SESSION_TYPES + `sessions.service` dispatch): interleaves
+  recently-struggled questions with a fresh cross-area draw, degrading to a filtered draw with no
+  history. Reconciliation recorded in ADR-0011 §3: `weak_area_review` already **is** "weakness_repair",
+  so no duplicate type was added — it now also repairs debrief-derived weaknesses via the merged summary.
+
+**Verification:** 171 API tests green (+10: 3 openSignals decay/sort, 3 recordSignal upsert/accrual/cap,
+2 resolve/dismiss, 2 mixed_interview). API + web typecheck + lint clean; shared rebuilt. **Live
+round-trip on local Postgres:** seeded a fresh (sev 3, debrief, linked to the NVIDIA job) and a
+1-year-old signal → `GET /weaknesses` returned only the fresh one, decayed, with the stale one filtered
+below the floor → `POST .../resolve` → re-GET showed `openSignals: []`. Also live-created a
+`mixed_interview` session (4 questions). Test signals + temp scripts cleaned up.
+
+**Boundary (honest):** the store is written by the debrief edge (MOM-113) and surfaced on Today by
+recommendations (MOM-142) — both later PRs. MOM-127 delivers the foundation + the `weaknesses` API
+surface + the summary field; the full "bomb a round → Today changes" demo lights up at MOM-113+142.
+**Next:** MOM-109 DESIGN (InterviewRound), then MOM-113 (debrief → recordSignal, the loop-closing edge).
+
 ## 2026-07-08 - MOM-126 DESIGN + SPIKE-013 resolved: WeaknessSignal + FSRS-grounded readiness (CLAUDE)
 
 **Actor:** CLAUDE (planner — design only, no migration run per D-004)

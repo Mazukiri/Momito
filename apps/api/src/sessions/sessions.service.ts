@@ -38,7 +38,9 @@ export class SessionsService {
         ? await this.selectDueReviewQuestions(userId, questionCount)
         : sessionData.sessionType === 'weak_area_review'
           ? await this.selectWeaknessQuestions(userId, { topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern })
-          : await this.selectFilteredQuestions({ topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern });
+          : sessionData.sessionType === 'mixed_interview'
+            ? await this.selectMixedInterviewQuestions(userId, { topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern })
+            : await this.selectFilteredQuestions({ topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern });
 
     if (selected.length === 0) throw new BadRequestException('No questions match the selected filters');
 
@@ -153,6 +155,41 @@ export class SessionsService {
 
     const combined = [...redo, ...siblings, ...struggledIds.slice(redo.length)];
     const unique = [...new Set(combined)].slice(0, filters.questionCount);
+    if (unique.length === 0) return this.selectFilteredQuestions(filters);
+    return unique.map((id) => ({ id }));
+  }
+
+  // MOM-127 mixed_interview: a mock-loop draw weighted toward weak spots.
+  // Interleaves recently-struggled questions (up to half the slots) with a fresh
+  // filtered draw across areas, so the session both re-tests known gaps and
+  // exercises breadth like a real onsite. Degrades to a plain filtered draw when
+  // there's no struggle history yet (UX invariant: the type never dead-ends).
+  private async selectMixedInterviewQuestions(
+    userId: string,
+    filters: {
+      topicId?: string;
+      companyId?: string;
+      difficulty?: string;
+      roleTrackId?: string;
+      area?: string;
+      pattern?: string;
+      questionCount: number;
+    },
+  ) {
+    const struggledIds = await this.weaknesses.struggledQuestionIds(userId);
+    const weakSlots = Math.floor(filters.questionCount / 2);
+    const weakPicks = struggledIds.slice(0, weakSlots);
+
+    const fresh = await this.selectFilteredQuestions(filters);
+    const weakSet = new Set(weakPicks);
+    const freshIds = fresh.map(({ id }) => id).filter((id) => !weakSet.has(id));
+
+    const interleaved: string[] = [];
+    for (let index = 0; index < Math.max(weakPicks.length, freshIds.length); index += 1) {
+      if (index < weakPicks.length) interleaved.push(weakPicks[index]);
+      if (index < freshIds.length) interleaved.push(freshIds[index]);
+    }
+    const unique = [...new Set(interleaved)].slice(0, filters.questionCount);
     if (unique.length === 0) return this.selectFilteredQuestions(filters);
     return unique.map((id) => ({ id }));
   }

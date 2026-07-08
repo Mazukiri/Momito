@@ -48,6 +48,7 @@ model User {
   readwiseSyncRuns ReadwiseSyncRun[]
   aiUsage        AiUsage[]
   pushSubscriptions PushSubscription[]
+  weaknessSignals WeaknessSignal[]
 
   @@map("users")
 }
@@ -283,6 +284,12 @@ model AnswerAttempt {
   // isn't DB-constrained to it — validated at the DTO layer instead.
   missTags   String[]          @default([]) @map("miss_tags")
   reflectionNote String?       @map("reflection_note")
+  // MOM-126/128 (ADR-0011): target-scope columns so a study signal can be
+  // attributed to a specific role track / competency area without joining
+  // through the (optional) session. Populated on create by MOM-128; existing
+  // rows are NULL (additive, no backfill).
+  roleTrackId String?          @map("role_track_id")
+  area       String?
   language   String?
   complexity String?
   createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -297,6 +304,9 @@ model AnswerAttempt {
   // access pattern directly instead of relying on the single-column index
   // plus a sort.
   @@index([userId, createdAt])
+  // MOM-129 grounds per-area readiness on graded attempts; this covers the
+  // per-user, per-area group-by.
+  @@index([userId, area])
   @@index([sessionId])
   @@index([questionId])
   @@index([needsReview])
@@ -396,6 +406,7 @@ model JobApplication {
   reminders         Reminder[]
   sessions          InterviewSession[]
   learningEvidence  LearningEvidence[]
+  weaknessSignals   WeaknessSignal[]
 
   @@index([userId])
   @@index([status])
@@ -783,4 +794,38 @@ model ReviewState {
   @@unique([userId, objectType, objectId])
   @@index([userId, due])
   @@map("review_states")
+}
+
+// MOM-126/127 (ADR-0011 / D-013, plan §5.4): persistent weakness signals for
+// the CareerOS loop. The derived weakness engine (weaknesses.service) still
+// handles practice struggles on the fly; this table stores only the signals
+// that CANNOT be re-derived — interview debriefs (source='debrief') and manual
+// entries — plus the state the derived path can't hold: severity accrual,
+// decay, and a repair/dismiss lifecycle. `summary()` merges both sources.
+// Target scoping is by roleTrackId/area/jobApplicationId; companyId is
+// deliberately deferred until the Company FK migration (MOM-122) lands.
+model WeaknessSignal {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  signalType       String    @map("signal_type") // reason | pattern | topic | area | round
+  key              String                        // MissTagReason | patternTag | topicId | areaId | roundType
+  label            String
+  roleTrackId      String?   @map("role_track_id")
+  area             String?
+  jobApplicationId String?   @map("job_application_id") @db.Uuid
+  severity         Float     @default(1)
+  occurrences      Int       @default(1)
+  source           String                         // attempt | debrief | manual
+  status           String    @default("open")     // open | repairing | resolved | dismissed
+  lastSignalAt     DateTime  @map("last_signal_at") @db.Timestamptz(6)
+  resolvedAt       DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([jobApplicationId])
+  @@index([roleTrackId, area])
+  @@map("weakness_signals")
 }

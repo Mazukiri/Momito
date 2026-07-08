@@ -18,6 +18,7 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-127 | CLAUDE | `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**`, `apps/api/src/weaknesses/**`, `apps/api/src/sessions/sessions.service.ts`, `apps/api/test/{weaknesses,sessions}.service.spec.ts`, `packages/shared/src/index.ts`, `apps/web/app/lib/api-client.ts`, `docs/**` | 2026-07-09 |
 | MOM-065 | CLAUDE | `apps/web/app/(authenticated)/stories/page.tsx` (new), `apps/web/app/lib/navigation.ts`, `docs/agent/*.MD` | 2026-07-06T02:35:00Z |
 | MOM-066 | CLAUDE | `packages/shared/src/index.ts`, `apps/api/src/stories/**`, `apps/api/test/stories.service.spec.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/(authenticated)/questions/[id]/page.tsx`, `docs/agent/*.MD` | 2026-07-06T02:50:00Z |
 | MOM-067 | CLAUDE | `apps/api/src/reviews/reviews.service.ts`, `apps/api/test/reviews.service.spec.ts`, `apps/web/app/(authenticated)/stories/page.tsx`, `apps/web/app/(authenticated)/today/page.tsx`, `docs/agent/*.MD` | 2026-07-06T03:10:00Z |

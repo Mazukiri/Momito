@@ -222,6 +222,7 @@ import type {
   SessionQuestionResponse,
   AnswerAttemptResponse,
   MissTagReason,
+  WeaknessSignalResponse,
   WeaknessSummaryResponse,
 } from '@momito/shared';
 
@@ -342,6 +343,11 @@ export const attemptsApi = {
 // ── Weakness signals (plan §5.4/§6.1) ───────────────────────────────────────
 export const weaknessesApi = {
   summary: () => request<WeaknessSummaryResponse>('/weaknesses'),
+  // MOM-127: act on a persisted signal from summary.openSignals.
+  resolveSignal: (id: string) =>
+    request<WeaknessSignalResponse>(`/weaknesses/signals/${id}/resolve`, { method: 'POST' }),
+  dismissSignal: (id: string) =>
+    request<WeaknessSignalResponse>(`/weaknesses/signals/${id}/dismiss`, { method: 'POST' }),
 };
 
 // ── AI grading (Workstream C: dormant until ANTHROPIC_API_KEY is set) ──────

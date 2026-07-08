@@ -340,3 +340,65 @@ describe('SessionsService — weak_area_review selection', () => {
     expect(result.questions.map((question) => question.questionId)).toEqual(['q-1']);
   });
 });
+
+describe('SessionsService — mixed_interview selection (MOM-127)', () => {
+  const captureCreate = () =>
+    vi.fn().mockImplementation(({ data }) => ({
+      id: 'session-1',
+      status: 'active',
+      sessionQuestions: data.sessionQuestions.create.map((item: { questionId: string; order: number }) => ({
+        id: `sq-${item.order}`,
+        sessionId: 'session-1',
+        questionId: item.questionId,
+        order: item.order,
+        question: { id: item.questionId, topic: { id: 't', name: 'T' }, companies: [] },
+      })),
+    }));
+
+  it('interleaves recently-struggled questions with a fresh cross-area draw', async () => {
+    const create = captureCreate();
+    const prisma = {
+      interviewSession: { create },
+      question: {
+        // Distinct importances make the filtered sort deterministic despite the shuffle.
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'fresh-1', roleTags: [], areaTags: [], patternTags: [], importance: 3 },
+          { id: 'fresh-2', roleTags: [], areaTags: [], patternTags: [], importance: 2 },
+          { id: 'fresh-3', roleTags: [], areaTags: [], patternTags: [], importance: 1 },
+        ]),
+      },
+    };
+    const weaknesses = {
+      struggledQuestionIds: vi.fn().mockResolvedValue(['struggle-1', 'struggle-2']),
+      summary: vi.fn(),
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknesses as never);
+
+    const result = await service.create({ sessionType: 'mixed_interview', questionCount: 4 }, 'user-1');
+
+    // weakSlots = floor(4/2) = 2 → [struggle-1, struggle-2] interleaved with fresh.
+    expect(result.questions.map((question) => question.questionId)).toEqual([
+      'struggle-1',
+      'fresh-1',
+      'struggle-2',
+      'fresh-2',
+    ]);
+  });
+
+  it('falls back to a plain filtered draw when there is no struggle history', async () => {
+    const create = captureCreate();
+    const prisma = {
+      interviewSession: { create },
+      question: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'only-1', roleTags: [], areaTags: [], patternTags: [], importance: 1 },
+        ]),
+      },
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
+
+    const result = await service.create({ sessionType: 'mixed_interview', questionCount: 3 }, 'user-1');
+
+    expect(result.questions.map((question) => question.questionId)).toEqual(['only-1']);
+  });
+});

@@ -223,6 +223,9 @@ export const SESSION_TYPES = [
   'mixed_mock',
   'role_drill',
   'weak_area_review',
+  // MOM-127: a mock-interview draw weighted toward your weak spots — interleaves
+  // recently-struggled questions with fresh ones across areas, simulating a loop.
+  'mixed_interview',
   'daily_mixed_set',
   'job_prep',
   'spaced_review',
@@ -1281,6 +1284,35 @@ export interface WeaknessAreaSummary {
   questionIds: string[];
 }
 
+// MOM-127 (ADR-0011 / D-013): persisted weakness signals. The derived engine
+// above still handles practice struggles on the fly; these rows store only the
+// signals that can't be re-derived — interview debriefs and manual entries —
+// with severity accrual, read-time decay, and a repair/dismiss lifecycle.
+export const WEAKNESS_SIGNAL_TYPES = ['reason', 'pattern', 'topic', 'area', 'round'] as const;
+export type WeaknessSignalType = (typeof WEAKNESS_SIGNAL_TYPES)[number];
+
+export const WEAKNESS_SIGNAL_SOURCES = ['attempt', 'debrief', 'manual'] as const;
+export type WeaknessSignalSource = (typeof WEAKNESS_SIGNAL_SOURCES)[number];
+
+export const WEAKNESS_SIGNAL_STATUSES = ['open', 'repairing', 'resolved', 'dismissed'] as const;
+export type WeaknessSignalStatus = (typeof WEAKNESS_SIGNAL_STATUSES)[number];
+
+export interface WeaknessSignalResponse {
+  id: string;
+  signalType: WeaknessSignalType;
+  key: string;
+  label: string;
+  roleTrackId: string | null;
+  area: string | null;
+  jobApplicationId: string | null;
+  /** Effective (decayed) severity at read time, not the stored raw value. */
+  severity: number;
+  occurrences: number;
+  source: WeaknessSignalSource;
+  status: WeaknessSignalStatus;
+  lastSignalAt: string;
+}
+
 export interface WeaknessSummaryResponse {
   windowDays: number;
   totalAttempts: number;
@@ -1288,6 +1320,8 @@ export interface WeaknessSummaryResponse {
   reasons: WeaknessReasonSummary[];
   patterns: WeaknessAreaSummary[];
   topics: WeaknessAreaSummary[];
+  /** MOM-127: open, above-the-decay-floor persisted signals, most-severe first. */
+  openSignals: WeaknessSignalResponse[];
 }
 
 // ── Rubric (MOM-023) ────────────────────────────────────────────────────────

@@ -114,11 +114,16 @@ Existing rows backfill to `NULL` (additive, no data migration). MOM-128 populate
 creation from the session's `roleTrackId`/`area` or the standalone-attempt DTO.
 
 ### 3. New session-type branches (MOM-127)
-Implement the specced-but-missing `weakness_repair` and `mixed_interview` session types in
-`sessions.service` (question selection reuses `weaknesses.service.struggledQuestionIds` +
-`selectWeaknessQuestions`). The `job_prep` branch (MOM-128) auto-derives its question set from a
-`jobApplicationId`. **No new Task/PlanItem dual-write** — prep still writes to the existing `Task`
-model (avoids the anti-pattern SPIKE-010 flags for MOM-109).
+**Implementation reconciliation (MOM-127):** the existing `weak_area_review` session type *already*
+draws from the user's weakness signals (redo struggled items + weak-pattern siblings, falling back to
+a filtered draw) — it **is** the "weakness_repair" the plan named, and the recommendations engine
+already links to it. Adding a second, near-identical `weakness_repair` type would be pure duplication,
+so it was **not** added; once stored debrief signals merge into `weaknesses.summary` (below),
+`weak_area_review` repairs interview-derived weaknesses too. Only the genuinely-new
+**`mixed_interview`** type was added — a mock-loop draw that interleaves recently-struggled questions
+with a fresh cross-area draw (distinct from the plain `mixed_mock`). The `job_prep` branch (MOM-128)
+auto-derives its question set from a `jobApplicationId`. **No new Task/PlanItem dual-write** — prep
+still writes to the existing `Task` model (avoids the anti-pattern SPIKE-010 flags for MOM-109).
 
 ### 4. One grounded engine (MOM-129, separate PR)
 Replace both readiness computations with a single shared helper
