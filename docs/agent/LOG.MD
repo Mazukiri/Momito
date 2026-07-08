@@ -1,5 +1,40 @@
 # LOG
 
+## 2026-07-09 - MOM-130: "am I ready for <company>?" job readiness verdict (CLAUDE)
+
+**Actor:** CLAUDE (implementer). No schema change. Branch `feat/careeros-phase-0`. The Gate-1 verdict:
+a single go/no-go for one application that a bombed round visibly lowers.
+
+**`career.getJobReadiness(jobId, userId)`** (route `GET /career/jobs/:jobId/readiness`) composes the two
+loop halves: the target's **grounded role readiness** (MOM-129 `getReadiness` for the job's `roleTrackId`,
+default `big-tech-swe`) minus a **penalty** from that job's **open weakness signals** (MOM-113 debrief
+output, fetched via the new `weaknesses.listOpenSignals(userId, jobId)`, decayed). `penalty =
+min(30, Σ severity·5)`; `score = clamp(overall − penalty, 0, 100)`; status `ready ≥75 / almost ≥50 /
+not_ready`. Returns the 3 weakest grounded areas + the blocking signals. Company focus-area weighting is
+derived from the role-track checklist for now; when the structured-`Company` migration (MOM-121) lands it
+can weight by real company focus — additive.
+
+**Shared:** `JOB_READINESS_STATUSES`, `JobReadinessResponse` (+ `JobReadinessWeakArea`). **Weaknesses:**
+`openSignals` → public `listOpenSignals(userId, jobApplicationId?)`. **Web:** `careerApi.jobReadiness` +
+a new `JobReadinessCard` at the top of the job detail aside — the score, status, `−penalty` explainer,
+weakest-area bars, and the flagged-in-interviews chips.
+
+**Checks:** `pnpm -r lint/typecheck/test` green (api + web + shared) — **200 API tests** (+3: penalty
+docking, penalty cap + non-negative clamp, ownership 404). **Live**: `GET /career/jobs/<Meta>/readiness`
+returns **score 2/100, not_ready, penalty 15** with `blockingSignals` = `[concept_gap, time_pressure,
+system_design]` and weakest areas `projects/lld_oop/behavioral` — the bombed system-design round
+demonstrably drags the Meta verdict down. Playwright screenshot shows the Interview Readiness card on the
+job page.
+
+**★ CareerOS Gate 1 loop is complete:** save a losing debrief → a target-scoped weakness is stored →
+it appears on Today (MOM-142), leads the next `job_prep` (MOM-128), and lowers the FSRS-grounded
+"am I ready for Meta?" verdict (MOM-129/130). Bombing a round provably reshapes prep *and* the go/no-go.
+(Remaining Gate-1 polish: auto prep-queue countdown MOM-141, and the deferred structured-company context
+MOM-120→122.)
+
+**Next:** MOM-111 (round-scoped prep generation) + MOM-112 (interview-date reminders) — small, READY,
+unblock MOM-141 (auto-assembled prep queue on an approaching date).
+
 ## 2026-07-09 - MOM-129: one FSRS-grounded readiness engine (consolidates the two) (CLAUDE)
 
 **Actor:** CLAUDE (implementer). The plan's *large* task and its riskiest non-migration change — it

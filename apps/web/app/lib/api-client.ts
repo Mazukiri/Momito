@@ -465,6 +465,7 @@ import type {
   MissionDetailResponse,
   MissionResponse,
   MissionTodayResponse,
+  JobReadinessResponse,
   PracticeRecommendationResponse,
   ReadwiseConnectionResponse,
   ReadwiseSyncRunResponse,
@@ -495,6 +496,9 @@ export const careerApi = {
 
   activeReadiness: () =>
     request<RoleReadinessResponse[]>('/career/readiness'),
+
+  jobReadiness: (jobId: string) =>
+    request<JobReadinessResponse>(`/career/jobs/${jobId}/readiness`),
 };
 
 export const jobsApi = {

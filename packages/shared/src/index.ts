@@ -569,6 +569,34 @@ export interface RoleReadinessResponse {
   nextActions: string[];
 }
 
+// MOM-130: the "am I ready for <company>?" go/no-go for one JobApplication —
+// the role-track's grounded readiness docked by that target's open weakness
+// signals (the MOM-113 debrief output).
+export const JOB_READINESS_STATUSES = ['ready', 'almost', 'not_ready'] as const;
+export type JobReadinessStatus = (typeof JOB_READINESS_STATUSES)[number];
+
+export interface JobReadinessWeakArea {
+  area: CareerRoleAreaId;
+  percentage: number;
+}
+
+export interface JobReadinessResponse {
+  jobApplicationId: string;
+  company: string;
+  roleTitle: string;
+  roleTrackId: CareerRoleTrackId;
+  roleTrack: CareerRoleTrack;
+  /** 0–100 verdict = grounded role readiness minus the weakness-signal penalty. */
+  score: number;
+  status: JobReadinessStatus;
+  /** Points docked for this job's open weakness signals. */
+  penalty: number;
+  areas: RoleAreaReadiness[];
+  weakestAreas: JobReadinessWeakArea[];
+  blockingSignals: WeaknessSignalResponse[];
+  nextActions: string[];
+}
+
 export const MISSION_SOURCE_TYPES = ['manual', 'career_goal', 'job_application'] as const;
 export type MissionSourceType = (typeof MISSION_SOURCE_TYPES)[number];
 

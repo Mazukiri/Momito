@@ -38,25 +38,26 @@ company bank weak-area-first); **MOM-142** (open `WeaknessSignal`s surface as ra
 — live + Playwright verified). **★ CareerOS Gate 1 loop is now visible end-to-end**: bomb a round → a
 target-scoped weakness is stored → it shows on Today AND leads the next `job_prep` for that job.
 
-**Shipped since:** **MOM-129** — one FSRS-grounded `ReadinessService` (canonical `isPositiveAttempt` +
-`areaMastery`); career now blends coverage with retrievability-grounded mastery and exposes
-`masteryScore`/`retrievability`; missions shares the positive-attempt rule. Live-verified on
-career/dashboard; 197 API tests.
+**Shipped since:** **MOM-129** (one FSRS-grounded `ReadinessService`); **MOM-130** (`getJobReadiness` —
+grounded role readiness minus open-weakness-signal penalty; `JobReadinessCard` on the job page;
+live-verified: bombed Meta round → verdict 2/100 not_ready). **★ CareerOS Gate 1 loop is COMPLETE** end
+to end (debrief → stored weakness → Today card + weak-area-first job_prep + lowered "ready for Meta?"
+verdict).
 
-**Active PR-sized task: MOM-130** — company-scoped readiness rollup, the "am I ready for Meta?" go/no-go.
-Build on `readiness.areaMastery(userId)`: for a given `JobApplication`, weight per-area mastery by the
-target's focus areas and dock it for that job's **open weakness signals** (the MOM-113 debrief output),
-producing a single 0–100 verdict + the 2–3 areas dragging it down. Company focus-area weights don't exist
-yet (that's the deferred MOM-121 structured-Company migration), so for now derive focus from the role
-track's checklist weights (+ the job's `roleTrackId`), and treat every open `area` signal scoped to the
-job as a readiness drag. Expose it via a career/job endpoint and surface the verdict on the job detail
-page. Small–medium, **no schema**. After it: MOM-131 (story gap map), then Phase 1D company-FK migration
-(MOM-120→121→122), **last**.
+**Active PR-sized task: MOM-111** — round-scoped prep task generation. Extend `jobs.service.generatePrep`
+(or add a sibling) to generate `Task`s scoped to an `InterviewRound`: derive the checklist from the round's
+`roundType` (system_design round → design tasks; behavioral → story tasks) staggered before its
+`scheduledAt`, and back-ref the `InterviewRound` via a nullable `interviewRoundId` on `Task`
+(SPIKE-010 said Task gets this FK here — **this is a migration**, additive, D-004 gate; blanket approval
+stands). Reuse the existing checklist→Task pattern. Then **MOM-112** (interview-date reminder automation —
+reuse `ensureDeadlineReminder`'s sentinel-upsert, keyed per round), both small and unblocking **MOM-141**
+(auto-assembled prep queue on an approaching date → the last Gate-1 polish). Then **MOM-131** (story gap
+map — a role-track-scoped version is doable now; its MOM-121 dependency only enriches it).
 
-**Note on remaining Phase 1:** MOM-131 (story coverage → behavioral gap map) depends on MOM-121 (company
-structure) per the backlog, but a role-track-scoped version is doable now; re-check its dependency when
-picking it up. The company-FK migration trio (MOM-120→121→122) is deliberately **last** and is the
-highest-risk migration (busiest table + seed) — do the SPIKE-012 + DESIGN PR before the implementer PR.
+**Then Phase 1D — company-FK migration (MOM-120→121→122), LAST:** the highest-risk migration (busiest
+table + seed). Do SPIKE-012 + the DESIGN-doc PR before the implementer PR; keep the free-text `company`
+column as fallback; name-match backfill. This also retro-enriches MOM-125/130/131 (real company focus
+weights) and MOM-128 (company FK instead of name match).
 
 **Gate 1:** bombing a round demonstrably reshapes tomorrow's prep; an "am I ready for Meta?" verdict
 exists. Each schema task = SPIKE + DESIGN-doc PR **then** human-approved implementer PR (D-004),

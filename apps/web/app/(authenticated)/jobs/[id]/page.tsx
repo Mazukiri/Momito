@@ -6,6 +6,7 @@ import { JOB_APPLICATION_STATUSES, type JobApplicationStatus } from '@momito/sha
 import { jobsApi, missionsApi, remindersApi } from '../../../lib/api-client';
 import { Badge, Card, ErrorBanner, Spinner } from '../../../components/ui';
 import { InterviewRoundsCard } from '../../../components/InterviewRoundsCard';
+import { JobReadinessCard } from '../../../components/JobReadinessCard';
 
 type JobDetail = Awaited<ReturnType<typeof jobsApi.get>>;
 
@@ -178,6 +179,8 @@ export default function JobDetailPage() {
         </div>
 
         <aside className="space-y-6">
+          <JobReadinessCard jobId={params.id} />
+
           <Card>
             <h2 className="mb-3 font-semibold text-zinc-800 dark:text-zinc-100">Status</h2>
             <select value={status} onChange={(event) => setStatus(event.target.value as JobApplicationStatus)} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">

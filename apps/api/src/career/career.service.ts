@@ -3,15 +3,29 @@ import { CareerGoal, Prisma } from '@prisma/client';
 import {
   CAREER_ROLE_TRACKS,
   CareerGoalResponse,
+  CareerRoleAreaId,
   CareerRoleTrack,
   CareerRoleTrackId,
+  JobReadinessResponse,
+  JobReadinessStatus,
   RoleAreaReadiness,
   RoleChecklistItem,
   RoleReadinessResponse,
 } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReadinessService, type AreaMastery } from '../readiness/readiness.service';
+import { WeaknessesService } from '../weaknesses/weaknesses.service';
 import { UpsertCareerGoalDto } from './dto/upsert-career-goal.dto';
+
+// MOM-130 job-readiness tuning.
+const DEFAULT_JOB_ROLE_TRACK: CareerRoleTrackId = 'big-tech-swe';
+// Each point of a job-scoped open weakness signal's decayed severity docks this
+// many verdict points; the total dock is capped so signals can't zero out a
+// genuinely strong candidate.
+const SIGNAL_PENALTY_PER_SEVERITY = 5;
+const SIGNAL_PENALTY_CAP = 30;
+const READY_THRESHOLD = 75;
+const ALMOST_THRESHOLD = 50;
 
 type EvidenceContext = {
   profileText: string;
@@ -27,6 +41,7 @@ export class CareerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly readiness: ReadinessService,
+    private readonly weaknesses: WeaknessesService,
   ) {}
 
   listRoleTracks() {
@@ -111,6 +126,51 @@ export class CareerService {
       ? goals.map((goal) => goal.roleTrackId as CareerRoleTrackId)
       : (['big-tech-swe'] satisfies CareerRoleTrackId[]);
     return Promise.all(roleIds.map((roleTrackId) => this.getReadiness(roleTrackId, userId)));
+  }
+
+  // MOM-130: "am I ready for <company>?" — the target's grounded role readiness
+  // (MOM-129) docked by that job's open weakness signals (MOM-113 debriefs). One
+  // 0–100 verdict + the areas dragging it down, so a bombed round visibly lowers
+  // the go/no-go for that specific application.
+  async getJobReadiness(jobId: string, userId: string): Promise<JobReadinessResponse> {
+    const job = await this.prisma.jobApplication.findFirst({
+      where: { id: jobId, userId },
+      select: { id: true, company: true, roleTitle: true, roleTrackId: true },
+    });
+    if (!job) throw new NotFoundException('Job application not found');
+
+    const roleTrackId = (job.roleTrackId as CareerRoleTrackId | null) ?? DEFAULT_JOB_ROLE_TRACK;
+    const [readiness, blockingSignals] = await Promise.all([
+      this.getReadiness(roleTrackId, userId),
+      this.weaknesses.listOpenSignals(userId, jobId),
+    ]);
+
+    // Penalty from this job's open weakness signals, weighted by decayed severity.
+    const rawPenalty = blockingSignals.reduce((sum, signal) => sum + signal.severity * SIGNAL_PENALTY_PER_SEVERITY, 0);
+    const penalty = Math.min(SIGNAL_PENALTY_CAP, Math.round(rawPenalty));
+    const score = Math.max(0, Math.min(100, readiness.overallPercentage - penalty));
+    const status: JobReadinessStatus = score >= READY_THRESHOLD ? 'ready' : score >= ALMOST_THRESHOLD ? 'almost' : 'not_ready';
+
+    // The areas most in the way: lowest grounded percentage first (weight breaks ties).
+    const weakestAreas = [...readiness.areas]
+      .sort((left, right) => left.percentage - right.percentage || right.totalWeight - left.totalWeight)
+      .slice(0, 3)
+      .map((area) => ({ area: area.area as CareerRoleAreaId, percentage: area.percentage }));
+
+    return {
+      jobApplicationId: job.id,
+      company: job.company,
+      roleTitle: job.roleTitle,
+      roleTrackId,
+      roleTrack: readiness.roleTrack,
+      score,
+      status,
+      penalty,
+      areas: readiness.areas,
+      weakestAreas,
+      blockingSignals,
+      nextActions: readiness.nextActions,
+    };
   }
 
   private async loadEvidenceContext(roleTrackId: CareerRoleTrackId, userId: string): Promise<EvidenceContext> {

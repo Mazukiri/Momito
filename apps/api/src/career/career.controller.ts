@@ -42,4 +42,10 @@ export class CareerController {
   activeReadiness(@CurrentUser() user: AuthenticatedUser) {
     return this.career.listActiveReadiness(user.id);
   }
+
+  // MOM-130: "am I ready for <company>?" for a specific application.
+  @Get('jobs/:jobId/readiness')
+  jobReadiness(@Param('jobId', ParseUUIDPipe) jobId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.career.getJobReadiness(jobId, user.id);
+  }
 }

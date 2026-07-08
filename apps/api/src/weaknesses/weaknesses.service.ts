@@ -108,7 +108,7 @@ export class WeaknessesService {
       topics: this.aggregateAreas(attempts, (attempt) =>
         attempt.question.topic ? [{ key: attempt.question.topic.id, label: attempt.question.topic.name }] : [],
       ),
-      openSignals: await this.openSignals(userId),
+      openSignals: await this.listOpenSignals(userId),
     };
   }
 
@@ -182,9 +182,15 @@ export class WeaknessesService {
     return this.serializeSignal(signal);
   }
 
-  private async openSignals(userId: string): Promise<WeaknessSignalResponse[]> {
+  // Open signals, decayed at read time and sorted strongest-first. Pass a
+  // jobApplicationId to scope to one target (MOM-130 job readiness).
+  async listOpenSignals(userId: string, jobApplicationId?: string): Promise<WeaknessSignalResponse[]> {
     const signals = await this.prisma.weaknessSignal.findMany({
-      where: { userId, status: { in: [...OPEN_STATUSES] } },
+      where: {
+        userId,
+        status: { in: [...OPEN_STATUSES] },
+        ...(jobApplicationId !== undefined && { jobApplicationId }),
+      },
     });
     return signals
       .map((signal) => this.serializeSignal(signal))
