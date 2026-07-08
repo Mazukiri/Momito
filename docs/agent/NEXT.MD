@@ -10,12 +10,19 @@ Thesis: the study loop closes; the career loop does not. Tracks **M–S / MOM-10
 is **AI-first, dormant-until-key**; (3) **missions frozen** (D-015) — pipeline-driven loop primary, the
 two readiness engines consolidate into one FSRS-grounded engine (MOM-129).
 
-**Executing now — Phase 0 quick wins (schema-free, on branch `feat/careeros-phase-0`):**
-MOM-101 (funnel card) → MOM-102 (auto-log status transition) → MOM-135 (gap→task) →
-MOM-108 + MOM-134-lite (paste-JD capture + ATS coverage) → MOM-140-lite (stage-aware Today copy).
-Then Phase 1 (loop closure): company FK + WeaknessSignal + interview rounds/debrief + grounded
-company-scoped readiness + auto prep queue. Each schema task = DESIGN-doc PR then human-approved
-implementer PR (D-004). New registries: SPIKE-009…015, ADR-0009…0012, D-011…D-015.
+**Phase 0 quick wins — COMPLETE** (schema-free, branch `feat/careeros-phase-0`):
+MOM-101 (funnel card, `daf5cd1`) · MOM-102 (auto-log status transition, `897df85`) ·
+MOM-135 (gap→task, `b79cde5`) · MOM-108 + MOM-134-lite (paste-JD capture + ATS coverage,
+`a5d6476`) · MOM-140-lite (stage-aware Today copy). All live-verified against local Postgres;
+161 API tests green. See LOG.MD 2026-07-08 entries.
+
+**Executing next — Phase 1 (close the study↔target loop, owner's #1):** the minimal scaffolding
+then the loop edges — company context (MOM-120→121→122) · weakness spine (MOM-126→127→128) ·
+outcome source (MOM-109→110→113) · one grounded FSRS readiness engine + company rollup
+(MOM-129→130) · story gap map (MOM-131) · auto prep queue + recommendations wiring (141, 142).
+**Gate:** bombing a round demonstrably reshapes tomorrow's prep; an "am I ready for Meta?" verdict
+exists. Each schema task = SPIKE + DESIGN-doc PR **then** human-approved implementer PR (D-004),
+tested on fresh + existing DB. Registries in play: SPIKE-009…015, ADR-0009…0012, D-011…D-015.
 
 ---
 

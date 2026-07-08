@@ -29,6 +29,42 @@ const RECOMMENDATION_REASONS = {
 // recommendation — one bad attempt is noise, not a pattern.
 const WEAKNESS_MIN_COUNT = 2;
 
+// MOM-140-lite: a pipeline item's Today card should speak to the stage it's in.
+// A saved lead reads "apply", an onsite reads "prep your onsite" with real
+// urgency — instead of one generic "Prepare X" for every stage. This is copy +
+// light stage-ranking only; the full interview-date countdown and auto-assembled
+// prep queue are MOM-140/141 (migration-gated interview-round modeling).
+const JOB_STAGE_CARD: Record<
+  string,
+  { title: (company: string, role: string) => string; reason: string; priority: number }
+> = {
+  saved: {
+    title: (company, role) => `Apply to ${company} — ${role}`,
+    reason: 'You saved this role but have not applied yet.',
+    priority: 55,
+  },
+  applied: {
+    title: (company, role) => `Follow up with ${company} — ${role}`,
+    reason: 'Your application is in review — keep it warm.',
+    priority: 62,
+  },
+  oa: {
+    title: (company) => `Prep the ${company} online assessment`,
+    reason: 'You are at the online-assessment stage — practice before it expires.',
+    priority: 85,
+  },
+  interview: {
+    title: (company) => `Prep for your ${company} interview`,
+    reason: 'You are actively interviewing here.',
+    priority: 88,
+  },
+  onsite: {
+    title: (company) => `Prep for your ${company} onsite`,
+    reason: 'You have an onsite for this role — the sharp end of the pipeline.',
+    priority: 92,
+  },
+};
+
 @Injectable()
 export class RecommendationsService {
   constructor(
@@ -135,15 +171,24 @@ export class RecommendationsService {
       }
     }
     for (const job of jobs) {
+      const card = JOB_STAGE_CARD[job.status] ?? {
+        title: (company: string, role: string) => `Prepare ${company} ${role}`,
+        reason: RECOMMENDATION_REASONS.jobActive(),
+        priority: 60,
+      };
+      // An application deadline is only actionable-by-date while the job is still
+      // a saved lead ("apply by Friday"); once applied it is moot, so from then on
+      // the stage governs both the copy and the ranking.
+      const deadlineUrgent = job.status === 'saved' && Boolean(job.deadline);
       recommendations.push({
         id: `job:${job.id}`,
         type: 'job',
-        title: `Prepare ${job.company} ${job.roleTitle}`,
-        reason: job.deadline ? RECOMMENDATION_REASONS.jobDeadline() : RECOMMENDATION_REASONS.jobActive(),
+        title: card.title(job.company, job.roleTitle),
+        reason: deadlineUrgent ? RECOMMENDATION_REASONS.jobDeadline() : card.reason,
         roleTrackId: job.roleTrackId as PracticeRecommendationResponse['roleTrackId'],
         area: null,
         targetHref: `/jobs/${job.id}`,
-        priority: job.deadline ? 90 : 60,
+        priority: deadlineUrgent ? 90 : card.priority,
       });
     }
     if (inboxCount > 0) {

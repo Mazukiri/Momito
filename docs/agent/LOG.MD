@@ -1,5 +1,40 @@
 # LOG
 
+## 2026-07-08 - MOM-140-lite: stage-aware Today copy for pipeline items (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Final Phase 0 quick win (`docs/plans/MOMITO_CAREEROS_PLAN.md`, Track S). Schema-free,
+API-only. Branch `feat/careeros-phase-0`.
+
+**Change:** `recommendations.service.list()` previously emitted one generic "Prepare {company}
+{roleTitle}" card for every pipeline job regardless of stage. A new `JOB_STAGE_CARD` map gives
+each stage its own voice and ranking: `saved` → "Apply to {company} — {role}" (55), `applied` →
+"Follow up with {company} — {role}" (62), `oa` → "Prep the {company} online assessment" (85),
+`interview` → "Prep for your {company} interview" (88), `onsite` → "Prep for your {company}
+onsite — the sharp end of the pipeline" (92). An application deadline is treated as apply-by
+urgency (priority 90 + deadline reason) **only** while the job is still a `saved` lead — once
+applied the deadline is moot, so from then on the stage governs both copy and ranking. Unknown
+statuses fall back to the old generic copy at priority 60. No shared-type or schema change; the
+Today page renders the existing `title`/`reason` fields, so no web edit needed.
+
+**Checks:** 161 API tests green (3 new stage-aware job-card tests: onsite copy+ranking, saved
+deadline-vs-no-deadline, post-application deadline is not apply-by urgency). API typecheck + lint
+clean. Live round-trip against local Postgres confirmed the demo seed's `saved` NVIDIA (deadline)
+rendered "Apply to NVIDIA — GPU Software Engineer" at 90, and two `oa` jobs (Stripe, Datadog)
+rendered "Prep the {company} online assessment" at 85.
+
+**Known limitation (deferred, not a regression):** the recommendations query still fetches only
+the top 3 pipeline jobs ordered by deadline-asc/updatedAt-desc (`take: 3`), so a deadline-less
+late-stage job (Jane Street onsite, Meta interview) can be crowded out of Today by earlier-stage
+jobs that were updated more recently. The stage-aware *copy* is correct for whatever surfaces;
+making the right stage-aware cards reliably *surface* (interview countdown + first-class ranked
+career items) is MOM-140-full / MOM-142, deliberately out of the -lite copy scope.
+
+**Phase 0 complete.** Next: Phase 1 loop-closure (migration-gated, D-004 human-approval per
+migration): company context (MOM-120→121→122) · weakness spine (126→127→128) · outcome source
+(109→110→113) · grounded readiness + company rollup (129→130) · story gap map (131) · auto prep
+queue + recommendations wiring (141, 142).
+
 ## 2026-07-08 - CareerOS Phase 0: schema-free quick wins (MOM-101/102/135/108/134-lite) (CLAUDE)
 
 **Actor:** CLAUDE (implementer)
