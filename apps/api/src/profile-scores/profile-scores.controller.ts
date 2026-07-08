@@ -22,4 +22,9 @@ export class ProfileScoresController {
   get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.profileScores.get(id, user.id);
   }
+
+  @Post(':id/generate-tasks')
+  generateTasks(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.profileScores.generateTasks(id, user.id);
+  }
 }

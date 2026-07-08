@@ -431,6 +431,9 @@ export const profileScoresApi = {
 
   get: (id: string) =>
     request<ProfileScoreResponse>(`/profile-scores/${id}`),
+
+  generateTasks: (id: string) =>
+    request<{ created: number }>(`/profile-scores/${id}/generate-tasks`, { method: 'POST' }),
 };
 
 // Career OS

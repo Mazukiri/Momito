@@ -111,3 +111,70 @@ describe('ProfileScoresService', () => {
     await expect(service.get('score-1', 'user-2')).rejects.toEqual(new NotFoundException('Profile score not found'));
   });
 });
+
+describe('ProfileScoresService.generateTasks (MOM-135)', () => {
+  const scoreWithGaps = {
+    id: 'score-1',
+    userId: 'user-1',
+    targetLabel: 'Google L4 SWE',
+    skillsGaps: ['Missing required skill: Kubernetes', 'Missing required skill: Go', 'Missing required skill: gRPC'],
+    experienceGaps: ['Experience (1.0 years) below target (4 years)'],
+    projectGaps: ['No project evidence for: distributed systems'],
+    presentationGaps: ['No GitHub URL in profile'],
+  };
+
+  it('creates prioritized gap tasks and skips gaps already tracked, idempotently', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 6 });
+    const service = new ProfileScoresService({
+      profileScore: { findFirst: vi.fn().mockResolvedValue(scoreWithGaps) },
+      task: { findMany: vi.fn().mockResolvedValue([]), createMany },
+    } as never);
+
+    const result = await service.generateTasks('score-1', 'user-1');
+
+    expect(result).toEqual({ created: 6 });
+    const created = createMany.mock.calls[0][0].data;
+    // 3 skills (high) + 2 experience/project (medium) + 1 presentation (low), capped at 6
+    expect(created).toHaveLength(6);
+    expect(created[0]).toMatchObject({
+      userId: 'user-1',
+      type: 'study',
+      priority: 'high',
+      title: 'Résumé gap: Missing required skill: Kubernetes',
+      notes: 'From your "Google L4 SWE" profile score.',
+    });
+    expect(created.filter((task: { priority: string }) => task.priority === 'high')).toHaveLength(3);
+    expect(created.some((task: { priority: string }) => task.priority === 'low')).toBe(true);
+  });
+
+  it('does not recreate a gap task whose title already exists', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 5 });
+    const service = new ProfileScoresService({
+      profileScore: { findFirst: vi.fn().mockResolvedValue(scoreWithGaps) },
+      task: {
+        findMany: vi.fn().mockResolvedValue([{ title: 'Résumé gap: Missing required skill: Kubernetes' }]),
+        createMany,
+      },
+    } as never);
+
+    const result = await service.generateTasks('score-1', 'user-1');
+
+    expect(result).toEqual({ created: 5 });
+    const created = createMany.mock.calls[0][0].data;
+    expect(created.some((task: { title: string }) => task.title.includes('Kubernetes'))).toBe(false);
+  });
+
+  it('creates nothing when the score has no gaps', async () => {
+    const createMany = vi.fn();
+    const service = new ProfileScoresService({
+      profileScore: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'score-1', userId: 'user-1', targetLabel: 'x', skillsGaps: [], experienceGaps: [], projectGaps: [], presentationGaps: [] }),
+      },
+      task: { findMany: vi.fn(), createMany },
+    } as never);
+
+    const result = await service.generateTasks('score-1', 'user-1');
+    expect(result).toEqual({ created: 0 });
+    expect(createMany).not.toHaveBeenCalled();
+  });
+});

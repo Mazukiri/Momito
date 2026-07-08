@@ -95,6 +95,54 @@ export class ProfileScoresService {
     return this.serialize(score);
   }
 
+  // MOM-135: turn a score's static gap strings into executable Tasks (the same
+  // checklist→Task move as jobs.service.generatePrep), so a diagnosis becomes
+  // an action list. Idempotent by title — re-running skips gaps already tasked.
+  async generateTasks(id: string, userId: string): Promise<{ created: number }> {
+    const score = await this.prisma.profileScore.findFirst({ where: { id, userId } });
+    if (!score) throw new NotFoundException('Profile score not found');
+
+    const candidates = this.gapTasks(score);
+    if (candidates.length === 0) return { created: 0 };
+
+    const existing = await this.prisma.task.findMany({
+      where: { userId, title: { in: candidates.map((task) => task.title) } },
+      select: { title: true },
+    });
+    const existingTitles = new Set(existing.map((task) => task.title));
+    const toCreate = candidates.filter((task) => !existingTitles.has(task.title));
+    if (toCreate.length === 0) return { created: 0 };
+
+    const notes = `From your "${score.targetLabel}" profile score.`;
+    const result = await this.prisma.task.createMany({
+      data: toCreate.map((task) => ({
+        userId,
+        type: 'study',
+        status: 'todo',
+        priority: task.priority,
+        title: task.title,
+        notes,
+      })),
+    });
+    return { created: result.count };
+  }
+
+  // Gaps in priority order: skills (high) → experience/projects (medium) →
+  // presentation (low). Capped so one score can't flood the task list.
+  private gapTasks(score: ProfileScore): Array<{ title: string; priority: string }> {
+    const tasks: Array<{ title: string; priority: string }> = [];
+    const push = (gaps: Prisma.JsonValue, priority: string, take: number) => {
+      for (const gap of this.asStringArray(gaps).slice(0, take)) {
+        tasks.push({ title: `Résumé gap: ${gap}`.slice(0, 190), priority });
+      }
+    };
+    push(score.skillsGaps, 'high', 3);
+    push(score.experienceGaps, 'medium', 2);
+    push(score.projectGaps, 'medium', 2);
+    push(score.presentationGaps, 'low', 1);
+    return tasks.slice(0, 6);
+  }
+
   private computeScore(profile: Profile, template: RoleTemplate, jdSkills?: string[]): ScoreResult {
     const skills = this.asStringArray(profile.skills);
     const projects = this.asProjectArray(profile.projects);
