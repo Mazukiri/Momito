@@ -789,9 +789,9 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 - **MOM-125** Company targeting/fit shortlist (fit × company-readiness × sponsorship × region) · BLOCKED on MOM-121,130
 
 ### Track R — Target-Scoped Readiness & Weakness Engine · CareerOS Gate 1 *(spine; owner's first focus)*
-- **MOM-126** SPIKE-013 + DESIGN: `WeaknessSignal` (V2 §5.4) + `roleTrackId/area/companyId` tags on `AnswerAttempt`/`ReviewState` · NEEDS_SPIKE · CLAUDE
-- **MOM-127** Implement `WeaknessSignal` + `weakness_repair`/`mixed_interview` session types (reuse `selectWeaknessQuestions`) · BLOCKED on MOM-126 · *migration*
-- **MOM-128** Tag study signals on create + implement missing `job_prep` session branch · BLOCKED on MOM-127,122
+- **MOM-126** SPIKE-013 + DESIGN: `WeaknessSignal` (V2 §5.4) + `roleTrackId/area` tags on `AnswerAttempt` · **DESIGN DONE** (ADR-0011 finalized 2026-07-08) · CLAUDE. SPIKE-013 resolved: keep the derived weakness path + a table for event-sourced signals (debriefs) only; FSRS-per-area is a cheap bounded service-layer join (no `ReviewState` denorm); tags go on `AnswerAttempt` not `ReviewState`; `companyId` deferred (scoped via `jobApplicationId` until the MOM-122 FK lands). Additive migration → MOM-127 implementer PR awaits D-004 approval.
+- **MOM-127** Implement `WeaknessSignal` + `weakness_repair`/`mixed_interview` session types (reuse `selectWeaknessQuestions`) · **READY** (design in ADR-0011) · *migration, D-004 gate*
+- **MOM-128** Tag study signals on create + implement missing `job_prep` session branch (derive question set from `jobApplicationId`; no MOM-122 dependency after SPIKE-013) · BLOCKED on MOM-127
 - **MOM-129** **Ground readiness in FSRS retrievability + graded attempts; consolidate the two readiness engines into one** · BLOCKED on MOM-127 · *large*
 - **MOM-130** Company-scoped readiness rollup ("am I ready for Meta?" go/no-go) · BLOCKED on MOM-129,121
 - **MOM-131** Story coverage → specific-interview behavioral gap map · BLOCKED on MOM-110,121
@@ -838,7 +838,7 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 | SPIKE-010 | (CareerOS) `InterviewRound` + interview-date modeling + reminder idempotency; link to `InterviewSession`/`Task` **without repeating the PlanItem/Task dual-write anti-pattern** | MOM-109 |
 | SPIKE-011 | (CareerOS) Migrate `referralName` String → `Contact` rows without data loss | MOM-116 |
 | SPIKE-012 | (CareerOS) `JobApplication.company` free-text → `companyId` FK backfill by name-match with free-text fallback; structure `Company` focus-area weights vs `CAREER_ROLE_AREA_IDS`. **Highest-risk migration** (busiest table + seed) | MOM-120 |
-| SPIKE-013 | (CareerOS) `WeaknessSignal` schema + tagging `AnswerAttempt`/`ReviewState` with `roleTrackId/area/companyId`; is FSRS retrievability cheaply queryable to ground readiness per area? | MOM-126 |
+| SPIKE-013 | (CareerOS) `WeaknessSignal` schema + tagging attempts with `roleTrackId/area`; is FSRS retrievability cheaply queryable to ground readiness per area? · **RESOLVED 2026-07-08** (ADR-0011 §SPIKE-013 findings): table stores only event-sourced signals (derived path kept for practice struggles); FSRS-per-area = bounded indexed service-layer join, no `ReviewState` denorm; tags on `AnswerAttempt` not `ReviewState`; `companyId` deferred to post-MOM-122, `jobApplicationId` scoping for now. | MOM-126 |
 | SPIKE-014 | (CareerOS) `ResumeVersion` decoupling from `@unique Profile`; ATS-safe PDF-export library choice (new dep); AI tailoring cost/prompt/structured-output budget mirroring MOM-068 | MOM-132, MOM-136 |
 | SPIKE-015 | (CareerOS) Offer/comp normalization (multi-currency, equity vesting, visa-adjusted) — enough structure to compare without over-modeling | MOM-114 |
 

@@ -16,11 +16,20 @@ MOM-135 (gap→task, `b79cde5`) · MOM-108 + MOM-134-lite (paste-JD capture + AT
 `a5d6476`) · MOM-140-lite (stage-aware Today copy). All live-verified against local Postgres;
 161 API tests green. See LOG.MD 2026-07-08 entries.
 
-**Executing next — Phase 1 (close the study↔target loop, owner's #1):** the minimal scaffolding
-then the loop edges — company context (MOM-120→121→122) · weakness spine (MOM-126→127→128) ·
-outcome source (MOM-109→110→113) · one grounded FSRS readiness engine + company rollup
-(MOM-129→130) · story gap map (MOM-131) · auto prep queue + recommendations wiring (141, 142).
-**Gate:** bombing a round demonstrably reshapes tomorrow's prep; an "am I ready for Meta?" verdict
+**Executing now — Phase 1, LOOP-FIRST ordering (owner decision 2026-07-08):** close the loop scoped
+to a `JobApplication` first (low risk), prove Gate 1, then do the highest-risk company-FK migration
+(MOM-120→122) **last** in Phase 1. Sub-phases: **1A outcome edge** (MOM-126→127 weakness spine,
+MOM-109→110 InterviewRound, **MOM-113 debrief→WeaknessSignal = the loop-closing edge**, MOM-128
+tagging + job_prep, MOM-142 recommendations wiring) · **1B grounded verdict** (MOM-129 one FSRS
+engine, MOM-130 "am I ready for Meta?", MOM-131 story gap map) · **1C auto-prep + countdown**
+(MOM-141, MOM-140-full) · **1D company context, last** (MOM-120→121→122).
+
+**Active PR-sized task: MOM-127** — implement `WeaknessSignal` + `weakness_repair`/`mixed_interview`
+session types. **MOM-126 DESIGN is DONE** (ADR-0011 finalized; SPIKE-013 resolved). MOM-127 is the
+first migration; it needs the **D-004 human-approval gate** (additive: 1 table + 2 nullable columns +
+indexes, no backfill; rollback = drop). The owner's standing approval (below) covers this.
+
+**Gate 1:** bombing a round demonstrably reshapes tomorrow's prep; an "am I ready for Meta?" verdict
 exists. Each schema task = SPIKE + DESIGN-doc PR **then** human-approved implementer PR (D-004),
 tested on fresh + existing DB. Registries in play: SPIKE-009…015, ADR-0009…0012, D-011…D-015.
 

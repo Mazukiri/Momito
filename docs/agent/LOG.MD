@@ -1,5 +1,47 @@
 # LOG
 
+## 2026-07-08 - MOM-126 DESIGN + SPIKE-013 resolved: WeaknessSignal + FSRS-grounded readiness (CLAUDE)
+
+**Actor:** CLAUDE (planner — design only, no migration run per D-004)
+**Scope:** First PR of CareerOS Phase 1, loop-first ordering (owner decision 2026-07-08: close the
+study↔target loop scoped to a `JobApplication` first, defer the highest-risk company-FK migration to
+last). This is a **design-doc PR** — it finalizes ADR-0011 and resolves SPIKE-013; the migration and
+service code are MOM-127 and await the D-004 human-approval gate.
+
+**Grounding (read the real code first):** confirmed by direct read that readiness is computed by
+**two divergent keyword-matching engines** — `career.service.getReadiness` (binary has-evidence,
+weighted, never decays) and `missions.service.diagnose` (count-based `currentLevel` 0–3, persisted to
+`MissionCompetencyState`) — producing different "am I ready" numbers for the same user. `AnswerAttempt`
+carries `missTags`/`reflectionNote` but no `roleTrackId`/`area`, so nothing is target-scoped.
+`weaknesses.service` derives signals on-demand with no table and is fed **only** by practice attempts —
+interview outcomes feed nothing (the open loop). `ReviewState` holds the FSRS fields that a real
+readiness engine should lean on, indexed `[userId, due]`.
+
+**SPIKE-013 resolved (ADR-0011 §SPIKE-013 findings):**
+1. *Keep the derived weakness path; add a table only for what can't be re-derived* — interview
+   debriefs + manual signals + decay/repair-lifecycle/dismissal state. `summary()` merges derived ∪
+   stored. Keeps MOM-127 small; preserves the working engine.
+2. *FSRS-per-area is cheaply queryable without denormalizing `ReviewState`* — a user's review states
+   are a single indexed scan; area resolves via an in-memory `objectId → Question.areaTags` map. Keeps
+   `ReviewState` polymorphically pure (ADR-0002).
+3. *Target tags go on `AnswerAttempt`* (`roleTrackId` + `area`), not `ReviewState` — a standalone
+   attempt has no session to inherit from, and this also gives graded-attempt-per-area cheaply.
+   `companyId` deferred (no `Company` FK yet); `WeaknessSignal.jobApplicationId` carries target scope
+   until the MOM-122 FK lands — additive, no rework.
+
+**Finalized schema (in ADR-0011, for MOM-127):** new `weakness_signals` table (signalType/key/label,
+nullable roleTrackId/area/jobApplicationId, severity+occurrences with read-time exponential decay,
+source, status lifecycle); `roleTrackId`/`area` nullable columns on `answer_attempts`. Migration is
+**additive** (1 table + 2 nullable columns + indexes, no ALTER of data, no backfill); rollback = drop.
+
+**Files:** `docs/adr/0011-*.md` (PROPOSED → ACCEPTED design), `docs/agent/BACKLOG.md` (SPIKE-013
+RESOLVED, MOM-126 DESIGN DONE, MOM-127 READY, MOM-128 unblocked from MOM-122), `docs/agent/NEXT.MD`
+(Phase 1 loop-first sub-phases; active task = MOM-127). No app code, no schema.prisma change, no
+`prisma migrate` — that is MOM-127 under D-004.
+
+**Next:** MOM-127 implementer PR (the additive migration + WeaknessSignal service + new session types),
+then MOM-109 DESIGN (InterviewRound), then MOM-113 (debrief→WeaknessSignal — the loop-closing edge).
+
 ## 2026-07-08 - MOM-140-lite: stage-aware Today copy for pipeline items (CLAUDE)
 
 **Actor:** CLAUDE (implementer)
