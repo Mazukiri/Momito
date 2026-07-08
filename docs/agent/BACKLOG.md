@@ -770,7 +770,7 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 - **MOM-110** Implement `InterviewRound` + CRUD + timeline UI upgrade in place · **DONE** 2026-07-09 (migration `20260708173028_interview_rounds`, additive; CRUD scoped to owned job; `InterviewRoundsCard` on job detail with outcome badge + debrief editor emitting `areasWeak`/`missTags`; 179 API tests; live CRUD round-trip + Playwright screenshot verified) · *migration*
 - **MOM-111** Round-scoped prep task generation (extend `generatePrep`) · **READY** (MOM-110 landed the model)
 - **MOM-112** Interview-date reminder automation (reuse `ensureDeadlineReminder`) · **READY** (MOM-110 landed the model)
-- **MOM-113** Debrief → `WeaknessSignal`/`LearningEvidence` emission — **the loop-closing edge** · **READY** (MOM-110 + MOM-127 both landed; hook into `interview-rounds.service.update()`)
+- **MOM-113** Debrief → `WeaknessSignal`/`LearningEvidence` emission — **the loop-closing edge** · **DONE** 2026-07-09 (no schema; `emitDebriefSignals` in `interview-rounds.service.update()` fires area+reason signals via MOM-127's `recordSignal` + writes one `interview_debrief` `LearningEvidence` row per round as the OUTCOME record and idempotency ledger; per-round idempotent via `metadata.emittedKeys`, best-effort. 182 API tests; live-verified: bombed Meta round → 3 job-scoped open signals, re-save doesn't inflate.)
 - **MOM-114** SPIKE-015 + structured `Offer` model (base/equity/bonus/location/visa/deadline) · NEEDS_SPIKE · CLAUDE · *migration*
 - **MOM-115** Offer comparison decision view (normalized, visa-adjusted) · BLOCKED on MOM-114
 

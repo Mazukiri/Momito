@@ -1,5 +1,49 @@
 # LOG
 
+## 2026-07-09 - MOM-113: debrief → WeaknessSignal + LearningEvidence — THE LOOP-CLOSING EDGE (CLAUDE)
+
+**Actor:** CLAUDE (implementer). The single most important PR of Phase 1: the edge that makes an
+interview OUTCOME reshape future PREP. No schema change (uses the MOM-127 `weakness_signals` store +
+the existing `learning_evidence` ledger). Branch `feat/careeros-phase-0`. **CareerOS Gate 1 core
+behavior now demonstrably works.**
+
+**The edge:** `InterviewRoundsService.update()` now, *after* the write and *only* when the update
+carried debrief content (`dto.debrief`/`areasWeak`/`missTags` defined — i.e. the "Save debrief"
+action, not a bare outcome-toggle), calls a new private `emitDebriefSignals(round, userId)`:
+- For each `areasWeak` entry → `weaknesses.recordSignal({signalType:'area', key:area, source:'debrief',
+  area, jobApplicationId})` labelled e.g. *"System design — weak at Meta"*.
+- For each valid `missTags` entry → a `signalType:'reason'` signal labelled e.g. *"Ran out of time —
+  System design at Meta"*.
+- Writes/updates one `LearningEvidence` row of type `interview_debrief` per round — the OUTCOME record
+  **and** the idempotency ledger.
+
+**Idempotency (the subtle part):** the weakness store *accrues* severity per event, so naive
+re-emission on every save would inflate a weakness every time the user edits a typo. Each round keeps
+exactly one `interview_debrief` evidence row whose `metadata.emittedKeys` records which signal keys it
+has already fired; on re-save only *new* keys emit. This makes a round's contribution idempotent while
+still letting two *different* rounds on the same job both accrue onto the shared job-scoped signal
+(correct cross-round behavior). Removing an area does not retract its earlier signal — read-time decay
+(21-day half-life, MOM-127) handles that. Emission is best-effort (wrapped; a failure logs a warning
+and never fails the user's debrief save). Wired via `WeaknessesModule` import into
+`InterviewRoundsModule` (no circular dep — Weaknesses depends only on Prisma).
+
+**Checks:** `pnpm --filter @momito/api lint/typecheck/test` green — **182 API tests** (+3 new edge specs:
+fresh emit fires area+reason signals and writes the ledger; identical re-save emits nothing and updates
+the ledger; a re-save that adds an area emits only the delta). **Live round-trip** against local Postgres
+on the Meta demo job (re-saving its bombed system_design round, which pre-dated the edge): baseline 0
+open signals → PATCH #1 → 3 open signals (`area:system_design` + `reason:time_pressure` +
+`reason:concept_gap`, all `src=debrief`, scoped to the Meta job, sev 1.00/occ 1) → PATCH #2 identical →
+still 3, severities/occurrences unchanged (idempotent) → PATCH #3 adding `behavioral` → 4 (only the delta
+fired) → `GET /learning/ledger` shows exactly **one** `interview_debrief` row despite 3 PATCHes. Test-only
+`behavioral` reverted + its signal resolved; demo left in an accurate 3-signal state.
+
+**Loop status:** bombing a round now provably lands a target-scoped weakness that the weakness engine
+holds and decays. Surfacing these on Today (MOM-142) and letting them drive weakness-repair /
+company-scoped readiness (MOM-129/130) are the remaining Gate-1 wires.
+
+**Next:** MOM-128 (tag `AnswerAttempt.roleTrackId/area` on create + the missing `job_prep` session
+branch), then MOM-142 (rank openSignals on Today), then MOM-129 (one FSRS-grounded readiness engine).
+
 ## 2026-07-09 - MOM-110: InterviewRound model + CRUD + job-detail timeline UI (CLAUDE, migration)
 
 **Actor:** CLAUDE (implementer). Third PR of Phase 1, implementing the ADR-0013 design under the

@@ -28,15 +28,19 @@ engine, MOM-130 "am I ready for Meta?", MOM-131 story gap map) · **1C auto-prep
 (ADR-0011, SPIKE-013); **MOM-127** (migration `weakness_signals` — the WeaknessSignal store + decay +
 `mixed_interview`; live-verified); **MOM-109 DESIGN** (ADR-0013 / D-016, SPIKE-010 — InterviewRound);
 **MOM-110** (migration `interview_rounds` — first-class InterviewRound CRUD + `InterviewRoundsCard`
-timeline UI with debrief editor; 179 API tests, live CRUD + Playwright verified).
+timeline UI with debrief editor; 179 API tests, live CRUD + Playwright verified); **MOM-113 — THE
+LOOP-CLOSING EDGE** (debrief → area+reason `WeaknessSignal`s + one `interview_debrief` `LearningEvidence`
+row per round, per-round idempotent; 182 API tests, live-verified: a bombed Meta round now lands 3
+job-scoped open weakness signals).
 
-**Active PR-sized task: MOM-113** — debrief → `WeaknessSignal`/`LearningEvidence` emission. **This is
-the loop-closing edge.** Hook into `interview-rounds.service.update()`: when a round's debrief carries
-`areasWeak`/`missTags` (or outcome flips to failed/mixed), call MOM-127's `weaknesses.recordSignal`
-(source `debrief`, tagged `jobApplicationId` + area) and emit a `LearningEvidence` row so the outcome
-reshapes target-scoped readiness + FSRS weakness repair. No new table (uses the MOM-127 store). After
-it: MOM-128 (tag attempts + `job_prep` branch), MOM-142 (surface openSignals on Today), MOM-129
-(one grounded readiness engine).
+**Active PR-sized task: MOM-128** — tag study signals on create + implement the missing `job_prep`
+session branch. Two parts: (1) populate `AnswerAttempt.roleTrackId`/`area` when an attempt is created
+inside a job- or role-scoped session so study signals carry the target dimension the readiness rollup
+(MOM-130) needs; (2) implement the `job_prep` session type in `sessions.service` — derive the question
+set from the session's `jobApplicationId` (that job's company question tags + this target's open
+weakness signals). No schema change (columns landed in MOM-127). After it: MOM-142 (rank openSignals as
+first-class Today items), then MOM-129 (one FSRS-grounded readiness engine) + MOM-130 ("am I ready for
+Meta?").
 
 **Gate 1:** bombing a round demonstrably reshapes tomorrow's prep; an "am I ready for Meta?" verdict
 exists. Each schema task = SPIKE + DESIGN-doc PR **then** human-approved implementer PR (D-004),
