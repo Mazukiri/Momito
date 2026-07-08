@@ -40,4 +40,14 @@ export class InterviewRoundsController {
   ) {
     return this.rounds.remove(jobId, roundId, user.id);
   }
+
+  // MOM-111: generate round-scoped prep tasks.
+  @Post(':roundId/prep')
+  generatePrep(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @Param('roundId', ParseUUIDPipe) roundId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.rounds.generatePrep(jobId, roundId, user.id);
+  }
 }

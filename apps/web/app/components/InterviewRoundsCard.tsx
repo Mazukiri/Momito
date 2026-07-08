@@ -40,6 +40,7 @@ export function InterviewRoundsCard({ jobId }: { jobId: string }) {
   const [scheduledAt, setScheduledAt] = useState('');
   const [interviewer, setInterviewer] = useState('');
   const [openDebrief, setOpenDebrief] = useState<string | null>(null);
+  const [prepMessage, setPrepMessage] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -93,6 +94,16 @@ export function InterviewRoundsCard({ jobId }: { jobId: string }) {
     }
   }
 
+  async function generatePrep(id: string) {
+    setBusy(true);
+    try {
+      const { created } = await interviewRoundsApi.generatePrep(jobId, id);
+      setPrepMessage(created > 0 ? `Added ${created} prep task${created === 1 ? '' : 's'} — see the calendar.` : 'Prep tasks already exist for this round.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between">
@@ -118,6 +129,10 @@ export function InterviewRoundsCard({ jobId }: { jobId: string }) {
             Add round
           </button>
         </form>
+      )}
+
+      {prepMessage && (
+        <p className="mb-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">{prepMessage}</p>
       )}
 
       {loading ? (
@@ -152,6 +167,9 @@ export function InterviewRoundsCard({ jobId }: { jobId: string }) {
                     className="text-xs font-medium text-indigo-600"
                   >
                     {openDebrief === round.id ? 'Close' : 'Debrief'}
+                  </button>
+                  <button onClick={() => generatePrep(round.id)} disabled={busy} className="text-xs font-medium text-indigo-600 disabled:opacity-50">
+                    Prep
                   </button>
                   <button onClick={() => removeRound(round.id)} disabled={busy} className="text-xs font-medium text-rose-600 disabled:opacity-50">
                     Delete

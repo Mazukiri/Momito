@@ -447,6 +447,7 @@ model Task {
   area                  String?
   topicId               String?            @map("topic_id") @db.Uuid
   jobApplicationId      String?            @map("job_application_id") @db.Uuid
+  interviewRoundId      String?            @map("interview_round_id") @db.Uuid
   missionId             String?            @map("mission_id") @db.Uuid
   plannedFor            DateTime?          @map("planned_for") @db.Timestamptz(6)
   dueDate               DateTime?          @map("due_date") @db.Timestamptz(6)
@@ -459,6 +460,7 @@ model Task {
   user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   topic                 Topic?             @relation(fields: [topicId], references: [id], onDelete: SetNull)
   jobApplication        JobApplication?    @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+  interviewRound        InterviewRound?    @relation(fields: [interviewRoundId], references: [id], onDelete: SetNull)
   mission               Mission?           @relation(fields: [missionId], references: [id], onDelete: SetNull)
   reminders             Reminder[]
   learningEvidence      LearningEvidence[]
@@ -472,6 +474,7 @@ model Task {
   @@index([dueDate])
   @@index([plannedFor])
   @@index([missionId])
+  @@index([interviewRoundId])
   @@map("tasks")
 }
 
@@ -856,6 +859,7 @@ model InterviewRound {
   updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobApplication   JobApplication @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+  tasks            Task[]
 
   @@index([userId])
   @@index([jobApplicationId])

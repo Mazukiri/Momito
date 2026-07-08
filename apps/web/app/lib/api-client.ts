@@ -543,6 +543,9 @@ export const interviewRoundsApi = {
 
   remove: (jobId: string, roundId: string) =>
     request<{ deleted: boolean }>(`/jobs/${jobId}/rounds/${roundId}`, { method: 'DELETE' }),
+
+  generatePrep: (jobId: string, roundId: string) =>
+    request<{ created: number }>(`/jobs/${jobId}/rounds/${roundId}/prep`, { method: 'POST' }),
 };
 
 export const tasksApi = {

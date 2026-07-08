@@ -1,5 +1,38 @@
 # LOG
 
+## 2026-07-09 - MOM-111: round-scoped prep task generation + Task.interviewRoundId (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Additive migration under the D-004 gate (blanket approval). Branch
+`feat/careeros-phase-0`. Delivers SPIKE-010's planned Task↔round back-ref and the round-typed prep it
+enables — the input MOM-141 (auto prep queue) will fire on an approaching date.
+
+**Schema (additive migration `20260708202012_task_interview_round`, rollback = drop):** `tasks` gains a
+nullable `interview_round_id` UUID + index + FK to `interview_rounds` (`ON DELETE SET NULL` — deleting a
+round detaches its tasks, doesn't delete them). Back-relation `tasks Task[]` on `InterviewRound`. No
+backfill; purely additive on the busy `tasks` table.
+
+**Round-typed prep (`InterviewRoundsService.generatePrep(jobId, roundId, userId)`, route `POST
+/jobs/:jobId/rounds/:roundId/prep`):** a new `ROUND_TYPE_FOCUS` map says which competency areas each round
+type tests (system_design → `[system_design]`, onsite → `[dsa, system_design, behavioral]`,
+recruiter_screen → `[behavioral, profile]`, …). Prep pulls the role-track checklist filtered to those
+areas (falls back to the full list if the filter is empty — never dead-ends), caps at 5, and creates
+`Task`s back-referenced to the round (`interviewRoundId`), staggered to come due *before* the round's
+`scheduledAt` (or the job deadline, or a week out). Reuses the existing `generatePrep` checklist→Task
+pattern.
+
+**Web:** `interviewRoundsApi.generatePrep` + a per-round **Prep** button in `InterviewRoundsCard` with a
+confirmation toast ("Added N prep tasks — see the calendar.").
+
+**Checks:** `pnpm -r lint/typecheck/test` green (api + web + shared) — **202 API tests** (+2: system_design
+round creates system_design-scoped tasks back-referenced + due before the round; not-found round throws).
+**Live**: `POST /jobs/<Meta>/rounds/<system_design>/prep` → `{created:1}`; a direct DB read confirms the
+task carries `interviewRoundId`, `area=system_design`, due 2026-07-05 (one day before the 07-06 round).
+Migration applied to the running DB; client regenerated after killing the API node process (Windows DLL
+lock).
+
+**Next:** MOM-112 (interview-date reminder automation — reuse `ensureDeadlineReminder`'s sentinel upsert,
+keyed per round), then MOM-141 (auto-assemble the round-scoped prep queue + surface the countdown on Today).
+
 ## 2026-07-09 - MOM-130: "am I ready for <company>?" job readiness verdict (CLAUDE)
 
 **Actor:** CLAUDE (implementer). No schema change. Branch `feat/careeros-phase-0`. The Gate-1 verdict:

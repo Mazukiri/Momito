@@ -44,15 +44,23 @@ live-verified: bombed Meta round → verdict 2/100 not_ready). **★ CareerOS Ga
 to end (debrief → stored weakness → Today card + weak-area-first job_prep + lowered "ready for Meta?"
 verdict).
 
-**Active PR-sized task: MOM-111** — round-scoped prep task generation. Extend `jobs.service.generatePrep`
-(or add a sibling) to generate `Task`s scoped to an `InterviewRound`: derive the checklist from the round's
-`roundType` (system_design round → design tasks; behavioral → story tasks) staggered before its
-`scheduledAt`, and back-ref the `InterviewRound` via a nullable `interviewRoundId` on `Task`
-(SPIKE-010 said Task gets this FK here — **this is a migration**, additive, D-004 gate; blanket approval
-stands). Reuse the existing checklist→Task pattern. Then **MOM-112** (interview-date reminder automation —
-reuse `ensureDeadlineReminder`'s sentinel-upsert, keyed per round), both small and unblocking **MOM-141**
-(auto-assembled prep queue on an approaching date → the last Gate-1 polish). Then **MOM-131** (story gap
-map — a role-track-scoped version is doable now; its MOM-121 dependency only enriches it).
+**Shipped since:** **MOM-111** — additive migration `task_interview_round` (nullable `Task.interviewRoundId`
+FK); `generatePrep(jobId, roundId)` filters the role checklist by a `ROUND_TYPE_FOCUS` map, staggers due
+dates before the round, back-refs the round; per-round **Prep** button. Live + DB verified.
+
+**Active PR-sized task: MOM-112** — interview-date reminder automation. Reuse `jobs.service`'s
+`ensureDeadlineReminder` sentinel-upsert pattern (idempotent title/type marker so re-runs don't duplicate),
+but keyed per `InterviewRound`: when a round has a `scheduledAt`, upsert a `Reminder` due a sensible lead
+time before it (e.g. 1 day prior) so it lands on Today/calendar. Fire it from round create/update (when
+`scheduledAt` is set/changed) and/or the existing reminder scheduler. Small, likely **no schema** (reuse
+the `Reminder` model + its existing `interviewRound`? — check: Reminder currently links task/job, so key
+the sentinel by jobApplicationId + a round marker in the title, or add a nullable `interviewRoundId` to
+`Reminder` if cleaner — a tiny additive migration). Then **MOM-141** (auto-assemble the round-scoped prep
+queue + interview countdown on Today — depends on 111 ✓, 128 ✓, 131) and **MOM-131** (story gap map;
+role-scoped version doable now).
+
+**Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
+first; keep free-text `company` fallback; name-match backfill).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST:** the highest-risk migration (busiest
 table + seed). Do SPIKE-012 + the DESIGN-doc PR before the implementer PR; keep the free-text `company`

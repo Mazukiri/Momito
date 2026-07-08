@@ -224,6 +224,41 @@ describe('InterviewRoundsService.update debrief → weakness signals', () => {
   });
 });
 
+describe('InterviewRoundsService.generatePrep (MOM-111)', () => {
+  const jobRow = { id: 'job-1', company: 'Meta', roleTitle: 'E5 SWE', roleTrackId: 'big-tech-swe', deadline: null };
+
+  it('creates round-typed prep tasks scoped to the round', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 1 });
+    const prisma = makePrisma({
+      jobApplication: { findFirst: vi.fn().mockResolvedValue(jobRow) },
+      interviewRound: { findFirst: vi.fn().mockResolvedValue(roundRow({ roundType: 'system_design', scheduledAt: new Date('2026-08-01T00:00:00.000Z') })) },
+      task: { createMany },
+    });
+    const service = makeService(prisma);
+
+    const result = await service.generatePrep('job-1', 'round-1', 'user-1');
+
+    expect(result).toEqual({ created: 1 });
+    const data = (createMany as ReturnType<typeof vi.fn>).mock.calls[0][0].data;
+    expect(data.length).toBeGreaterThan(0);
+    for (const task of data) {
+      expect(task.interviewRoundId).toBe('round-1');
+      expect(task.jobApplicationId).toBe('job-1');
+      // system_design round focuses prep on the system_design area only.
+      expect(task.area).toBe('system_design');
+      expect(task.dueDate.getTime()).toBeLessThan(new Date('2026-08-01T00:00:00.000Z').getTime());
+    }
+  });
+
+  it('throws when the round is not the job\'s', async () => {
+    const prisma = makePrisma({
+      jobApplication: { findFirst: vi.fn().mockResolvedValue(jobRow) },
+      interviewRound: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+    await expect(makeService(prisma).generatePrep('job-1', 'round-x', 'user-1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
 describe('InterviewRoundsService.remove', () => {
   it('deletes an owned round', async () => {
     const prisma = makePrisma({ interviewRound: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) } });

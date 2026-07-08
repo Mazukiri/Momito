@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, type InterviewRound } from '@prisma/client';
 import {
+  CAREER_ROLE_TRACKS,
+  CareerRoleTrackId,
   INTERVIEW_ROUND_TYPE_LABELS,
   InterviewRoundOutcome,
   InterviewRoundResponse,
@@ -18,6 +20,25 @@ import { UpdateInterviewRoundDto } from './dto/update-interview-round.dto';
 // signals the round has already fired, so re-saving the same debrief does not
 // re-accrue severity.
 const DEBRIEF_EVIDENCE_TYPE = 'interview_debrief';
+
+// MOM-111: which competency areas each round type actually tests, so prep is
+// scoped to the round ("system_design onsite" → design tasks, not a generic
+// checklist). An empty list means "use the whole role-track checklist".
+const ROUND_TYPE_FOCUS: Record<string, string[]> = {
+  recruiter_screen: ['behavioral', 'profile'],
+  phone_screen: ['dsa', 'cs_fundamentals'],
+  online_assessment: ['dsa'],
+  technical: ['dsa', 'cs_fundamentals'],
+  coding: ['dsa'],
+  system_design: ['system_design'],
+  behavioral: ['behavioral'],
+  hiring_manager: ['behavioral', 'projects'],
+  onsite: ['dsa', 'system_design', 'behavioral'],
+  final: ['behavioral'],
+  other: [],
+};
+
+const MAX_PREP_TASKS = 5;
 
 const humanizeArea = (id: string): string => {
   const words = id.replace(/_/g, ' ');
@@ -98,6 +119,54 @@ export class InterviewRoundsService {
     const result = await this.prisma.interviewRound.deleteMany({ where: { id: roundId, jobApplicationId: jobId, userId } });
     if (result.count === 0) throw new NotFoundException('Interview round not found');
     return { deleted: true };
+  }
+
+  // MOM-111: generate prep Tasks scoped to a specific round — the role-track
+  // checklist filtered to the areas that round type tests, staggered to come due
+  // before the round's scheduledAt, and back-referenced to the round so the
+  // auto-assembled prep queue (MOM-141) and Today can group them.
+  async generatePrep(jobId: string, roundId: string, userId: string): Promise<{ created: number }> {
+    const job = await this.prisma.jobApplication.findFirst({
+      where: { id: jobId, userId },
+      select: { id: true, company: true, roleTitle: true, roleTrackId: true, deadline: true },
+    });
+    if (!job) throw new NotFoundException('Job application not found');
+    const round = await this.prisma.interviewRound.findFirst({
+      where: { id: roundId, jobApplicationId: jobId, userId },
+    });
+    if (!round) throw new NotFoundException('Interview round not found');
+
+    const roleTrackId = (job.roleTrackId as CareerRoleTrackId | null) ?? 'big-tech-swe';
+    const checklist = CAREER_ROLE_TRACKS[roleTrackId].checklist;
+    const focus = ROUND_TYPE_FOCUS[round.roundType] ?? [];
+    const focused = focus.length > 0 ? checklist.filter((item) => focus.includes(item.area)) : checklist;
+    // Never dead-end: if the focus filter matched nothing, fall back to the full list.
+    const items = (focused.length > 0 ? focused : checklist).slice(0, MAX_PREP_TASKS);
+
+    const roundLabel = INTERVIEW_ROUND_TYPE_LABELS[round.roundType as InterviewRoundType] ?? round.roundType;
+    // Anchor due dates before the round (or its job deadline, or a week out).
+    const dueBase = round.scheduledAt ?? job.deadline ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const taskData = items.map((item, index) => ({
+      userId,
+      jobApplicationId: jobId,
+      interviewRoundId: roundId,
+      roleTrackId: job.roleTrackId,
+      area: item.area,
+      type: item.evidenceType === 'project' ? 'project' : 'practice',
+      priority: index < 2 ? 'high' : 'medium',
+      title: `Prep ${item.title} for ${job.company} ${roundLabel}`,
+      notes: `${job.roleTitle} — ${roundLabel} round: ${item.description}`,
+      // Stagger: the first task is due earliest, the last closest to the round.
+      dueDate: this.offsetDays(dueBase, -Math.max(1, items.length - index)),
+    }));
+
+    const created = await this.prisma.task.createMany({ data: taskData, skipDuplicates: true });
+    return { created: created.count };
+  }
+
+  private offsetDays(base: Date, days: number): Date {
+    return new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
   }
 
   // Convert the round's current debrief into target-scoped weakness signals and a
