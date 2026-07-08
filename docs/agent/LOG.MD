@@ -1,5 +1,44 @@
 # LOG
 
+## 2026-07-09 - MOM-110: InterviewRound model + CRUD + job-detail timeline UI (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Third PR of Phase 1, implementing the ADR-0013 design under the
+D-004 human-approval gate (standing blanket approval for Phase 1 migrations). Branch
+`feat/careeros-phase-0`. This lands the **OUTCOME source** the loop needs: a first-class interview
+round with a debrief that carries `areasWeak`/`missTags` — the raw material MOM-113 will convert
+into `WeaknessSignal`s.
+
+**Schema (additive migration `20260708173028_interview_rounds`):** new `interview_rounds` table only —
+no ALTER on existing tables, so rollback = drop. Columns: `roundType`, `sequence`, `scheduledAt?`,
+`durationMinutes?`, `interviewer?`, `outcome` (default `pending`), `debrief?`, `areasWeak text[]`,
+`missTags text[]`, timestamps. FKs to `User` and `JobApplication` (both `onDelete: Cascade`); indexed
+on `userId`, `jobApplicationId`, `scheduledAt`. Per ADR-0013/SPIKE-010 the round owns no prep/practice
+rows — Task/Session will back-ref it via a nullable `interviewRoundId` in MOM-111/141 (no dual-write).
+
+**API:** new `interview-rounds` module — `InterviewRoundsService` (`listForJob`/`create`/`update`/
+`remove`, all ownership-scoped through a private `ensureJob` findFirst; `update`/`remove` via
+`updateMany`/`deleteMany` on `{id, jobApplicationId, userId}` → `NotFoundException` on count 0). Nested
+controller `jobs/:jobId/rounds` with `ParseUUIDPipe`. DTOs validate `roundType`/`outcome` against the
+shared enums, `areasWeak` against `CAREER_ROLE_AREA_IDS`, `missTags` against `MISS_TAG_REASONS`. A
+comment marks where MOM-113 hooks the debrief→`WeaknessSignal` edge in `update()`.
+
+**Shared:** `INTERVIEW_ROUND_TYPES` (+labels), `INTERVIEW_ROUND_OUTCOMES`, `InterviewRoundResponse`,
+`Create/UpdateInterviewRoundRequest`.
+
+**Web:** `interviewRoundsApi` client + new `InterviewRoundsCard` on the job detail page (between JD
+Notes and Timeline): add-round form (type/date/interviewer), per-round inline outcome `<select>` with a
+color-coded badge, and a `DebriefEditor` (free-text + area chips + miss-tag chips → single PATCH).
+
+**Checks:** `pnpm -r lint/typecheck/test` green — **179 API tests** (+8 new interview-rounds specs) +
+24 web. Live CRUD round-trip against local Postgres on the Meta demo job: create → PATCH debrief
+(outcome `failed`, areasWeak `[system_design]`, missTags `[time_pressure, concept_gap]`) → list → delete
+→ empty, all correct. Playwright screenshot confirms the card renders both a failed round (badge +
+debrief + chips) and an upcoming pending round. Migration applied to the running DB; client regenerated
+after killing the `nest start` node process to avoid the Windows Prisma DLL lock.
+
+**Next:** MOM-113 (debrief → `recordSignal` + `LearningEvidence` — the loop-closing edge), then MOM-128
+(tag attempts + `job_prep` branch), MOM-129 (grounded readiness).
+
 ## 2026-07-09 - MOM-109 DESIGN + SPIKE-010 resolved: InterviewRound + the outcome→weakness edge (CLAUDE)
 
 **Actor:** CLAUDE (planner — design only, no migration). Second design PR of Phase 1. Produces

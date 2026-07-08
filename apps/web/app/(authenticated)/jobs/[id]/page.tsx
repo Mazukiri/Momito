@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { JOB_APPLICATION_STATUSES, type JobApplicationStatus } from '@momito/shared';
 import { jobsApi, missionsApi, remindersApi } from '../../../lib/api-client';
 import { Badge, Card, ErrorBanner, Spinner } from '../../../components/ui';
+import { InterviewRoundsCard } from '../../../components/InterviewRoundsCard';
 
 type JobDetail = Awaited<ReturnType<typeof jobsApi.get>>;
 
@@ -151,6 +152,8 @@ export default function JobDetailPage() {
             <p className="whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-400">{job.jdText || job.notes || 'No JD text saved yet.'}</p>
             {job.url && <a href={job.url} target="_blank" className="mt-4 inline-block text-sm font-medium text-indigo-600">Open posting</a>}
           </Card>
+
+          <InterviewRoundsCard jobId={params.id} />
 
           <Card>
             <h2 className="mb-3 font-semibold text-zinc-800 dark:text-zinc-100">Timeline</h2>

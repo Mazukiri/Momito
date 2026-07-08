@@ -49,6 +49,7 @@ model User {
   aiUsage        AiUsage[]
   pushSubscriptions PushSubscription[]
   weaknessSignals WeaknessSignal[]
+  interviewRounds InterviewRound[]
 
   @@map("users")
 }
@@ -407,6 +408,7 @@ model JobApplication {
   sessions          InterviewSession[]
   learningEvidence  LearningEvidence[]
   weaknessSignals   WeaknessSignal[]
+  interviewRounds   InterviewRound[]
 
   @@index([userId])
   @@index([status])
@@ -828,4 +830,35 @@ model WeaknessSignal {
   @@index([jobApplicationId])
   @@index([roleTrackId, area])
   @@map("weakness_signals")
+}
+
+// MOM-109/110 (ADR-0013 / D-016, Track N): a first-class interview round on a
+// JobApplication, replacing the JobEvent-as-interview hack. Carries the schedule
+// (drives reminders/countdown/auto-prep) and the outcome+debrief that MOM-113
+// turns into WeaknessSignals — the edge that closes the CareerOS loop. Owns no
+// prep/practice rows: a round's prep is an ordinary Task and its mock an ordinary
+// InterviewSession, attributed by a nullable interviewRoundId back-ref added when
+// needed (MOM-111/141) — never a copy (avoids the PlanItem/Task dual-write).
+model InterviewRound {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  jobApplicationId String    @map("job_application_id") @db.Uuid
+  roundType        String    @map("round_type")   // INTERVIEW_ROUND_TYPES
+  sequence         Int       @default(0)
+  scheduledAt      DateTime? @map("scheduled_at") @db.Timestamptz(6)
+  durationMinutes  Int?      @map("duration_minutes")
+  interviewer      String?
+  outcome          String    @default("pending")  // INTERVIEW_ROUND_OUTCOMES
+  debrief          String?
+  areasWeak        String[]  @default([]) @map("areas_weak")  // CAREER_ROLE_AREA_IDS
+  missTags         String[]  @default([]) @map("miss_tags")   // MISS_TAG_REASONS
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobApplication   JobApplication @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([jobApplicationId])
+  @@index([scheduledAt])
+  @@map("interview_rounds")
 }

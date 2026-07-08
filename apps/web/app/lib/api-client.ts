@@ -450,12 +450,15 @@ export const profileScoresApi = {
 import type {
   CareerGoalResponse,
   CareerRoleTrack,
+  CreateInterviewRoundRequest,
   CreateJobApplicationRequest,
   CreateMissionRequest,
   CreateTaskRequest,
+  InterviewRoundResponse,
   JobApplicationResponse,
   JobEventResponse,
   JobFunnelResponse,
+  UpdateInterviewRoundRequest,
   LearningEvidenceResponse,
   LearningHighlightResponse,
   MissionCheckInResponse,
@@ -521,6 +524,21 @@ export const jobsApi = {
 
   scoreProfile: (id: string) =>
     request<ProfileScoreResponse>(`/jobs/${id}/score-profile`, { method: 'POST' }),
+};
+
+// MOM-110: interview rounds nested under a job.
+export const interviewRoundsApi = {
+  list: (jobId: string) =>
+    request<InterviewRoundResponse[]>(`/jobs/${jobId}/rounds`),
+
+  create: (jobId: string, body: CreateInterviewRoundRequest) =>
+    request<InterviewRoundResponse>(`/jobs/${jobId}/rounds`, { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (jobId: string, roundId: string, body: UpdateInterviewRoundRequest) =>
+    request<InterviewRoundResponse>(`/jobs/${jobId}/rounds/${roundId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  remove: (jobId: string, roundId: string) =>
+    request<{ deleted: boolean }>(`/jobs/${jobId}/rounds/${roundId}`, { method: 'DELETE' }),
 };
 
 export const tasksApi = {

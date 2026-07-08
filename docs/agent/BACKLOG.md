@@ -767,10 +767,10 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 
 ### Track N — Interview Rounds, Debriefs & Offers · CareerOS Gate 3
 - **MOM-109** SPIKE-010 + DESIGN: `InterviewRound` (roundType, interviewer, scheduledAt, outcome, debrief) · **DESIGN DONE** (ADR-0013 / D-016, 2026-07-09) · CLAUDE. SPIKE-010 resolved: round owns no prep/practice — attaches via a nullable `interviewRoundId` back-ref on `Task`/`InterviewSession` (added in MOM-111/141), no dual-write; reminders keyed per-round; coexists with `JobEvent` (no backfill); outcome independent of pipeline status. Additive migration → MOM-110 awaits D-004.
-- **MOM-110** Implement `InterviewRound` + CRUD + timeline UI upgrade in place · **READY** (design in ADR-0013) · *migration, D-004 gate*
-- **MOM-111** Round-scoped prep task generation (extend `generatePrep`) · BLOCKED on MOM-110
-- **MOM-112** Interview-date reminder automation (reuse `ensureDeadlineReminder`) · BLOCKED on MOM-110
-- **MOM-113** Debrief → `WeaknessSignal`/`LearningEvidence` emission — **the loop-closing edge** · BLOCKED on MOM-110,127
+- **MOM-110** Implement `InterviewRound` + CRUD + timeline UI upgrade in place · **DONE** 2026-07-09 (migration `20260708173028_interview_rounds`, additive; CRUD scoped to owned job; `InterviewRoundsCard` on job detail with outcome badge + debrief editor emitting `areasWeak`/`missTags`; 179 API tests; live CRUD round-trip + Playwright screenshot verified) · *migration*
+- **MOM-111** Round-scoped prep task generation (extend `generatePrep`) · **READY** (MOM-110 landed the model)
+- **MOM-112** Interview-date reminder automation (reuse `ensureDeadlineReminder`) · **READY** (MOM-110 landed the model)
+- **MOM-113** Debrief → `WeaknessSignal`/`LearningEvidence` emission — **the loop-closing edge** · **READY** (MOM-110 + MOM-127 both landed; hook into `interview-rounds.service.update()`)
 - **MOM-114** SPIKE-015 + structured `Offer` model (base/equity/bonus/location/visa/deadline) · NEEDS_SPIKE · CLAUDE · *migration*
 - **MOM-115** Offer comparison decision view (normalized, visa-adjusted) · BLOCKED on MOM-114
 

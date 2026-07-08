@@ -932,6 +932,78 @@ export interface JobEventResponse {
   createdAt: string;
 }
 
+// MOM-109/110 (CareerOS Track N, ADR-0013): a first-class interview round.
+// Replaces the JobEvent-as-interview hack — carries the schedule and the
+// outcome+debrief that MOM-113 turns into WeaknessSignals (the loop-closing edge).
+export const INTERVIEW_ROUND_TYPES = [
+  'recruiter_screen',
+  'phone_screen',
+  'online_assessment',
+  'technical',
+  'coding',
+  'system_design',
+  'behavioral',
+  'hiring_manager',
+  'onsite',
+  'final',
+  'other',
+] as const;
+export type InterviewRoundType = (typeof INTERVIEW_ROUND_TYPES)[number];
+
+export const INTERVIEW_ROUND_TYPE_LABELS: Record<InterviewRoundType, string> = {
+  recruiter_screen: 'Recruiter screen',
+  phone_screen: 'Phone screen',
+  online_assessment: 'Online assessment',
+  technical: 'Technical',
+  coding: 'Coding',
+  system_design: 'System design',
+  behavioral: 'Behavioral',
+  hiring_manager: 'Hiring manager',
+  onsite: 'Onsite',
+  final: 'Final',
+  other: 'Other',
+};
+
+export const INTERVIEW_ROUND_OUTCOMES = ['pending', 'passed', 'failed', 'mixed', 'withdrawn', 'unknown'] as const;
+export type InterviewRoundOutcome = (typeof INTERVIEW_ROUND_OUTCOMES)[number];
+
+export interface InterviewRoundResponse {
+  id: string;
+  userId: string;
+  jobApplicationId: string;
+  roundType: InterviewRoundType;
+  sequence: number;
+  scheduledAt: string | null;
+  durationMinutes: number | null;
+  interviewer: string | null;
+  outcome: InterviewRoundOutcome;
+  debrief: string | null;
+  areasWeak: string[];
+  missTags: MissTagReason[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateInterviewRoundRequest {
+  roundType: InterviewRoundType;
+  sequence?: number;
+  scheduledAt?: string | null;
+  durationMinutes?: number | null;
+  interviewer?: string | null;
+}
+
+export interface UpdateInterviewRoundRequest {
+  roundType?: InterviewRoundType;
+  sequence?: number;
+  scheduledAt?: string | null;
+  durationMinutes?: number | null;
+  interviewer?: string | null;
+  outcome?: InterviewRoundOutcome;
+  debrief?: string | null;
+  areasWeak?: CareerRoleAreaId[];
+  missTags?: MissTagReason[];
+}
+
 // MOM-101 (CareerOS Track M): the job-hunt funnel. The progression stages a
 // live application moves through, in order; `rejected`/`withdrawn` are terminal
 // outcomes reported separately, not funnel positions.

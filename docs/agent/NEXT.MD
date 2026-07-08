@@ -26,12 +26,17 @@ engine, MOM-130 "am I ready for Meta?", MOM-131 story gap map) · **1C auto-prep
 
 **Shipped so far this initiative:** Phase 0 (MOM-101/102/135/108/134-lite/140-lite); MOM-126 DESIGN
 (ADR-0011, SPIKE-013); **MOM-127** (migration `weakness_signals` — the WeaknessSignal store + decay +
-`mixed_interview`; live-verified); **MOM-109 DESIGN** (ADR-0013 / D-016, SPIKE-010 — InterviewRound).
+`mixed_interview`; live-verified); **MOM-109 DESIGN** (ADR-0013 / D-016, SPIKE-010 — InterviewRound);
+**MOM-110** (migration `interview_rounds` — first-class InterviewRound CRUD + `InterviewRoundsCard`
+timeline UI with debrief editor; 179 API tests, live CRUD + Playwright verified).
 
-**Active PR-sized task: MOM-110** — implement `InterviewRound` (CRUD + timeline UI upgrade in place).
-Design is final in **ADR-0013**. This is the next **migration** (additive: 1 table + indexes + 2 FKs,
-no backfill; rollback = drop) → **D-004 gate**. After it: MOM-113 (debrief → `recordSignal`, the
-loop-closing edge — depends on MOM-110 + the MOM-127 store), then MOM-142 to surface signals on Today.
+**Active PR-sized task: MOM-113** — debrief → `WeaknessSignal`/`LearningEvidence` emission. **This is
+the loop-closing edge.** Hook into `interview-rounds.service.update()`: when a round's debrief carries
+`areasWeak`/`missTags` (or outcome flips to failed/mixed), call MOM-127's `weaknesses.recordSignal`
+(source `debrief`, tagged `jobApplicationId` + area) and emit a `LearningEvidence` row so the outcome
+reshapes target-scoped readiness + FSRS weakness repair. No new table (uses the MOM-127 store). After
+it: MOM-128 (tag attempts + `job_prep` branch), MOM-142 (surface openSignals on Today), MOM-129
+(one grounded readiness engine).
 
 **Gate 1:** bombing a round demonstrably reshapes tomorrow's prep; an "am I ready for Meta?" verdict
 exists. Each schema task = SPIKE + DESIGN-doc PR **then** human-approved implementer PR (D-004),
