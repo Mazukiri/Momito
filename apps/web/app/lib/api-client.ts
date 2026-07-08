@@ -402,6 +402,7 @@ export const dashboardApi = {
 
 // Profile and CV Scoring
 import type {
+  AtsCoverageResponse,
   CreateProfileScoreRequest,
   ProfileResponse,
   ProfileScoreResponse,
@@ -434,6 +435,9 @@ export const profileScoresApi = {
 
   generateTasks: (id: string) =>
     request<{ created: number }>(`/profile-scores/${id}/generate-tasks`, { method: 'POST' }),
+
+  atsCoverage: (jdText: string) =>
+    request<AtsCoverageResponse>('/profile-scores/ats-coverage', { method: 'POST', body: JSON.stringify({ jdText }) }),
 };
 
 // Career OS

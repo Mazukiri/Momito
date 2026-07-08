@@ -847,6 +847,16 @@ export interface ProfileScoreResponse {
   createdAt: string;
 }
 
+// MOM-134-lite (CareerOS Track Q): deterministic ATS keyword coverage of the
+// user's profile skills against a pasted JD. Full résumé-version ATS lands with
+// ResumeVersion (MOM-133/134); this v1 checks the base profile.
+export interface AtsCoverageResponse {
+  jdKeywordCount: number;
+  covered: string[];
+  missing: string[];
+  coveragePct: number; // 0-1
+}
+
 export const JOB_APPLICATION_STATUSES = [
   'saved',
   'applied',

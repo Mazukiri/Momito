@@ -1,5 +1,50 @@
 # LOG
 
+## 2026-07-08 - CareerOS Phase 0: schema-free quick wins (MOM-101/102/135/108/134-lite) (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Phase 0 of the CareerOS transformation (`docs/plans/MOMITO_CAREEROS_PLAN.md`,
+Tracks M–S). All six quick wins are schema-free — no migration, no D-004 gate — and were
+built to make Momito feel like a CareerOS in a handful of small PRs before the migration-gated
+loop-closure work begins. Branch `feat/careeros-phase-0`.
+
+**MOM-101 — funnel & conversion analytics** (commit daf5cd1): `jobs.service.funnel(userId)`
+computes cumulative reached-counts across the saved→applied→oa→interview→onsite→offer stage
+ladder, per-stage conversion, response rate, and source/visaTag breakdowns; `ratio()` returns
+null when the denominator is 0 so the UI never renders NaN. New `@Get('funnel')` route ordered
+*before* `@Get(':id')` to dodge `ParseUUIDPipe`. `JobFunnelCard` renders the bars, conversion
+%, response rate, and by-source breakdown on the jobs page.
+
+**MOM-102 — auto-log a JobEvent on status transition** (commit 897df85): `jobs.service.update()`
+reads `previousStatus` only when `dto.status` is present, and after the write creates a
+`jobEvent` of type `status_change` titled `${from} → ${to}` only when the status genuinely
+changed — a free timeline of pipeline movement with no schema change.
+
+**MOM-135 — gaps → executable tasks** (commit b79cde5): `profile-scores.service.generateTasks()`
+converts a résumé score's four gap categories into `Task` rows (skills high×3, experience×2,
+project×2, presentation low×1, capped at 6), idempotent by title (queries existing task titles,
+filters). `@Post(':id/generate-tasks')` + a "Turn gaps into tasks" button on the score page.
+
+**MOM-108 + MOM-134-lite — paste-JD quick capture + deterministic ATS coverage** (this commit):
+`profile-scores.service.atsCoverage(jdText, userId)` reuses `extractJdSkills` to tokenize a
+pasted JD, normalizes against `profile.skills`, and returns `{jdKeywordCount, covered, missing,
+coveragePct}`; `@Post('ats-coverage')` ordered before `@Get(':id')`. On the jobs Add form a
+"Check ATS keyword coverage" button surfaces the coverage % and amber missing-keyword chips
+while you paste, so a gap is visible at capture time. Honestly labeled **-lite**: the tokenizer
+inherits the existing scorer's capitalized-noise limitation (grabs Backend/Engineer/Experience);
+it is superseded by the AI résumé track (MOM-136) once the Anthropic key lands.
+
+**Checks:** `pnpm -r lint && typecheck && test` green — **158 API tests** (7 new: 4 funnel,
+3 status-transition, 2 atsCoverage, 3 generateTasks). API + web typecheck + lint clean. Live
+round-trip against local Postgres confirmed the funnel aggregates and an ATS check (JD with 10
+keywords → coveragePct 0.1, covered [PostgreSQL], missing [Backend, Engineer, Kubernetes, Go,
+RPC, Python, Experience, Terraform, Kafka]). Playwright screenshot confirmed the Add-form ATS
+UI renders the coverage line + amber chips with zero console errors.
+
+**Deliberately not done:** no stage-timestamps or transition-history table (that's the
+migration-gated MOM-103/104); the `-lite` ATS tokenizer is not being hardened (AI supersedes it).
+Next: MOM-140-lite (stage-aware Today copy), then Phase 1 loop-closure (migration-gated).
+
 ## 2026-07-06 - MOM-087: weekly encrypted backup workflow, design + implementation (CLAUDE)
 
 **Actor:** CLAUDE (implementer)

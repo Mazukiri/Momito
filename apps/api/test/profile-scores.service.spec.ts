@@ -112,6 +112,35 @@ describe('ProfileScoresService', () => {
   });
 });
 
+describe('ProfileScoresService.atsCoverage (MOM-134-lite)', () => {
+  it('reports covered and missing JD keywords against profile skills', async () => {
+    const service = new ProfileScoresService({
+      profile: { findUnique: vi.fn().mockResolvedValue({ skills: ['Python', 'SQL'] }) },
+    } as never);
+
+    // extractJdSkills pulls capitalized tokens (minus stopwords like "We"):
+    // Kubernetes, Go, Python, SQL.
+    const result = await service.atsCoverage('We need Kubernetes, Go, Python and SQL experience.', 'user-1');
+
+    expect(result.jdKeywordCount).toBe(4);
+    expect(result.covered).toEqual(expect.arrayContaining(['Python', 'SQL']));
+    expect(result.missing).toEqual(expect.arrayContaining(['Kubernetes', 'Go']));
+    expect(result.coveragePct).toBeCloseTo(0.5, 3);
+  });
+
+  it('treats every JD keyword as missing when there is no profile', async () => {
+    const service = new ProfileScoresService({
+      profile: { findUnique: vi.fn().mockResolvedValue(null) },
+    } as never);
+
+    const result = await service.atsCoverage('Rust and Kubernetes required.', 'user-1');
+
+    expect(result.covered).toEqual([]);
+    expect(result.missing.length).toBe(result.jdKeywordCount);
+    expect(result.coveragePct).toBe(0);
+  });
+});
+
 describe('ProfileScoresService.generateTasks (MOM-135)', () => {
   const scoreWithGaps = {
     id: 'score-1',

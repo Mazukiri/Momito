@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Profile, ProfileScore } from '@prisma/client';
 import {
+  AtsCoverageResponse,
   ProfileExperienceItem,
   ProfileProjectItem,
   ProfileScoreResponse,
@@ -93,6 +94,23 @@ export class ProfileScoresService {
     const score = await this.prisma.profileScore.findFirst({ where: { id, userId } });
     if (!score) throw new NotFoundException('Profile score not found');
     return this.serialize(score);
+  }
+
+  // MOM-134-lite: deterministic ATS keyword coverage of the base profile skills
+  // against a pasted JD — which JD keywords are present vs missing. Reuses the
+  // same extractJdSkills tokenizer the scorer uses. No persistence, no AI.
+  async atsCoverage(jdText: string, userId: string): Promise<AtsCoverageResponse> {
+    const profile = await this.prisma.profile.findUnique({ where: { userId } });
+    const have = new Set(this.asStringArray(profile?.skills ?? []).map((skill) => this.normalize(skill)));
+    const jdKeywords = this.extractJdSkills(jdText);
+    const covered = jdKeywords.filter((keyword) => have.has(this.normalize(keyword)));
+    const missing = jdKeywords.filter((keyword) => !have.has(this.normalize(keyword)));
+    return {
+      jdKeywordCount: jdKeywords.length,
+      covered,
+      missing,
+      coveragePct: jdKeywords.length ? this.round(covered.length / jdKeywords.length) : 0,
+    };
   }
 
   // MOM-135: turn a score's static gap strings into executable Tasks (the same

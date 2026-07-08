@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { CAREER_ROLE_TRACKS, JOB_APPLICATION_STATUSES, type CareerRoleTrackId, type JobApplicationResponse, type JobFunnelResponse } from '@momito/shared';
-import { jobsApi } from '../../lib/api-client';
+import { CAREER_ROLE_TRACKS, JOB_APPLICATION_STATUSES, type AtsCoverageResponse, type CareerRoleTrackId, type JobApplicationResponse, type JobFunnelResponse } from '@momito/shared';
+import { jobsApi, profileScoresApi } from '../../lib/api-client';
 import { Badge, Card, EmptyState, ErrorBanner, Spinner } from '../../components/ui';
 import { JobFunnelCard } from '../../components/JobFunnelCard';
 
@@ -22,6 +22,20 @@ export default function JobsPage() {
   const [deadline, setDeadline] = useState('');
   const [jdText, setJdText] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | JobApplicationResponse['status']>('all');
+  const [ats, setAts] = useState<AtsCoverageResponse | null>(null);
+  const [atsLoading, setAtsLoading] = useState(false);
+
+  async function checkAts() {
+    if (!jdText.trim()) return;
+    setAtsLoading(true);
+    try {
+      setAts(await profileScoresApi.atsCoverage(jdText.trim()));
+    } catch {
+      setAts(null);
+    } finally {
+      setAtsLoading(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -148,7 +162,26 @@ export default function JobsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Job Description</label>
-              <textarea value={jdText} onChange={(event) => setJdText(event.target.value)} rows={6} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <textarea value={jdText} onChange={(event) => { setJdText(event.target.value); setAts(null); }} rows={6} placeholder="Paste the JD to check which keywords your profile is missing…" className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <div className="mt-2 flex items-center gap-3">
+                <button type="button" onClick={checkAts} disabled={atsLoading || !jdText.trim()} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                  {atsLoading ? 'Checking…' : 'Check ATS keyword coverage'}
+                </button>
+                {ats && (
+                  <span className="text-xs text-zinc-500">
+                    {Math.round(ats.coveragePct * 100)}% of {ats.jdKeywordCount} JD keyword{ats.jdKeywordCount === 1 ? '' : 's'} in your profile
+                  </span>
+                )}
+              </div>
+              {ats && ats.missing.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {ats.missing.slice(0, 20).map((keyword) => (
+                    <span key={keyword} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <button disabled={saving || !company.trim() || !roleTitle.trim()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
               {saving ? 'Saving...' : 'Save Job'}
