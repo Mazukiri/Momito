@@ -919,6 +919,42 @@ export interface JobEventResponse {
   createdAt: string;
 }
 
+// MOM-101 (CareerOS Track M): the job-hunt funnel. The progression stages a
+// live application moves through, in order; `rejected`/`withdrawn` are terminal
+// outcomes reported separately, not funnel positions.
+export const JOB_FUNNEL_STAGES = ['saved', 'applied', 'oa', 'interview', 'onsite', 'offer'] as const;
+export type JobFunnelStage = (typeof JOB_FUNNEL_STAGES)[number];
+
+export interface JobFunnelStageRow {
+  stage: JobFunnelStage;
+  atStage: number; // active apps whose current status is exactly this stage
+  reached: number; // active apps currently at this stage or deeper (cumulative)
+  conversionFromPrev: number | null; // reached[i] / reached[i-1]; null for the first stage
+}
+
+export interface JobFunnelBreakdownRow {
+  key: string; // a source or visaTag value
+  total: number;
+  offers: number;
+  interviewing: number; // reached interview or deeper
+  conversion: number; // offers / total
+}
+
+// Honest v1: computed from CURRENT status only — an app that was rejected after
+// an onsite is counted as an outcome, not as having reached onsite, because no
+// transition history exists yet. True stage timing/history lands with MOM-104.
+export interface JobFunnelResponse {
+  total: number;
+  active: number; // not rejected/withdrawn
+  offers: number;
+  rejected: number;
+  withdrawn: number;
+  responseRate: number; // of active apps that reached `applied`, the share that reached `oa` or deeper
+  stages: JobFunnelStageRow[];
+  bySource: JobFunnelBreakdownRow[];
+  byVisaTag: JobFunnelBreakdownRow[];
+}
+
 export const TASK_TYPES = [
   'study',
   'practice',

@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { CAREER_ROLE_TRACKS, JOB_APPLICATION_STATUSES, type CareerRoleTrackId, type JobApplicationResponse } from '@momito/shared';
+import { CAREER_ROLE_TRACKS, JOB_APPLICATION_STATUSES, type CareerRoleTrackId, type JobApplicationResponse, type JobFunnelResponse } from '@momito/shared';
 import { jobsApi } from '../../lib/api-client';
 import { Badge, Card, EmptyState, ErrorBanner, Spinner } from '../../components/ui';
+import { JobFunnelCard } from '../../components/JobFunnelCard';
 
 export default function JobsPage() {
   const router = useRouter();
   const [jobs, setJobs] = useState<JobApplicationResponse[]>([]);
+  const [funnel, setFunnel] = useState<JobFunnelResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -25,7 +27,9 @@ export default function JobsPage() {
     setLoading(true);
     setError('');
     try {
-      setJobs(await jobsApi.list());
+      const [jobList, funnelData] = await Promise.all([jobsApi.list(), jobsApi.funnel()]);
+      setJobs(jobList);
+      setFunnel(funnelData);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load jobs');
     } finally {
@@ -84,6 +88,8 @@ export default function JobsPage() {
       </div>
 
       {error && <ErrorBanner message={error} onRetry={load} />}
+
+      {funnel && funnel.total > 0 && <JobFunnelCard funnel={funnel} />}
 
       {jobs.length > 0 && (
         <div className="flex flex-wrap gap-2">

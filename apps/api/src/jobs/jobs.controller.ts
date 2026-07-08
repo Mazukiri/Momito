@@ -15,6 +15,13 @@ export class JobsController {
     return this.jobs.list(user.id, status);
   }
 
+  // Declared before `@Get(':id')` so `/jobs/funnel` isn't swallowed by the
+  // UUID param route (which would 400 on the ParseUUIDPipe).
+  @Get('funnel')
+  funnel(@CurrentUser() user: AuthenticatedUser) {
+    return this.jobs.funnel(user.id);
+  }
+
   @Post()
   create(@Body() dto: CreateJobDto, @CurrentUser() user: AuthenticatedUser) {
     return this.jobs.create(dto, user.id);

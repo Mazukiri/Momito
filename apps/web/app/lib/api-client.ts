@@ -442,6 +442,7 @@ import type {
   CreateTaskRequest,
   JobApplicationResponse,
   JobEventResponse,
+  JobFunnelResponse,
   LearningEvidenceResponse,
   LearningHighlightResponse,
   MissionCheckInResponse,
@@ -487,6 +488,8 @@ export const jobsApi = {
     const query = qs.toString();
     return request<JobApplicationResponse[]>(`/jobs${query ? `?${query}` : ''}`);
   },
+
+  funnel: () => request<JobFunnelResponse>('/jobs/funnel'),
 
   create: (body: CreateJobApplicationRequest) =>
     request<JobApplicationResponse>('/jobs', { method: 'POST', body: JSON.stringify(body) }),

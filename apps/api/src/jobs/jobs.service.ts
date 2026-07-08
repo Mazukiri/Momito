@@ -3,8 +3,11 @@ import { JobApplication, JobEvent, Prisma } from '@prisma/client';
 import {
   CAREER_ROLE_TRACKS,
   CareerRoleTrackId,
+  JOB_FUNNEL_STAGES,
   JobApplicationResponse,
   JobEventResponse,
+  JobFunnelBreakdownRow,
+  JobFunnelResponse,
   RoleTemplateId,
 } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -53,6 +56,81 @@ export class JobsService {
       tasks,
       reminders,
     };
+  }
+
+  // MOM-101: the job-hunt funnel + conversion analytics, computed from current
+  // status only (no transition history yet — see JobFunnelResponse doc + MOM-104).
+  async funnel(userId: string): Promise<JobFunnelResponse> {
+    const jobs = await this.prisma.jobApplication.findMany({
+      where: { userId },
+      select: { status: true, source: true, visaTag: true },
+    });
+
+    const stageIndex = new Map(JOB_FUNNEL_STAGES.map((stage, index) => [stage as string, index]));
+    const atStage = JOB_FUNNEL_STAGES.map(() => 0);
+    let rejected = 0;
+    let withdrawn = 0;
+
+    for (const job of jobs) {
+      if (job.status === 'rejected') rejected += 1;
+      else if (job.status === 'withdrawn') withdrawn += 1;
+      else {
+        const index = stageIndex.get(job.status);
+        if (index !== undefined) atStage[index] += 1;
+      }
+    }
+
+    // reached[k] = active apps at stage k or deeper (cumulative funnel).
+    const reached = atStage.map((_, index) => atStage.slice(index).reduce((sum, count) => sum + count, 0));
+    const active = reached[0] ?? 0;
+
+    const stages = JOB_FUNNEL_STAGES.map((stage, index) => ({
+      stage,
+      atStage: atStage[index],
+      reached: reached[index],
+      conversionFromPrev: index === 0 ? null : this.ratio(reached[index], reached[index - 1]),
+    }));
+
+    const appliedIdx = stageIndex.get('applied')!;
+    const oaIdx = stageIndex.get('oa')!;
+    const offers = atStage[stageIndex.get('offer')!];
+
+    return {
+      total: jobs.length,
+      active,
+      offers,
+      rejected,
+      withdrawn,
+      responseRate: this.ratio(reached[oaIdx], reached[appliedIdx]) ?? 0,
+      stages,
+      bySource: this.breakdown(jobs, (job) => job.source ?? 'unspecified'),
+      byVisaTag: this.breakdown(jobs, (job) => job.visaTag ?? 'unknown'),
+    };
+  }
+
+  private breakdown(
+    jobs: Array<{ status: string }>,
+    keyOf: (job: { status: string; source: string | null; visaTag: string | null }) => string,
+  ): JobFunnelBreakdownRow[] {
+    const groups = new Map<string, { total: number; offers: number; interviewing: number }>();
+    const interviewingStatuses = new Set(['interview', 'onsite', 'offer']);
+    for (const job of jobs as Array<{ status: string; source: string | null; visaTag: string | null }>) {
+      const key = keyOf(job);
+      const row = groups.get(key) ?? { total: 0, offers: 0, interviewing: 0 };
+      row.total += 1;
+      if (job.status === 'offer') row.offers += 1;
+      if (interviewingStatuses.has(job.status)) row.interviewing += 1;
+      groups.set(key, row);
+    }
+    return [...groups.entries()]
+      .map(([key, row]) => ({ key, ...row, conversion: this.ratio(row.offers, row.total) ?? 0 }))
+      .sort((left, right) => right.total - left.total);
+  }
+
+  // Rounded 0-1 ratio; null when the denominator is 0 (no meaningful conversion).
+  private ratio(numerator: number, denominator: number): number | null {
+    if (denominator <= 0) return null;
+    return Math.round((numerator / denominator) * 1000) / 1000;
   }
 
   async create(dto: CreateJobDto, userId: string): Promise<JobApplicationResponse> {
