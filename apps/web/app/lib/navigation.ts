@@ -16,6 +16,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/missions', label: 'Mission', icon: '🎯' },
   { href: '/career', label: 'Career', icon: '🚀' },
   { href: '/calendar', label: 'Calendar', icon: '📅' },
+  { href: '/companies', label: 'Companies', icon: '🏢' },
   { href: '/questions', label: 'Questions', icon: '❓' },
   { href: '/attempts', label: 'History', icon: '🕓' },
   { href: '/study-plan', label: 'Study Plan', icon: '🗂️' },

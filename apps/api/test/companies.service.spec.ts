@@ -20,6 +20,7 @@ function companyRow(overrides: Record<string, unknown> = {}) {
     compBand: null,
     createdAt: now,
     updatedAt: now,
+    _count: { questions: 0, stories: 0 },
     ...overrides,
   };
 }
@@ -72,6 +73,15 @@ describe('CompaniesService — structured intelligence (MOM-121)', () => {
   it('throws NotFound for a missing company', async () => {
     const { service } = makeService({ company: { findUnique: vi.fn().mockResolvedValue(null) } });
     await expect(service.get('missing')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('includes linked question/story counts on detail (MOM-123)', async () => {
+    const { service } = makeService({
+      company: { findUnique: vi.fn().mockResolvedValue({ ...companyRow(), _count: { questions: 7, stories: 2 } }) },
+    });
+    const company = await service.get('c-1');
+    expect(company.linkedQuestionCount).toBe(7);
+    expect(company.linkedStoryCount).toBe(2);
   });
 });
 

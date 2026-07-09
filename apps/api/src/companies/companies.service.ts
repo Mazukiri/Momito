@@ -22,9 +22,16 @@ export class CompaniesService {
   }
 
   async get(id: string): Promise<CompanyResponse> {
-    const company = await this.prisma.company.findUnique({ where: { id } });
+    const company = await this.prisma.company.findUnique({
+      where: { id },
+      include: { _count: { select: { questions: true, stories: true } } },
+    });
     if (!company) throw new NotFoundException('Company not found');
-    return this.serialize(company);
+    return {
+      ...this.serialize(company),
+      linkedQuestionCount: company._count.questions,
+      linkedStoryCount: company._count.stories,
+    };
   }
 
   async create(dto: CreateCompanyDto): Promise<CompanyResponse> {

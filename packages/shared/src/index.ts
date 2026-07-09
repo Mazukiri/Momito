@@ -207,6 +207,9 @@ export interface CompanyResponse {
   interviewProcess: CompanyInterviewStage[];
   sponsorshipStatus: VisaTag | null;
   compBand: string | null;
+  // MOM-123: populated by GET /companies/:id (detail), omitted from the list.
+  linkedQuestionCount?: number;
+  linkedStoryCount?: number;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,5 +1,26 @@
 # LOG
 
+## 2026-07-10 - MOM-123: company detail + catalog pages (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Surfaces the structured
+company intelligence (MOM-121) as a browsable catalog + detail UI — the target side of the North-Star loop
+now has a face.
+
+**Web:** new `apps/web/app/(authenticated)/companies/page.tsx` (catalog grid — name, region badge,
+sponsorship badge, top-3 focus-area chips; click → detail) and `companies/[id]/page.tsx` (detail —
+focus-area weight bars, numbered interview process, notes, role tracks, linked question/story counts,
+sponsorship badge, comp band). Nav entry `🏢 Companies` added to `navigation.ts` before Questions.
+
+**API:** `CompaniesService.get(id)` now `include`s `_count: { questions, stories }` and returns
+`linkedQuestionCount`/`linkedStoryCount` (added to `CompanyResponse` in shared). `list()` unchanged.
+
+**Checks:** `pnpm --filter @momito/shared build`; API + web lint/typecheck green; **237 API tests** (+1:
+`get()` surfaces linked counts) + 25 web tests; web build clean. **Live:** `GET /companies/:id` for Meta
+returns `linkedQuestionCount: 4, linkedStoryCount: 0`. Playwright screenshot skipped — no Playwright binary
+in this checkout; pages are build/typecheck/lint clean and reuse the verified `Card`/`Badge`/`companiesApi`
+patterns, API data path live-verified. Rollback: delete the two pages + nav row + revert the `_count`
+include (inert).
+
 ## 2026-07-10 - MOM-122-followup: company-weighted readiness (CLAUDE, no schema)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Makes the MOM-122 FK pay

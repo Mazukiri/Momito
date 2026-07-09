@@ -74,16 +74,19 @@ company context is landed** — the job↔company FK loop is closed.
 linked company's `focusAreas`; `getJobStoryGaps` falls back to `companyRef.roleTrackIds[0]`; live: Meta
 verdict's weakest areas are now Meta's three focus areas). **★ Wave 1 loop-value is realized.**
 
-**Active PR-sized task: MOM-123 — company detail + catalog pages** (no schema; API `GET /companies` and
-`GET /companies/:id` already return the structured `CompanyResponse`). Add
-`apps/web/app/(authenticated)/companies/page.tsx` (catalog list, reuse `Card`/`Badge`) +
-`companies/[id]/page.tsx` (detail: focus-area weights, sponsorship badge, comp band, interview process,
-linked questions/stories counts, and linked applications). Add a nav entry in `apps/web/app/lib/navigation.ts`.
-Playwright screenshot. Then **MOM-124** (sponsorship filter on catalog + jobs list, reuse the status
-filter-pill pattern; sort sponsored-first) and **MOM-125** (targeting shortlist:
-`career.getTargetShortlist` = fit × company-scoped readiness × sponsorship × region). Then Waves 2–4 in the
-approved handoff plan (`~/.claude/plans/…mossy-moore.md`): pipeline truth (MOM-103/104/105/106/107),
-contacts/offers (MOM-116/117/118/119, 114/115), résumé artifacts AI-first (MOM-132/133/134/139/136/137/138/145).
+**Shipped since:** **MOM-123** (company catalog + detail pages — `companies/page.tsx` grid and
+`companies/[id]/page.tsx` detail with focus-area weight bars, sponsorship badge, comp band, numbered
+interview process, role tracks, linked question/story counts; `🏢 Companies` nav entry; `CompaniesService.get()`
+adds `_count` → `linkedQuestionCount`/`linkedStoryCount`; live: Meta → 4 linked questions). **★ The target
+side of the loop now has a browsable face.**
+
+**Active PR-sized task: MOM-124 — visa/sponsorship filter + sort** (no schema). Catalog page + jobs list page
+get a sponsorship filter (reuse the status filter-pill pattern in
+`apps/web/app/(authenticated)/jobs/page.tsx` ~lines 108–134); jobs list may sort sponsored-first. Then
+**MOM-125** (targeting shortlist: `career.getTargetShortlist` = fit × company-scoped readiness × sponsorship ×
+region). Then Waves 2–4 in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`): pipeline truth
+(MOM-103/104/105/106/107), contacts/offers (MOM-116/117/118/119, 114/115), résumé artifacts AI-first
+(MOM-132/133/134/139/136/137/138/145).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).
