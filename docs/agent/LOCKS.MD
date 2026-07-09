@@ -19,6 +19,7 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-122-followup | CLAUDE | `apps/api/src/career/career.service.ts`, `apps/api/test/career.service.spec.ts`, `docs/agent/*.MD` | 2026-07-10 |
 | MOM-122 | CLAUDE | `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**`, `apps/api/src/jobs/**`, `packages/shared/src/index.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/(authenticated)/jobs/**`, `apps/api/test/jobs.service.spec.ts`, `docs/agent/*.MD` | 2026-07-10 |
 | MOM-121 | CLAUDE | `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**`, `apps/api/prisma/seed-data.ts`, `apps/api/prisma/seed.ts`, `apps/api/src/companies/**`, `packages/shared/src/index.ts`, `apps/api/test/{companies,content}.service.spec.ts`, `docs/agent/*.MD` | 2026-07-10 |
 | MOM-131 | CLAUDE | `apps/api/src/career/**`, `packages/shared/src/index.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/components/StoryGapCard.tsx` (new), `apps/web/app/(authenticated)/jobs/[id]/page.tsx`, `apps/api/test/career.service.spec.ts`, `docs/agent/*.MD` | 2026-07-09 |

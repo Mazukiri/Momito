@@ -1,5 +1,27 @@
 # LOG
 
+## 2026-07-10 - MOM-122-followup: company-weighted readiness (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Makes the MOM-122 FK pay
+off in the numbers: a job linked to a catalog company now gets a readiness verdict weighted by *that
+company's* focus areas, not the flat role checklist.
+
+**Logic (`career.service`):** `getJobReadiness` loads `companyRef.focusAreas`/`roleTrackIds`; when linked,
+the headline `base` becomes the **focus-weighted mean** of area percentages (`companyWeightedPercentage`)
+and `weakestAreas` is ordered by `focusDrag` = focus weight × (100 − percentage), so the areas the company
+actually drills surface first. Unlinked → the existing role-checklist mean + lowest-percentage ordering
+(unchanged). `getJobStoryGaps` falls back to `companyRef.roleTrackIds[0]` when the job has no explicit
+roleTrack. New helpers `companyWeightedPercentage`/`focusDrag`/`firstRoleTrack`/`asFocusAreas`.
+
+**Checks:** `pnpm -r lint/typecheck` green; **236 API tests** (+2: focus-weighted score math = 39 for a
+dsa-heavy company; weakest area = the hardest-drilled one; story-gap role-track fallback to the linked
+company). **Live**: the Meta job (focus dsa:5/system_design:4/behavioral:3) now returns a company-weighted
+verdict whose weakest areas are exactly Meta's three focus areas, ordered by Meta's emphasis (score 10,
+penalty 15 from the bombed system_design round).
+
+**Next:** MOM-123 (company detail + catalog pages), MOM-124 (sponsorship filter), MOM-125 (targeting
+shortlist) — the rest of Wave 1.
+
 ## 2026-07-10 - MOM-122: JobApplication.companyId FK + name-match backfill + link UI (CLAUDE, migration)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. The plan's **single highest-risk change**

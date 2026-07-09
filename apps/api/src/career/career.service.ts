@@ -143,25 +143,49 @@ export class CareerService {
   async getJobReadiness(jobId: string, userId: string): Promise<JobReadinessResponse> {
     const job = await this.prisma.jobApplication.findFirst({
       where: { id: jobId, userId },
-      select: { id: true, company: true, roleTitle: true, roleTrackId: true },
+      // MOM-122-followup: pull the linked company's focus weights so the verdict
+      // reflects what THIS company emphasizes, not just the flat role checklist.
+      select: {
+        id: true,
+        company: true,
+        roleTitle: true,
+        roleTrackId: true,
+        companyRef: { select: { focusAreas: true, roleTrackIds: true } },
+      },
     });
     if (!job) throw new NotFoundException('Job application not found');
 
-    const roleTrackId = (job.roleTrackId as CareerRoleTrackId | null) ?? DEFAULT_JOB_ROLE_TRACK;
+    const focusAreas = this.asFocusAreas(job.companyRef?.focusAreas ?? null);
+    const roleTrackId =
+      (job.roleTrackId as CareerRoleTrackId | null) ??
+      this.firstRoleTrack(job.companyRef?.roleTrackIds ?? null) ??
+      DEFAULT_JOB_ROLE_TRACK;
     const [readiness, blockingSignals] = await Promise.all([
       this.getReadiness(roleTrackId, userId),
       this.weaknesses.listOpenSignals(userId, jobId),
     ]);
 
+    // MOM-122-followup: when the job is linked to a catalog company, weight the
+    // headline by that company's focus areas (a weak area the company drills hard
+    // hurts more than one it barely tests). Unlinked → the role-checklist mean.
+    const focusKeys = Object.keys(focusAreas);
+    const base = focusKeys.length > 0 ? this.companyWeightedPercentage(readiness.areas, focusAreas) : readiness.overallPercentage;
+
     // Penalty from this job's open weakness signals, weighted by decayed severity.
     const rawPenalty = blockingSignals.reduce((sum, signal) => sum + signal.severity * SIGNAL_PENALTY_PER_SEVERITY, 0);
     const penalty = Math.min(SIGNAL_PENALTY_CAP, Math.round(rawPenalty));
-    const score = Math.max(0, Math.min(100, readiness.overallPercentage - penalty));
+    const score = Math.max(0, Math.min(100, base - penalty));
     const status: JobReadinessStatus = score >= READY_THRESHOLD ? 'ready' : score >= ALMOST_THRESHOLD ? 'almost' : 'not_ready';
 
-    // The areas most in the way: lowest grounded percentage first (weight breaks ties).
+    // The areas most in the way. When company-weighted, the company's emphasis
+    // (focus weight × how far the area is from 100) orders the drag; otherwise
+    // lowest grounded percentage first (weight breaks ties).
     const weakestAreas = [...readiness.areas]
-      .sort((left, right) => left.percentage - right.percentage || right.totalWeight - left.totalWeight)
+      .sort((left, right) =>
+        focusKeys.length > 0
+          ? this.focusDrag(right, focusAreas) - this.focusDrag(left, focusAreas)
+          : left.percentage - right.percentage || right.totalWeight - left.totalWeight,
+      )
       .slice(0, 3)
       .map((area) => ({ area: area.area as CareerRoleAreaId, percentage: area.percentage }));
 
@@ -191,11 +215,16 @@ export class CareerService {
   async getJobStoryGaps(jobId: string, userId: string): Promise<JobStoryGapResponse> {
     const job = await this.prisma.jobApplication.findFirst({
       where: { id: jobId, userId },
-      select: { id: true, company: true, roleTitle: true, roleTrackId: true },
+      select: { id: true, company: true, roleTitle: true, roleTrackId: true, companyRef: { select: { roleTrackIds: true } } },
     });
     if (!job) throw new NotFoundException('Job application not found');
 
-    const roleTrackId = (job.roleTrackId as CareerRoleTrackId | null) ?? DEFAULT_JOB_ROLE_TRACK;
+    // MOM-122-followup: a linked company's primary track sharpens the expected
+    // competency set when the job itself has no explicit roleTrack.
+    const roleTrackId =
+      (job.roleTrackId as CareerRoleTrackId | null) ??
+      this.firstRoleTrack(job.companyRef?.roleTrackIds ?? null) ??
+      DEFAULT_JOB_ROLE_TRACK;
     const roleTrack = this.getRoleTrack(roleTrackId);
     const expectedIds = this.expectedBehavioralCompetencies(roleTrack);
 
@@ -238,6 +267,35 @@ export class CareerService {
     );
     const named = STORY_COMPETENCIES.filter((competency) => keywords.has(competency.id)).map((competency) => competency.id);
     return named.length > 0 ? named : DEFAULT_BEHAVIORAL_COMPETENCIES;
+  }
+
+  // MOM-122-followup: the focus-weighted mean of area percentages (over the areas
+  // the company actually emphasizes), so "ready for Meta?" reflects Meta's bar.
+  private companyWeightedPercentage(areas: RoleAreaReadiness[], focusAreas: Record<string, number>): number {
+    const weightSum = areas.reduce((sum, area) => sum + (focusAreas[area.area] ?? 0), 0);
+    if (weightSum <= 0) return 0;
+    return Math.round(areas.reduce((sum, area) => sum + area.percentage * (focusAreas[area.area] ?? 0), 0) / weightSum);
+  }
+
+  // How much an area drags a company-scoped verdict: its focus weight × distance
+  // from mastery. A weak area the company drills hard rises to the top.
+  private focusDrag(area: RoleAreaReadiness, focusAreas: Record<string, number>): number {
+    return (focusAreas[area.area] ?? 0) * (100 - area.percentage);
+  }
+
+  private firstRoleTrack(value: Prisma.JsonValue | null): CareerRoleTrackId | null {
+    if (!Array.isArray(value)) return null;
+    const first = value.find((item): item is string => typeof item === 'string' && item in CAREER_ROLE_TRACKS);
+    return (first as CareerRoleTrackId | undefined) ?? null;
+  }
+
+  private asFocusAreas(value: Prisma.JsonValue | null): Record<string, number> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const out: Record<string, number> = {};
+    for (const [area, weight] of Object.entries(value)) {
+      if (typeof weight === 'number') out[area] = weight;
+    }
+    return out;
   }
 
   private async loadEvidenceContext(roleTrackId: CareerRoleTrackId, userId: string): Promise<EvidenceContext> {

@@ -106,6 +106,44 @@ describe('CareerService.getJobReadiness — "am I ready?" verdict (MOM-130)', ()
     });
     await expect(service.getJobReadiness('job-x', 'user-1')).rejects.toThrow();
   });
+
+  it('weights the verdict by the linked company\'s focus areas (MOM-122-followup)', async () => {
+    // dsa strong (mastery .9 → pct 45), behavioral weak (.2 → pct 10); empty
+    // evidence context means coverage 0, so pct = round(0.5*mastery*100).
+    const mastery = new Map<string, unknown>([
+      ['dsa', { area: 'dsa', retrievability: 0.9, reviewedCount: 3, gradedAttempts: 5, positiveAttempts: 5, score: 0.9 }],
+      ['behavioral', { area: 'behavioral', retrievability: 0.2, reviewedCount: 2, gradedAttempts: 3, positiveAttempts: 1, score: 0.2 }],
+    ]);
+    const linkedJob = { ...job, roleTrackId: 'big-tech-swe', companyRef: { focusAreas: { dsa: 5, behavioral: 1 }, roleTrackIds: ['big-tech-swe'] } };
+    const service = buildService(mastery, {
+      prisma: { jobApplication: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(linkedJob) } },
+    });
+
+    const verdict = await service.getJobReadiness('job-1', 'user-1');
+
+    // company-weighted = round((45*5 + 10*1)/6) = 39; no signals → score 39.
+    expect(verdict.score).toBe(39);
+    // dsa drags hardest for this company (5*(100-45)=275 > behavioral 1*(100-10)=90).
+    expect(verdict.weakestAreas[0].area).toBe('dsa');
+  });
+});
+
+describe('CareerService.getJobStoryGaps — company role-track fallback (MOM-122-followup)', () => {
+  it('uses the linked company\'s primary track when the job has no explicit roleTrack', async () => {
+    const service = buildService(new Map(), {
+      prisma: {
+        jobApplication: {
+          findMany: vi.fn().mockResolvedValue([]),
+          findFirst: vi.fn().mockResolvedValue({ id: 'job-1', company: 'Two Sigma', roleTitle: 'Quant Dev', roleTrackId: null, companyRef: { roleTrackIds: ['quant-swe'] } }),
+        },
+        story: { findMany: vi.fn().mockResolvedValue([]) },
+      },
+    });
+
+    const result = await service.getJobStoryGaps('job-1', 'user-1');
+
+    expect(result.roleTrackId).toBe('quant-swe');
+  });
 });
 
 describe('CareerService.getJobStoryGaps — behavioral gap map (MOM-131)', () => {
