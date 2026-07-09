@@ -1,5 +1,24 @@
 # LOG
 
+## 2026-07-10 - MOM-124: visa/sponsorship filter + sort (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema, web-only.** Makes the
+sponsorship signal actionable on both the target catalog and the live pipeline.
+
+**Catalog (`companies/page.tsx`):** a filter-pill row (All / Sponsors visas / Unknown / No sponsorship),
+reusing the jobs-page status-pill pattern. `sponsorshipKey(status)` buckets `null` (no data) together with
+explicit `'unknown'` so the filter never hides a company. Pills with a zero count hide (except All).
+
+**Jobs list (`jobs/page.tsx`):** a parallel sponsorship-pill row (emerald active state to distinguish it
+from the status row) plus a **sponsored-first sort** on the rendered list. A job's sponsorship prefers its
+linked `companyRef.sponsorshipStatus`, falling back to the job's own `visaTag`, then `'unknown'`
+(`jobSponsorship`); sort uses `SPONSORSHIP_RANK` (sponsored 0 < unknown 1 < not_sponsoring 2), stable so
+same-bucket jobs keep their order. The status and sponsorship filters compose (AND).
+
+**Checks:** web lint/typecheck green; **26 web tests** (+1: catalog filter buckets null with unknown and
+narrows to each sponsorship class). No API/shared change → API stays 237. No Playwright in this checkout;
+the filter logic is client-side and unit-covered. Rollback: revert the two pages + delete the test.
+
 ## 2026-07-10 - MOM-123: company detail + catalog pages (CLAUDE, no schema)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Surfaces the structured

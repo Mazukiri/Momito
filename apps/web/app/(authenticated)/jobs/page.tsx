@@ -2,10 +2,22 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { CAREER_ROLE_TRACKS, JOB_APPLICATION_STATUSES, type AtsCoverageResponse, type CareerRoleTrackId, type CompanyResponse, type JobApplicationResponse, type JobFunnelResponse } from '@momito/shared';
+import { CAREER_ROLE_TRACKS, JOB_APPLICATION_STATUSES, type AtsCoverageResponse, type CareerRoleTrackId, type CompanyResponse, type JobApplicationResponse, type JobFunnelResponse, type VisaTag } from '@momito/shared';
 import { companiesApi, jobsApi, profileScoresApi } from '../../lib/api-client';
 import { Badge, Card, EmptyState, ErrorBanner, Spinner } from '../../components/ui';
 import { JobFunnelCard } from '../../components/JobFunnelCard';
+
+// MOM-124: a job's sponsorship signal prefers the linked catalog company, falling
+// back to the job's own visaTag; null/absent = 'unknown'. Sponsored sorts first.
+const jobSponsorship = (job: JobApplicationResponse): VisaTag =>
+  job.companyRef?.sponsorshipStatus ?? job.visaTag ?? 'unknown';
+const SPONSORSHIP_RANK: Record<VisaTag, number> = { sponsored: 0, unknown: 1, not_sponsoring: 2 };
+const SPONSORSHIP_FILTERS: { key: 'all' | VisaTag; label: string }[] = [
+  { key: 'all', label: 'All visas' },
+  { key: 'sponsored', label: 'Sponsors' },
+  { key: 'unknown', label: 'Unknown' },
+  { key: 'not_sponsoring', label: 'No sponsorship' },
+];
 
 export default function JobsPage() {
   const router = useRouter();
@@ -22,6 +34,7 @@ export default function JobsPage() {
   const [deadline, setDeadline] = useState('');
   const [jdText, setJdText] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | JobApplicationResponse['status']>('all');
+  const [sponsorshipFilter, setSponsorshipFilter] = useState<'all' | VisaTag>('all');
   const [ats, setAts] = useState<AtsCoverageResponse | null>(null);
   const [atsLoading, setAtsLoading] = useState(false);
   // MOM-122: catalog for the company-link datalist. Typing a name that matches a
@@ -140,6 +153,26 @@ export default function JobsPage() {
         </div>
       )}
 
+      {jobs.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {SPONSORSHIP_FILTERS.map(({ key, label }) => {
+            const count = key === 'all' ? jobs.length : jobs.filter((job) => jobSponsorship(job) === key).length;
+            if (key !== 'all' && count === 0) return null;
+            return (
+              <button
+                key={key}
+                onClick={() => setSponsorshipFilter(key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  sponsorshipFilter === key ? 'bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400'
+                }`}
+              >
+                {label} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {showForm && (
         <Card>
           <form onSubmit={createJob} className="space-y-4">
@@ -209,6 +242,9 @@ export default function JobsPage() {
         <div className="grid gap-3">
           {jobs
             .filter((job) => statusFilter === 'all' || job.status === statusFilter)
+            .filter((job) => sponsorshipFilter === 'all' || jobSponsorship(job) === sponsorshipFilter)
+            .slice()
+            .sort((a, b) => SPONSORSHIP_RANK[jobSponsorship(a)] - SPONSORSHIP_RANK[jobSponsorship(b)])
             .map((job) => (
             <Card key={job.id} onClick={() => router.push(`/jobs/${job.id}`)}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

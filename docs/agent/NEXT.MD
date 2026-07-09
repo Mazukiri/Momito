@@ -80,12 +80,18 @@ interview process, role tracks, linked question/story counts; `🏢 Companies` n
 adds `_count` → `linkedQuestionCount`/`linkedStoryCount`; live: Meta → 4 linked questions). **★ The target
 side of the loop now has a browsable face.**
 
-**Active PR-sized task: MOM-124 — visa/sponsorship filter + sort** (no schema). Catalog page + jobs list page
-get a sponsorship filter (reuse the status filter-pill pattern in
-`apps/web/app/(authenticated)/jobs/page.tsx` ~lines 108–134); jobs list may sort sponsored-first. Then
-**MOM-125** (targeting shortlist: `career.getTargetShortlist` = fit × company-scoped readiness × sponsorship ×
-region). Then Waves 2–4 in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`): pipeline truth
-(MOM-103/104/105/106/107), contacts/offers (MOM-116/117/118/119, 114/115), résumé artifacts AI-first
+**Shipped since:** **MOM-124** (sponsorship filter-pill row on the companies catalog and the jobs list —
+`sponsorshipKey` buckets null with 'unknown'; jobs list also sorts sponsored-first via `jobSponsorship` =
+`companyRef.sponsorshipStatus ?? visaTag ?? 'unknown'`; filters compose with the status pills; 26 web tests).
+
+**Active PR-sized task: MOM-125 — targeting shortlist** (no schema; needs MOM-121 ✓ + MOM-130 ✓).
+`career.service.getTargetShortlist(userId)`: rank catalog companies by fit = company focus-weights · the
+user's per-area grounded readiness (reuse `ReadinessService.areaMastery` + `getReadiness` areas) ×
+sponsorship multiplier (sponsored 1.0 / unknown 0.7 / not_sponsoring 0.2) × region preference. Route
+`GET /career/target-shortlist`; surface top-3 as a card on the career page; optionally one
+`recommendations.service` item. Tests mirror `career.service.spec.ts` buildService pattern. Then Waves 2–4 in
+the approved handoff plan (`~/.claude/plans/…mossy-moore.md`): pipeline truth (MOM-103/104/105/106/107),
+contacts/offers (MOM-116/117/118/119, 114/115), résumé artifacts AI-first
 (MOM-132/133/134/139/136/137/138/145).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR

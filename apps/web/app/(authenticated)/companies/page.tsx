@@ -2,11 +2,20 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { CompanyResponse } from '@momito/shared';
+import type { CompanyResponse, VisaTag } from '@momito/shared';
 import { companiesApi } from '../../lib/api-client';
 import { Badge, Card, EmptyState, ErrorBanner, Spinner } from '../../components/ui';
 
 const areaLabel = (id: string) => id.replace(/_/g, ' ');
+
+// MOM-124: null sponsorship (no data) and explicit 'unknown' share one filter bucket.
+const sponsorshipKey = (status: VisaTag | null): VisaTag => status ?? 'unknown';
+const SPONSORSHIP_FILTERS: { key: 'all' | VisaTag; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'sponsored', label: 'Sponsors visas' },
+  { key: 'unknown', label: 'Unknown' },
+  { key: 'not_sponsoring', label: 'No sponsorship' },
+];
 
 function SponsorshipBadge({ status }: { status: CompanyResponse['sponsorshipStatus'] }) {
   if (status === 'sponsored') return <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">Sponsors visas</span>;
@@ -19,6 +28,7 @@ export default function CompaniesPage() {
   const [companies, setCompanies] = useState<CompanyResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sponsorshipFilter, setSponsorshipFilter] = useState<'all' | VisaTag>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,11 +58,33 @@ export default function CompaniesPage() {
 
       {error && <ErrorBanner message={error} onRetry={load} />}
 
+      {companies.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {SPONSORSHIP_FILTERS.map(({ key, label }) => {
+            const count = key === 'all' ? companies.length : companies.filter((c) => sponsorshipKey(c.sponsorshipStatus) === key).length;
+            if (key !== 'all' && count === 0) return null;
+            return (
+              <button
+                key={key}
+                onClick={() => setSponsorshipFilter(key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  sponsorshipFilter === key ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400'
+                }`}
+              >
+                {label} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {companies.length === 0 ? (
         <EmptyState icon="🏢" title="No companies" description="The company catalog is empty." />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {companies.map((company) => {
+          {companies
+            .filter((company) => sponsorshipFilter === 'all' || sponsorshipKey(company.sponsorshipStatus) === sponsorshipFilter)
+            .map((company) => {
             const topAreas = Object.entries(company.focusAreas).sort((a, b) => b[1] - a[1]).slice(0, 3);
             return (
               <button key={company.id} onClick={() => router.push(`/companies/${company.id}`)} className="text-left">
