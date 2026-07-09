@@ -783,7 +783,7 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 
 ### Track P — Company Intelligence & Job↔Company Linkage · CareerOS Gate 2/5
 - **MOM-120** SPIKE-012 + DESIGN: structured `Company` (rounds, focus-area weights vs `CAREER_ROLE_AREA_IDS`, `sponsorshipStatus`, `compBand`) + nullable `JobApplication.companyId` FK · **DESIGN DONE** 2026-07-10 (ADR-0010 ACCEPTED, D-017; SPIKE-012 measured 86% backfill on live data — 6/7 jobs match a unique catalog name, out-of-catalog "Datadog" stays null; Json columns + exact ci name-match with `HAVING count(*)=1` dup guard; two additive migrations MOM-121 then MOM-122).
-- **MOM-121** Implement structured `Company` columns + migrate 20 seed packs' focus/track prose · BLOCKED on MOM-120 · *migration*
+- **MOM-121** Implement structured `Company` columns + migrate 20 seed packs' focus/track prose · **DONE** 2026-07-10 (additive migration `company_intelligence`: `focus_areas`/`role_track_ids`/`interview_process` JSONB + `sponsorship_status`/`comp_band`; 20 packs hand-mapped from `notes` prose into structured columns; typed `CompanyResponse` serializer + `GET /companies/:id`; DTO validates Json shapes against `CAREER_ROLE_AREA_IDS`/`CAREER_ROLE_TRACK_IDS`/`INTERVIEW_ROUND_TYPES`/`VISA_TAGS`. 231 API tests; live-verified: Meta → focusAreas{dsa:5,system_design:4,behavioral:3}, sponsored.) · *migration*
 - **MOM-122** Add `companyId` FK + link/backfill UI (**highest-risk migration**) · BLOCKED on MOM-120 · *migration*
 - **MOM-123** Company detail page (interview process, focus, sponsorship, linked content) · BLOCKED on MOM-121
 - **MOM-124** Visa/sponsorship filter + sort on catalog + job list · BLOCKED on MOM-121

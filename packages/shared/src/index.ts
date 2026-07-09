@@ -186,6 +186,31 @@ export interface CompanySummary {
   name: string;
 }
 
+// MOM-121 (ADR-0010 / D-017): structured company intelligence. `focusAreas` maps
+// a CareerRoleAreaId to a 1–5 interview-weight; `interviewProcess` is the ordered
+// round sequence (roundType aligns with INTERVIEW_ROUND_TYPES).
+export type CompanyFocusAreas = Partial<Record<CareerRoleAreaId, number>>;
+
+export interface CompanyInterviewStage {
+  roundType: string;
+  label: string;
+  notes?: string;
+}
+
+export interface CompanyResponse {
+  id: string;
+  name: string;
+  region: string | null;
+  notes: string | null;
+  focusAreas: CompanyFocusAreas;
+  roleTrackIds: CareerRoleTrackId[];
+  interviewProcess: CompanyInterviewStage[];
+  sponsorshipStatus: VisaTag | null;
+  compBand: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface QuestionResponse {
   id: string;
   title: string;

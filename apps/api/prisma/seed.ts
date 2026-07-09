@@ -1,3 +1,6 @@
+import * as dotenv from 'dotenv';
+dotenv.config({ override: true });
+
 import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { companies, inferQuestionMetadata, questions, topics } from './seed-data';
@@ -31,8 +34,13 @@ async function upsertTopics() {
 }
 
 async function upsertCompanies() {
-  for (const [id, name, region, notes] of companies) {
-    await prisma.company.upsert({ where: { id }, update: { name, region, notes }, create: { id, name, region, notes } });
+  // MOM-121: focusAreas/roleTrackIds/sponsorshipStatus are structured columns now;
+  // upsert them by fixed UUID so existing DBs pick up the enrichment on re-seed.
+  for (const company of companies) {
+    const { id, name, region, notes, focusAreas, roleTrackIds, sponsorshipStatus } = company;
+    // Clone the `as const` Json values to mutable copies for Prisma's InputJsonValue.
+    const data = { name, region, notes, focusAreas: { ...focusAreas }, roleTrackIds: [...roleTrackIds], sponsorshipStatus };
+    await prisma.company.upsert({ where: { id }, update: data, create: { id, ...data } });
   }
 }
 
@@ -44,7 +52,7 @@ async function replaceQuestionCompanies(questionId: string, companyIndexes: numb
   await prisma.questionCompany.deleteMany({ where: { questionId } });
   if (!companyIndexes?.length) return;
   await prisma.questionCompany.createMany({
-    data: companyIndexes.map((company) => ({ questionId, companyId: companies[company][0] })),
+    data: companyIndexes.map((company) => ({ questionId, companyId: companies[company].id })),
   });
 }
 

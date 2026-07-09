@@ -113,6 +113,15 @@ model Company {
   name      String
   region    String?
   notes     String?
+  // MOM-121 (ADR-0010 / D-017): structured interview intelligence. Json map/array
+  // (not relation tables) because the area/track taxonomies are TS-owned
+  // (CAREER_ROLE_AREA_IDS / CAREER_ROLE_TRACK_IDS) and the only query is
+  // "load one company, weight its readiness" — never "find companies by area".
+  focusAreas        Json    @default("{}") @map("focus_areas")       // { [CareerRoleAreaId]: 1-5 weight }
+  roleTrackIds      Json    @default("[]") @map("role_track_ids")    // CareerRoleTrackId[]
+  interviewProcess  Json    @default("[]") @map("interview_process") // ordered [{ roundType, label, notes? }]
+  sponsorshipStatus String? @map("sponsorship_status")              // VISA_TAGS value; null = no data
+  compBand          String? @map("comp_band")                       // free text
   createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
   questions QuestionCompany[]

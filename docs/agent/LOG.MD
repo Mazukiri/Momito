@@ -1,5 +1,39 @@
 # LOG
 
+## 2026-07-10 - MOM-121: structured Company columns + seed enrichment (CLAUDE, additive migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. Additive migration under D-004 (standing
+blanket approval). Migration `20260709185922_company_intelligence`.
+
+**Schema (additive, rollback = drop 5 columns):** `companies` gains `focus_areas JSONB DEFAULT '{}'`
+(map `{[CareerRoleAreaId]: 1–5}`), `role_track_ids JSONB DEFAULT '[]'`, `interview_process JSONB DEFAULT '[]'`,
+`sponsorship_status TEXT` (a VISA_TAGS value; null = no data), `comp_band TEXT`. Pure `ADD COLUMN` — no
+data step in the SQL. Json (not relation tables) per D-017: the taxonomies are TS-owned and the query is
+always per-row.
+
+**Seed enrichment:** the 20 packs' focus/track prose (previously only in `notes`) is hand-mapped into the
+structured columns in `seed-data.ts` (tuples → objects; e.g. Meta → `focusAreas {dsa:5, system_design:4,
+behavioral:3}`, `roleTrackIds ['big-tech-swe','fullstack-swe']`, `sponsorshipStatus 'sponsored'`). `notes`
+kept verbatim as fallback. All sponsored except ByteDance (`unknown`). `seed.ts` upserts by fixed UUID so
+existing DBs enrich on re-seed; the question-company index reference switched from `companies[i][0]` to
+`companies[i].id`.
+
+**Service/DTO/shared:** `CompaniesService` now serializes rows to a typed `CompanyResponse` (new shared
+interface + `CompanyFocusAreas`/`CompanyInterviewStage`) and coerces malformed Json to safe empties; a new
+`get(id)` + `GET /companies/:id` route (for MOM-123). DTOs validate the Json shapes at the boundary via a
+new custom validator (`IsFocusAreas`/`IsRoleTrackIds`/`IsInterviewProcess` — keys ∈ `CAREER_ROLE_AREA_IDS`,
+weights 1–5, tracks ∈ `CAREER_ROLE_TRACK_IDS`, roundType ∈ `INTERVIEW_ROUND_TYPES`) + `@IsIn(VISA_TAGS)`.
+`toData` writes only the keys a PATCH provided (a notes-only update never clobbers focusAreas).
+
+**Checks:** `pnpm -r lint/typecheck` green; **231 API tests** (+8: serialization, malformed-Json coercion,
+partial-update, NotFound; DTO validation accept/reject for bad area key/weight/track/visa/roundType). Fixed
+one pre-existing content-service company test mock (serializer now needs timestamps). **Live** on :3001:
+`GET /companies` returns 20 enriched companies; `GET /companies/:id` (Meta) returns `focusAreas {dsa:5,…}`,
+tracks, `sponsorshipStatus 'sponsored'`.
+
+**Next:** MOM-122 — the `JobApplication.companyId` FK + name-match backfill + link UI (migration 2, the
+highest-risk change), then downstream company detail/filter/shortlist (MOM-123/124/125).
+
 ## 2026-07-10 - MOM-120: DESIGN — company-as-FK + structured intelligence (CLAUDE, docs only)
 
 **Actor:** CLAUDE (planner). Branch `feat/careeros-phase-0`. **Docs only, no migration run** — the design

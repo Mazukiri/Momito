@@ -17,32 +17,34 @@ export const topics = [
   ['00000000-0000-4000-8001-000000000012', 'Machine Learning Fundamentals', 'Core ML concepts, evaluation, and practical model-building tradeoffs'],
 ] as const;
 
-// MOM-060: 20 company packs (plan §8.2). Company has no dedicated roleTags/focus
-// column, so focus areas and linked role tracks are encoded in `notes` (D-003:
-// reuse existing fields rather than add a column for this). Existing rows (index
-// 0-5) keep their original position — question seed entries above reference
-// companies by array index, not id, so appends only go at the end.
+// MOM-060 / MOM-121: 20 company packs (plan §8.2). MOM-121 (ADR-0010 / D-017)
+// promoted the focus/track prose that used to live only in `notes` into structured
+// columns — `focusAreas` (a { [CareerRoleAreaId]: 1-5 weight } map that readiness
+// math can consume), `roleTrackIds`, and `sponsorshipStatus` (a VISA_TAGS value,
+// critical for an emigrant). `notes` is kept verbatim as the human-readable
+// fallback. `interviewProcess`/`compBand` default empty for now. Existing rows keep
+// their position — question seeds reference companies by array index, not id.
 export const companies = [
-  ['00000000-0000-4000-8002-000000000001', 'Google', 'Global', 'Focus areas: system design, DSA depth, distributed systems. Linked tracks: big-tech-swe, google-l4-swe.'],
-  ['00000000-0000-4000-8002-000000000002', 'Amazon', 'Global', 'Focus areas: leadership principles (behavioral), system design, operational excellence. Linked tracks: big-tech-swe.'],
-  ['00000000-0000-4000-8002-000000000003', 'Microsoft', 'Global', 'Focus areas: system design, C#/.NET or general backend, collaboration. Linked tracks: big-tech-swe, fullstack-swe.'],
-  ['00000000-0000-4000-8002-000000000004', 'Meta', 'Global', 'Focus areas: DSA speed, system design, product sense. Linked tracks: big-tech-swe, fullstack-swe.'],
-  ['00000000-0000-4000-8002-000000000005', 'Grab', 'Southeast Asia', 'Focus areas: backend systems, marketplace/logistics design. Linked tracks: big-tech-swe, fullstack-swe.'],
-  ['00000000-0000-4000-8002-000000000006', 'Shopee', 'Southeast Asia', 'Focus areas: backend systems, high-throughput e-commerce design. Linked tracks: big-tech-swe, fullstack-swe.'],
-  ['00000000-0000-4000-8002-000000000007', 'Apple', 'Global', 'Focus areas: platform/runtime depth, mobile architecture, performance. Linked tracks: mobile-swe.'],
-  ['00000000-0000-4000-8002-000000000008', 'Netflix', 'Global', 'Focus areas: distributed systems, streaming infra, chaos/reliability engineering. Linked tracks: infra-platform-engineer.'],
-  ['00000000-0000-4000-8002-000000000009', 'Uber', 'Global', 'Focus areas: marketplace systems, geo/real-time infra, backend design. Linked tracks: big-tech-swe, infra-platform-engineer.'],
-  ['00000000-0000-4000-8002-000000000010', 'Airbnb', 'Global', 'Focus areas: fullstack product engineering, API design, trust & safety systems. Linked tracks: fullstack-swe.'],
-  ['00000000-0000-4000-8002-000000000011', 'Stripe', 'Global', 'Focus areas: API design, payments correctness/idempotency, backend reliability. Linked tracks: big-tech-swe, fullstack-swe.'],
-  ['00000000-0000-4000-8002-000000000012', 'ByteDance', 'Global', 'Focus areas: recommendation/ML systems, mobile app performance. Linked tracks: ai-ml-engineer, mobile-swe.'],
-  ['00000000-0000-4000-8002-000000000013', 'NVIDIA', 'Global', 'Focus areas: CUDA/GPU performance, parallel computing, systems programming. Linked tracks: hpc-gpu-engineer.'],
-  ['00000000-0000-4000-8002-000000000014', 'Databricks', 'Global', 'Focus areas: distributed data processing (Spark), data pipeline design. Linked tracks: data-engineer.'],
-  ['00000000-0000-4000-8002-000000000015', 'Palantir', 'Global', 'Focus areas: data modeling, backend systems, ontology/graph design. Linked tracks: data-engineer, big-tech-swe.'],
-  ['00000000-0000-4000-8002-000000000016', 'Bloomberg', 'Global', 'Focus areas: low-latency systems, C++/Java backend, financial data. Linked tracks: quant-swe, fullstack-swe.'],
-  ['00000000-0000-4000-8002-000000000017', 'Two Sigma', 'Global', 'Focus areas: probability/statistics, quant research tooling, low-latency systems. Linked tracks: quant-swe.'],
-  ['00000000-0000-4000-8002-000000000018', 'Jane Street', 'Global', 'Focus areas: functional programming, probability, fast/correct reasoning under pressure. Linked tracks: quant-swe.'],
-  ['00000000-0000-4000-8002-000000000019', 'CrowdStrike', 'Global', 'Focus areas: security fundamentals, threat detection systems, systems programming. Linked tracks: security-engineer.'],
-  ['00000000-0000-4000-8002-000000000020', 'OpenAI', 'Global', 'Focus areas: ML/NLP research and infra, training/serving systems. Linked tracks: ai-ml-engineer, infra-platform-engineer.'],
+  { id: '00000000-0000-4000-8002-000000000001', name: 'Google', region: 'Global', notes: 'Focus areas: system design, DSA depth, distributed systems. Linked tracks: big-tech-swe, google-l4-swe.', focusAreas: { system_design: 5, dsa: 5, cs_fundamentals: 3 }, roleTrackIds: ['big-tech-swe', 'google-l4-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000002', name: 'Amazon', region: 'Global', notes: 'Focus areas: leadership principles (behavioral), system design, operational excellence. Linked tracks: big-tech-swe.', focusAreas: { behavioral: 5, system_design: 4, domain_knowledge: 2 }, roleTrackIds: ['big-tech-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000003', name: 'Microsoft', region: 'Global', notes: 'Focus areas: system design, C#/.NET or general backend, collaboration. Linked tracks: big-tech-swe, fullstack-swe.', focusAreas: { system_design: 4, dsa: 3, behavioral: 3 }, roleTrackIds: ['big-tech-swe', 'fullstack-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000004', name: 'Meta', region: 'Global', notes: 'Focus areas: DSA speed, system design, product sense. Linked tracks: big-tech-swe, fullstack-swe.', focusAreas: { dsa: 5, system_design: 4, behavioral: 3 }, roleTrackIds: ['big-tech-swe', 'fullstack-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000005', name: 'Grab', region: 'Southeast Asia', notes: 'Focus areas: backend systems, marketplace/logistics design. Linked tracks: big-tech-swe, fullstack-swe.', focusAreas: { system_design: 4, dsa: 3, domain_knowledge: 2 }, roleTrackIds: ['big-tech-swe', 'fullstack-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000006', name: 'Shopee', region: 'Southeast Asia', notes: 'Focus areas: backend systems, high-throughput e-commerce design. Linked tracks: big-tech-swe, fullstack-swe.', focusAreas: { system_design: 4, dsa: 3, domain_knowledge: 2 }, roleTrackIds: ['big-tech-swe', 'fullstack-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000007', name: 'Apple', region: 'Global', notes: 'Focus areas: platform/runtime depth, mobile architecture, performance. Linked tracks: mobile-swe.', focusAreas: { language_runtime: 4, lld_oop: 4, dsa: 3 }, roleTrackIds: ['mobile-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000008', name: 'Netflix', region: 'Global', notes: 'Focus areas: distributed systems, streaming infra, chaos/reliability engineering. Linked tracks: infra-platform-engineer.', focusAreas: { system_design: 5, dsa: 3, domain_knowledge: 3 }, roleTrackIds: ['infra-platform-engineer'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000009', name: 'Uber', region: 'Global', notes: 'Focus areas: marketplace systems, geo/real-time infra, backend design. Linked tracks: big-tech-swe, infra-platform-engineer.', focusAreas: { system_design: 5, dsa: 4, domain_knowledge: 2 }, roleTrackIds: ['big-tech-swe', 'infra-platform-engineer'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000010', name: 'Airbnb', region: 'Global', notes: 'Focus areas: fullstack product engineering, API design, trust & safety systems. Linked tracks: fullstack-swe.', focusAreas: { system_design: 4, dsa: 3, projects: 3 }, roleTrackIds: ['fullstack-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000011', name: 'Stripe', region: 'Global', notes: 'Focus areas: API design, payments correctness/idempotency, backend reliability. Linked tracks: big-tech-swe, fullstack-swe.', focusAreas: { system_design: 4, lld_oop: 4, dsa: 3 }, roleTrackIds: ['big-tech-swe', 'fullstack-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000012', name: 'ByteDance', region: 'Global', notes: 'Focus areas: recommendation/ML systems, mobile app performance. Linked tracks: ai-ml-engineer, mobile-swe.', focusAreas: { domain_knowledge: 4, system_design: 4, dsa: 3 }, roleTrackIds: ['ai-ml-engineer', 'mobile-swe'], sponsorshipStatus: 'unknown' },
+  { id: '00000000-0000-4000-8002-000000000013', name: 'NVIDIA', region: 'Global', notes: 'Focus areas: CUDA/GPU performance, parallel computing, systems programming. Linked tracks: hpc-gpu-engineer.', focusAreas: { language_runtime: 5, dsa: 4, domain_knowledge: 4 }, roleTrackIds: ['hpc-gpu-engineer'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000014', name: 'Databricks', region: 'Global', notes: 'Focus areas: distributed data processing (Spark), data pipeline design. Linked tracks: data-engineer.', focusAreas: { system_design: 4, domain_knowledge: 4, dsa: 3 }, roleTrackIds: ['data-engineer'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000015', name: 'Palantir', region: 'Global', notes: 'Focus areas: data modeling, backend systems, ontology/graph design. Linked tracks: data-engineer, big-tech-swe.', focusAreas: { system_design: 4, lld_oop: 4, dsa: 3 }, roleTrackIds: ['data-engineer', 'big-tech-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000016', name: 'Bloomberg', region: 'Global', notes: 'Focus areas: low-latency systems, C++/Java backend, financial data. Linked tracks: quant-swe, fullstack-swe.', focusAreas: { dsa: 4, language_runtime: 4, domain_knowledge: 3 }, roleTrackIds: ['quant-swe', 'fullstack-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000017', name: 'Two Sigma', region: 'Global', notes: 'Focus areas: probability/statistics, quant research tooling, low-latency systems. Linked tracks: quant-swe.', focusAreas: { domain_knowledge: 5, dsa: 4, language_runtime: 3 }, roleTrackIds: ['quant-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000018', name: 'Jane Street', region: 'Global', notes: 'Focus areas: functional programming, probability, fast/correct reasoning under pressure. Linked tracks: quant-swe.', focusAreas: { dsa: 5, domain_knowledge: 4, language_runtime: 3 }, roleTrackIds: ['quant-swe'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000019', name: 'CrowdStrike', region: 'Global', notes: 'Focus areas: security fundamentals, threat detection systems, systems programming. Linked tracks: security-engineer.', focusAreas: { domain_knowledge: 5, system_design: 3, language_runtime: 3 }, roleTrackIds: ['security-engineer'], sponsorshipStatus: 'sponsored' },
+  { id: '00000000-0000-4000-8002-000000000020', name: 'OpenAI', region: 'Global', notes: 'Focus areas: ML/NLP research and infra, training/serving systems. Linked tracks: ai-ml-engineer, infra-platform-engineer.', focusAreas: { domain_knowledge: 5, system_design: 4, dsa: 3 }, roleTrackIds: ['ai-ml-engineer', 'infra-platform-engineer'], sponsorshipStatus: 'sponsored' },
 ] as const;
 
 export type SeedQuestion = {
