@@ -8,9 +8,12 @@ import {
   CareerRoleTrackId,
   JobReadinessResponse,
   JobReadinessStatus,
+  JobStoryGapResponse,
   RoleAreaReadiness,
   RoleChecklistItem,
   RoleReadinessResponse,
+  STORY_COMPETENCIES,
+  StoryGapCompetency,
 } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReadinessService, type AreaMastery } from '../readiness/readiness.service';
@@ -26,6 +29,11 @@ const SIGNAL_PENALTY_PER_SEVERITY = 5;
 const SIGNAL_PENALTY_CAP = 30;
 const READY_THRESHOLD = 75;
 const ALMOST_THRESHOLD = 50;
+
+// MOM-131: the near-universal behavioral-interview themes, used as the expected
+// competency set when a role track's behavioral checklist doesn't name concrete
+// STORY_COMPETENCIES ids in its keywords (e.g. infra's "incident/postmortem").
+const DEFAULT_BEHAVIORAL_COMPETENCIES = ['ownership', 'conflict', 'ambiguity', 'failure'];
 
 type EvidenceContext = {
   profileText: string;
@@ -171,6 +179,65 @@ export class CareerService {
       blockingSignals,
       nextActions: readiness.nextActions,
     };
+  }
+
+  // MOM-131: story coverage → this target's behavioral gap map. The role's
+  // behavioral loop expects a set of STAR competencies; we check which the user's
+  // story bank covers (by competencyTags) and surface the missing ones — so a
+  // specific interview gets "you have ownership + conflict but no ambiguity story
+  // for Meta" instead of a generic "practice behavioral". Role-scoped for now;
+  // company-specific weighting enriches when the structured Company FK (MOM-121)
+  // lands.
+  async getJobStoryGaps(jobId: string, userId: string): Promise<JobStoryGapResponse> {
+    const job = await this.prisma.jobApplication.findFirst({
+      where: { id: jobId, userId },
+      select: { id: true, company: true, roleTitle: true, roleTrackId: true },
+    });
+    if (!job) throw new NotFoundException('Job application not found');
+
+    const roleTrackId = (job.roleTrackId as CareerRoleTrackId | null) ?? DEFAULT_JOB_ROLE_TRACK;
+    const roleTrack = this.getRoleTrack(roleTrackId);
+    const expectedIds = this.expectedBehavioralCompetencies(roleTrack);
+
+    const stories = await this.prisma.story.findMany({ where: { userId }, select: { competencyTags: true } });
+    // Count stories per competency (case-insensitive on the free-form tag).
+    const countByCompetency = new Map<string, number>();
+    for (const story of stories) {
+      for (const tag of new Set(story.competencyTags.map((value) => value.toLowerCase()))) {
+        countByCompetency.set(tag, (countByCompetency.get(tag) ?? 0) + 1);
+      }
+    }
+
+    const competencies: StoryGapCompetency[] = expectedIds.map((id) => {
+      const meta = STORY_COMPETENCIES.find((competency) => competency.id === id);
+      const storyCount = countByCompetency.get(id) ?? 0;
+      return { id, name: meta?.name ?? id, covered: storyCount > 0, storyCount };
+    });
+
+    const coveredCount = competencies.filter((competency) => competency.covered).length;
+    return {
+      jobApplicationId: job.id,
+      company: job.company,
+      roleTitle: job.roleTitle,
+      roleTrackId,
+      competencies,
+      coveredCount,
+      missingCount: competencies.length - coveredCount,
+      totalStories: stories.length,
+    };
+  }
+
+  // The behavioral competencies a role's loop expects: the concrete
+  // STORY_COMPETENCIES ids named in its behavioral checklist keywords, or the
+  // universal default set when the track names none.
+  private expectedBehavioralCompetencies(roleTrack: CareerRoleTrack): string[] {
+    const keywords = new Set(
+      roleTrack.checklist
+        .filter((item) => item.area === 'behavioral')
+        .flatMap((item) => item.keywords.map((keyword) => keyword.toLowerCase())),
+    );
+    const named = STORY_COMPETENCIES.filter((competency) => keywords.has(competency.id)).map((competency) => competency.id);
+    return named.length > 0 ? named : DEFAULT_BEHAVIORAL_COMPETENCIES;
   }
 
   private async loadEvidenceContext(roleTrackId: CareerRoleTrackId, userId: string): Promise<EvidenceContext> {

@@ -597,6 +597,31 @@ export interface JobReadinessResponse {
   nextActions: string[];
 }
 
+// MOM-131: the behavioral gap map for a specific target. Which STAR competencies
+// this role's behavioral loop expects, and which the user's story bank actually
+// covers — so "you have ownership + conflict but no ambiguity story for Meta"
+// becomes a concrete, closeable gap instead of a vague worry.
+export interface StoryGapCompetency {
+  /** A STORY_COMPETENCIES id (e.g. 'ambiguity'). */
+  id: string;
+  name: string;
+  covered: boolean;
+  /** How many of the user's stories are tagged with this competency. */
+  storyCount: number;
+}
+
+export interface JobStoryGapResponse {
+  jobApplicationId: string;
+  company: string;
+  roleTitle: string;
+  roleTrackId: CareerRoleTrackId;
+  competencies: StoryGapCompetency[];
+  coveredCount: number;
+  missingCount: number;
+  /** Total stories in the user's bank (context for an empty gap map). */
+  totalStories: number;
+}
+
 export const MISSION_SOURCE_TYPES = ['manual', 'career_goal', 'job_application'] as const;
 export type MissionSourceType = (typeof MISSION_SOURCE_TYPES)[number];
 

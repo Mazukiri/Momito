@@ -1,5 +1,32 @@
 # LOG
 
+## 2026-07-09 - MOM-131: story coverage → target-scoped behavioral gap map (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Closes the last Gate-1 spine
+item: a specific interview now gets a concrete behavioral **gap map** ("you have ownership but no ambiguity
+story for Meta") instead of a generic "practice behavioral".
+
+**Logic (`CareerService.getJobStoryGaps`, `GET /career/jobs/:jobId/story-gaps`):** the target role's
+**expected** behavioral competencies = the concrete `STORY_COMPETENCIES` ids named in that track's
+`behavioral`-area checklist keywords (big-tech-swe → ownership/conflict/ambiguity/failure), falling back to
+the universal ownership/conflict/ambiguity/failure set when a track names none (e.g. infra's
+incident/postmortem keywords aren't competency ids). Coverage = the user's `Story.competencyTags` matched
+case-insensitively; each competency reports `covered` + `storyCount`, plus `coveredCount`/`missingCount`/
+`totalStories`. Role-scoped now; company-specific weighting enriches when the structured Company FK (MOM-121)
+lands.
+
+**Web:** `StoryGapCard` (new) renders under `JobReadinessCard` on the job page — covered vs missing
+competency chips, a plain-language "N of M covered, missing X, Y" line, and a "write a story for the gaps"
+link (empty-bank state points to `/stories`). `careerApi.jobStoryGaps` added.
+
+**Checks:** `pnpm -r lint/typecheck` green; **223 API tests** (+3: covered/missing with case-insensitive
+tags + declaration-order competencies; all-missing on an empty bank; not-owned throws) + 25 web tests.
+**Live** on :3001: Meta job (defaults big-tech-swe) → 4 competencies, `ownership` covered (1 story),
+conflict/failure/ambiguity missing. **★ CareerOS Gate 1 spine (outcome→prep→verdict→gap) is complete.**
+
+**Next:** Phase 1D — company-FK migration (MOM-120→121→122), the highest-risk migration (busiest table +
+seed); SPIKE-012 + DESIGN-doc PR before the implementer PR, keeping the free-text `company` fallback.
+
 ## 2026-07-09 - MOM-146: Readwise highlight → FSRS spaced-repetition review — the read→retain loop (CLAUDE, no schema)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Net-new task (not in the

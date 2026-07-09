@@ -7,6 +7,7 @@ import { jobsApi, missionsApi, remindersApi } from '../../../lib/api-client';
 import { Badge, Card, ErrorBanner, Spinner } from '../../../components/ui';
 import { InterviewRoundsCard } from '../../../components/InterviewRoundsCard';
 import { JobReadinessCard } from '../../../components/JobReadinessCard';
+import { StoryGapCard } from '../../../components/StoryGapCard';
 
 type JobDetail = Awaited<ReturnType<typeof jobsApi.get>>;
 
@@ -180,6 +181,8 @@ export default function JobDetailPage() {
 
         <aside className="space-y-6">
           <JobReadinessCard jobId={params.id} />
+
+          <StoryGapCard jobId={params.id} />
 
           <Card>
             <h2 className="mb-3 font-semibold text-zinc-800 dark:text-zinc-100">Status</h2>

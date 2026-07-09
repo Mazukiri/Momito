@@ -58,11 +58,19 @@ a reviewed highlight now **enters the FSRS queue** (`ReviewState.objectType:'hig
 resurfaces on Today cued by its source until it sticks; "Review" → "Remember". 220 API + 25 web tests;
 live-verified end-to-end. See LOG.MD.
 
-**Active PR-sized task: MOM-131** — story coverage → specific-interview behavioral **gap map** ("you have
-ownership + conflict but no ambiguity story for Meta"). The role-scoped version is doable **now** (map the
-Story bank's covered behavioral competencies against the target role's required behavioral areas; surface
-missing ones as a card/gap). Full company-scoped weighting enriches once MOM-121's structured Company lands.
-Reuse the Story bank + `STORY_COMPETENCIES` / `CAREER_ROLE_AREA_IDS` behavioral taxonomy; no schema expected.
+**Shipped since:** **MOM-131** (`career.getJobStoryGaps` + `StoryGapCard` — the target's expected STAR
+competencies vs the story bank's `competencyTags`; role-scoped, no schema; live-verified: Meta → 1/4 covered,
+missing conflict/failure/ambiguity). **★ CareerOS Gate 1 spine is COMPLETE** — outcome (debrief) → stored
+weakness → Today prep + weak-area-first job_prep + lowered "ready for Meta?" verdict + behavioral gap map +
+auto prep-queue countdown. Everything in Gate 1 that does **not** require the company-FK migration is done.
+
+**Active PR-sized task: MOM-120 (Phase 1D, company context — LAST, highest-risk)** — SPIKE-012 + a D-004
+DESIGN-doc PR (planner, no `migrate` run) for: structured `Company` columns (interview rounds, focus-area
+weights vs `CAREER_ROLE_AREA_IDS`, `sponsorshipStatus`, `compBand`) **and** a nullable `companyId` FK on
+`JobApplication` with a free-text `company` fallback + name-match backfill. This is the busiest table + the
+20 seed packs, so it goes **design-first, then a separate human-approved implementer PR** (MOM-121 structured
+Company, then MOM-122 the FK) tested on fresh **and** existing DB with rollback notes. It retro-enriches
+MOM-125/130/131/128 (real company focus weights + FK instead of name match).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).

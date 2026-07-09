@@ -107,3 +107,53 @@ describe('CareerService.getJobReadiness — "am I ready?" verdict (MOM-130)', ()
     await expect(service.getJobReadiness('job-x', 'user-1')).rejects.toThrow();
   });
 });
+
+describe('CareerService.getJobStoryGaps — behavioral gap map (MOM-131)', () => {
+  const job = { id: 'job-1', company: 'Meta', roleTitle: 'E5 SWE', roleTrackId: 'big-tech-swe' };
+
+  function withStories(stories: Array<{ competencyTags: string[] }>, jobRow: unknown = job) {
+    return buildService(new Map(), {
+      prisma: {
+        jobApplication: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(jobRow) },
+        story: { findMany: vi.fn().mockResolvedValue(stories) },
+      },
+    });
+  }
+
+  it('marks covered competencies and names the missing ones (case-insensitive tags)', async () => {
+    // big-tech-swe expects ownership/conflict/ambiguity/failure. Cover two.
+    const service = withStories([
+      { competencyTags: ['Ownership', 'delivery'] },
+      { competencyTags: ['conflict'] },
+    ]);
+
+    const result = await service.getJobStoryGaps('job-1', 'user-1');
+
+    expect(result.company).toBe('Meta');
+    // Order follows STORY_COMPETENCIES declaration order (the intersection preserves it).
+    expect(result.competencies.map((c) => c.id)).toEqual(['ownership', 'conflict', 'failure', 'ambiguity']);
+    expect(result.coveredCount).toBe(2);
+    expect(result.missingCount).toBe(2);
+    const ownership = result.competencies.find((c) => c.id === 'ownership');
+    expect(ownership).toMatchObject({ covered: true, storyCount: 1 });
+    const ambiguity = result.competencies.find((c) => c.id === 'ambiguity');
+    expect(ambiguity).toMatchObject({ covered: false, storyCount: 0 });
+    expect(result.totalStories).toBe(2);
+  });
+
+  it('reports every competency missing when the bank is empty', async () => {
+    const service = withStories([]);
+
+    const result = await service.getJobStoryGaps('job-1', 'user-1');
+
+    expect(result.totalStories).toBe(0);
+    expect(result.coveredCount).toBe(0);
+    expect(result.missingCount).toBe(result.competencies.length);
+    expect(result.competencies.every((c) => !c.covered)).toBe(true);
+  });
+
+  it('throws when the job is not the user\'s', async () => {
+    const service = withStories([], null);
+    await expect(service.getJobStoryGaps('job-x', 'user-1')).rejects.toThrow();
+  });
+});

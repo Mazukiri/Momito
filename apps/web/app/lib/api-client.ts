@@ -466,6 +466,7 @@ import type {
   MissionResponse,
   MissionTodayResponse,
   JobReadinessResponse,
+  JobStoryGapResponse,
   PracticeRecommendationResponse,
   ReadwiseConnectionResponse,
   ReadwiseSyncRunResponse,
@@ -499,6 +500,9 @@ export const careerApi = {
 
   jobReadiness: (jobId: string) =>
     request<JobReadinessResponse>(`/career/jobs/${jobId}/readiness`),
+
+  jobStoryGaps: (jobId: string) =>
+    request<JobStoryGapResponse>(`/career/jobs/${jobId}/story-gaps`),
 };
 
 export const jobsApi = {

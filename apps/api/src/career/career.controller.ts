@@ -48,4 +48,10 @@ export class CareerController {
   jobReadiness(@Param('jobId', ParseUUIDPipe) jobId: string, @CurrentUser() user: AuthenticatedUser) {
     return this.career.getJobReadiness(jobId, user.id);
   }
+
+  // MOM-131: this target's behavioral story gap map.
+  @Get('jobs/:jobId/story-gaps')
+  jobStoryGaps(@Param('jobId', ParseUUIDPipe) jobId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.career.getJobStoryGaps(jobId, user.id);
+  }
 }
