@@ -1,5 +1,40 @@
 # LOG
 
+## 2026-07-10 - MOM-122: JobApplication.companyId FK + name-match backfill + link UI (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. The plan's **single highest-risk change**
+(busiest table + seed). Additive migration `20260709190839_job_company_fk` under D-004.
+
+**Schema/migration (additive; rollback = drop column+index+FK):** `job_applications` gains
+`company_id UUID` + FK to `companies` (**`onDelete SetNull`** — pipeline survives catalog deletion) +
+`@@index`. Free-text `company` KEPT untouched. Generated with `--create-only` (verified NOT auto-applied
+via `migrate status`), then the **backfill UPDATE** was added to the SQL before applying (so the checksum
+covers final content — no hand-edit-after-apply): exact case-insensitive match `lower(trim(company)) =
+lower(trim(name))` against catalog names that are unique (`HAVING count(*)=1`, since `Company.name` has no
+unique constraint). Idempotent (fills only NULLs).
+
+**Service/DTO/shared:** Create/UpdateJobDto gain optional `companyId` (`@IsUUID`, null unlinks);
+`jobs.service` validates the company exists (`ensureCompanyExists` → 400 on unknown), keeps writing the
+free-text `company`, includes a slim `companyRef` (id/name/region/sponsorshipStatus/focusAreas) in
+`jobInclude`, and serializes `companyId` + `companyRef` (`JobCompanyRef` in shared) — malformed focusAreas
+Json coerced to `{}`. `updateData` switched to `UncheckedUpdateManyInput` to carry the scalar FK.
+
+**Web:** job list "Add Job" form gains a `<datalist>` of catalog names — typing an exact (ci) match links
+the company (green "links to the catalog" hint); job detail gains a **Company** card showing the linked
+company + sponsorship and a "Link/Unlink" select for fixing non-matches. `companiesApi` return types
+upgraded to `CompanyResponse` + a `get(id)`.
+
+**Checks:** `pnpm -r lint/typecheck` green (API + web); **234 API tests** (+3: create validates+stores
+companyId & serializes companyRef; unknown companyId → 400; update passes companyId/null through). Migration
+is pure ADD COLUMN + idempotent NULL-only backfill, so fresh-DB behavior is a strict subset of the verified
+existing-DB path. **Live** on :3001: backfill linked 6/7 demo jobs (Datadog, out-of-catalog, stays null);
+Meta job returns `companyRef {sponsorship: sponsored, focusAreas {dsa:5,…}}`; created a Stripe-linked job,
+unlinked it (companyRef→null, free-text "Stripe" kept), bad companyId → 400.
+
+**Next:** wire `career.service.getJobReadiness`/`getJobStoryGaps` to weight by `companyRef.focusAreas`/
+`roleTrackIds` when linked (deferred from this PR to keep the risky migration focused) — then company detail
+page (MOM-123), sponsorship filter (MOM-124), targeting shortlist (MOM-125).
+
 ## 2026-07-10 - MOM-121: structured Company columns + seed enrichment (CLAUDE, additive migration)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. Additive migration under D-004 (standing

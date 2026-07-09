@@ -126,7 +126,7 @@ export const authApi = {
 };
 
 // ── Questions ─────────────────────────────────────
-import type { QuestionResponse, PaginatedResponse, TopicSummary, CompanySummary } from '@momito/shared';
+import type { QuestionResponse, PaginatedResponse, TopicSummary, CompanyResponse } from '@momito/shared';
 
 export interface ListQuestionsParams {
   topic?: string;
@@ -204,13 +204,16 @@ export const topicsApi = {
 // ── Companies ─────────────────────────────────────
 export const companiesApi = {
   list: () =>
-    request<CompanySummary[]>('/companies'),
+    request<CompanyResponse[]>('/companies'),
+
+  get: (id: string) =>
+    request<CompanyResponse>(`/companies/${id}`),
 
   create: (body: { name: string; region?: string; notes?: string }) =>
-    request<CompanySummary>('/companies', { method: 'POST', body: JSON.stringify(body) }),
+    request<CompanyResponse>('/companies', { method: 'POST', body: JSON.stringify(body) }),
 
   update: (id: string, body: { name?: string; region?: string; notes?: string }) =>
-    request<CompanySummary>(`/companies/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    request<CompanyResponse>(`/companies/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
   delete: (id: string) =>
     request<void>(`/companies/${id}`, { method: 'DELETE' }),

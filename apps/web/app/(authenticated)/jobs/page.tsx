@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { CAREER_ROLE_TRACKS, JOB_APPLICATION_STATUSES, type AtsCoverageResponse, type CareerRoleTrackId, type JobApplicationResponse, type JobFunnelResponse } from '@momito/shared';
-import { jobsApi, profileScoresApi } from '../../lib/api-client';
+import { CAREER_ROLE_TRACKS, JOB_APPLICATION_STATUSES, type AtsCoverageResponse, type CareerRoleTrackId, type CompanyResponse, type JobApplicationResponse, type JobFunnelResponse } from '@momito/shared';
+import { companiesApi, jobsApi, profileScoresApi } from '../../lib/api-client';
 import { Badge, Card, EmptyState, ErrorBanner, Spinner } from '../../components/ui';
 import { JobFunnelCard } from '../../components/JobFunnelCard';
 
@@ -24,6 +24,9 @@ export default function JobsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | JobApplicationResponse['status']>('all');
   const [ats, setAts] = useState<AtsCoverageResponse | null>(null);
   const [atsLoading, setAtsLoading] = useState(false);
+  // MOM-122: catalog for the company-link datalist. Typing a name that matches a
+  // catalog company (case-insensitive) links it; anything else stays free text.
+  const [companies, setCompanies] = useState<CompanyResponse[]>([]);
 
   async function checkAts() {
     if (!jdText.trim()) return;
@@ -41,9 +44,10 @@ export default function JobsPage() {
     setLoading(true);
     setError('');
     try {
-      const [jobList, funnelData] = await Promise.all([jobsApi.list(), jobsApi.funnel()]);
+      const [jobList, funnelData, companyList] = await Promise.all([jobsApi.list(), jobsApi.funnel(), companiesApi.list()]);
       setJobs(jobList);
       setFunnel(funnelData);
+      setCompanies(companyList);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load jobs');
     } finally {
@@ -61,8 +65,11 @@ export default function JobsPage() {
     setSaving(true);
     setError('');
     try {
+      // Link to the catalog when the typed name matches a company exactly (ci).
+      const match = companies.find((item) => item.name.trim().toLowerCase() === company.trim().toLowerCase());
       await jobsApi.create({
         company: company.trim(),
+        companyId: match?.id ?? null,
         roleTitle: roleTitle.trim(),
         url: url.trim() || null,
         roleTrackId,
@@ -139,7 +146,13 @@ export default function JobsPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Company</label>
-                <input value={company} onChange={(event) => setCompany(event.target.value)} required className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                <input value={company} onChange={(event) => setCompany(event.target.value)} required list="company-catalog" className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                <datalist id="company-catalog">
+                  {companies.map((item) => <option key={item.id} value={item.name} />)}
+                </datalist>
+                {companies.some((item) => item.name.trim().toLowerCase() === company.trim().toLowerCase()) && (
+                  <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">✓ Links to the catalog — sponsorship &amp; focus data will attach.</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Role</label>

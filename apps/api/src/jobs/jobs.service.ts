@@ -3,12 +3,15 @@ import { JobApplication, JobEvent, Prisma } from '@prisma/client';
 import {
   CAREER_ROLE_TRACKS,
   CareerRoleTrackId,
+  CompanyFocusAreas,
   JOB_FUNNEL_STAGES,
   JobApplicationResponse,
+  JobCompanyRef,
   JobEventResponse,
   JobFunnelBreakdownRow,
   JobFunnelResponse,
   RoleTemplateId,
+  VisaTag,
 } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProfileScoresService } from '../profile-scores/profile-scores.service';
@@ -18,6 +21,8 @@ import { UpdateJobDto } from './dto/update-job.dto';
 
 const jobInclude = {
   _count: { select: { events: true, tasks: true, reminders: true } },
+  // MOM-122: the linked catalog company, slim projection for pipeline display.
+  companyRef: { select: { id: true, name: true, region: true, sponsorshipStatus: true, focusAreas: true } },
 } satisfies Prisma.JobApplicationInclude;
 
 type JobWithCounts = Prisma.JobApplicationGetPayload<{ include: typeof jobInclude }>;
@@ -135,10 +140,12 @@ export class JobsService {
 
   async create(dto: CreateJobDto, userId: string): Promise<JobApplicationResponse> {
     if (dto.roleTrackId) this.ensureRole(dto.roleTrackId);
+    if (dto.companyId) await this.ensureCompanyExists(dto.companyId);
     const job = await this.prisma.jobApplication.create({
       data: {
         userId,
         company: dto.company.trim(),
+        companyId: dto.companyId ?? null,
         roleTitle: dto.roleTitle.trim(),
         url: this.cleanNullable(dto.url),
         location: this.cleanNullable(dto.location),
@@ -162,6 +169,7 @@ export class JobsService {
 
   async update(id: string, dto: UpdateJobDto, userId: string): Promise<JobApplicationResponse> {
     if (dto.roleTrackId) this.ensureRole(dto.roleTrackId);
+    if (dto.companyId) await this.ensureCompanyExists(dto.companyId);
     // MOM-102: capture the prior status *before* the write so a transition can
     // be logged. Only queried when the caller is actually changing status.
     const previousStatus =
@@ -237,9 +245,10 @@ export class JobsService {
     return this.profileScores.create({ role, jdText: job.jdText }, userId);
   }
 
-  private updateData(dto: UpdateJobDto): Prisma.JobApplicationUpdateManyMutationInput {
+  private updateData(dto: UpdateJobDto): Prisma.JobApplicationUncheckedUpdateManyInput {
     return {
       ...(dto.company !== undefined && { company: dto.company.trim() }),
+      ...(dto.companyId !== undefined && { companyId: dto.companyId }),
       ...(dto.roleTitle !== undefined && { roleTitle: dto.roleTitle.trim() }),
       ...(dto.url !== undefined && { url: this.cleanNullable(dto.url) }),
       ...(dto.location !== undefined && { location: this.cleanNullable(dto.location) }),
@@ -301,11 +310,42 @@ export class JobsService {
     if (!CAREER_ROLE_TRACKS[roleTrackId]) throw new BadRequestException('Unknown role track');
   }
 
+  // MOM-122: a linked company must exist in the catalog (companies are global, not
+  // user-scoped). Free-text `company` is unaffected — this only guards the FK.
+  private async ensureCompanyExists(companyId: string) {
+    const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
+    if (!company) throw new BadRequestException('Unknown company');
+  }
+
+  private serializeCompanyRef(
+    companyRef: { id: string; name: string; region: string | null; sponsorshipStatus: string | null; focusAreas: Prisma.JsonValue } | null,
+  ): JobCompanyRef | null {
+    if (!companyRef) return null;
+    return {
+      id: companyRef.id,
+      name: companyRef.name,
+      region: companyRef.region,
+      sponsorshipStatus: (companyRef.sponsorshipStatus as VisaTag | null) ?? null,
+      focusAreas: this.asFocusAreas(companyRef.focusAreas),
+    };
+  }
+
+  private asFocusAreas(value: Prisma.JsonValue): CompanyFocusAreas {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const out: Record<string, number> = {};
+    for (const [area, weight] of Object.entries(value)) {
+      if (typeof weight === 'number') out[area] = weight;
+    }
+    return out as CompanyFocusAreas;
+  }
+
   private serializeJob(job: JobWithCounts): JobApplicationResponse {
     return {
       id: job.id,
       userId: job.userId,
       company: job.company,
+      companyId: job.companyId,
+      companyRef: this.serializeCompanyRef(job.companyRef),
       roleTitle: job.roleTitle,
       url: job.url,
       location: job.location,

@@ -126,6 +126,7 @@ model Company {
   updatedAt DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
   questions QuestionCompany[]
   stories   StoryCompany[]
+  jobApplications JobApplication[]
 
   @@map("companies")
 }
@@ -393,6 +394,11 @@ model JobApplication {
   id                String             @id @default(uuid()) @db.Uuid
   userId            String             @map("user_id") @db.Uuid
   company           String
+  // MOM-122 (ADR-0010 / D-017): optional link to the curated catalog. Free-text
+  // `company` is KEPT as fallback + display; SetNull so pipeline data survives a
+  // catalog deletion. Backfilled by exact case-insensitive name match.
+  companyId         String?            @map("company_id") @db.Uuid
+  companyRef        Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
   roleTitle         String             @map("role_title")
   url               String?
   location          String?
@@ -423,6 +429,7 @@ model JobApplication {
   @@index([status])
   @@index([roleTrackId])
   @@index([deadline])
+  @@index([companyId])
   @@map("job_applications")
 }
 

@@ -124,6 +124,64 @@ describe('JobsService.update — status transition logging (MOM-102)', () => {
   });
 });
 
+describe('JobsService — company link (MOM-122)', () => {
+  const companyRef = { id: 'co-1', name: 'Meta', region: 'Global', sponsorshipStatus: 'sponsored', focusAreas: { dsa: 5 } };
+  function jobRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'job-1', userId: 'user-1', company: 'Meta', companyId: 'co-1', companyRef,
+      roleTitle: 'E4 SWE', url: null, location: null, status: 'saved', roleTrackId: null, jdText: null,
+      appliedDate: null, deadline: null, source: null, referralName: null, visaTag: 'unknown',
+      h1bCountLastYear: null, compensationNotes: null, notes: null,
+      createdAt: new Date('2026-07-01T00:00:00.000Z'), updatedAt: new Date('2026-07-08T00:00:00.000Z'),
+      _count: { events: 0, tasks: 0, reminders: 0 }, ...overrides,
+    };
+  }
+
+  it('validates the company exists and stores companyId + serializes companyRef on create', async () => {
+    const prisma = {
+      company: { findUnique: vi.fn().mockResolvedValue({ id: 'co-1' }) },
+      jobApplication: { create: vi.fn().mockResolvedValue(jobRow()) },
+      reminder: { findFirst: vi.fn(), upsert: vi.fn() },
+    };
+    const service = new JobsService(prisma as never, {} as never);
+
+    const result = await service.create({ company: 'Meta', companyId: 'co-1', roleTitle: 'E4 SWE' } as never, 'user-1');
+
+    expect(prisma.company.findUnique).toHaveBeenCalledWith({ where: { id: 'co-1' }, select: { id: true } });
+    expect(prisma.jobApplication.create.mock.calls[0][0].data).toMatchObject({ companyId: 'co-1', company: 'Meta' });
+    expect(result.companyId).toBe('co-1');
+    expect(result.companyRef).toMatchObject({ id: 'co-1', name: 'Meta', sponsorshipStatus: 'sponsored', focusAreas: { dsa: 5 } });
+  });
+
+  it('rejects an unknown companyId before creating', async () => {
+    const prisma = {
+      company: { findUnique: vi.fn().mockResolvedValue(null) },
+      jobApplication: { create: vi.fn() },
+    };
+    const service = new JobsService(prisma as never, {} as never);
+
+    await expect(service.create({ company: 'X', companyId: 'nope', roleTitle: 'R' } as never, 'user-1')).rejects.toThrow('Unknown company');
+    expect(prisma.jobApplication.create).not.toHaveBeenCalled();
+  });
+
+  it('passes companyId through on update (null unlinks)', async () => {
+    const prisma = {
+      jobApplication: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue(jobRow({ companyId: null, companyRef: null })),
+      },
+      reminder: { findFirst: vi.fn(), upsert: vi.fn() },
+    };
+    const service = new JobsService(prisma as never, {} as never);
+
+    const result = await service.update('job-1', { companyId: null } as never, 'user-1');
+
+    expect(prisma.jobApplication.updateMany.mock.calls[0][0].data).toEqual({ companyId: null });
+    expect(result.companyId).toBeNull();
+    expect(result.companyRef).toBeNull();
+  });
+});
+
 describe('JobsService.funnel', () => {
   function serviceWith(jobs: Array<{ status: string; source: string | null; visaTag: string | null }>) {
     const prisma = { jobApplication: { findMany: vi.fn().mockResolvedValue(jobs) } };

@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsString, IsUrl, Max, MaxLength, Min, Matches } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUrl, IsUUID, Max, MaxLength, Min, Matches } from 'class-validator';
 import {
   CAREER_ROLE_TRACK_IDS,
   CareerRoleTrackId,
@@ -14,6 +14,11 @@ export class CreateJobDto {
   @IsString()
   @MaxLength(200)
   company!: string;
+
+  // MOM-122: optional link to the catalog. Free-text company stays required.
+  @IsOptional()
+  @IsUUID()
+  companyId?: string | null;
 
   @IsString()
   @MaxLength(200)

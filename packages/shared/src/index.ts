@@ -961,10 +961,22 @@ export type JobApplicationSource = (typeof JOB_APPLICATION_SOURCES)[number];
 export const VISA_TAGS = ['sponsored', 'unknown', 'not_sponsoring'] as const;
 export type VisaTag = (typeof VISA_TAGS)[number];
 
+// MOM-122: the catalog company a job is linked to (a slim projection of
+// CompanyResponse), so the pipeline can show sponsorship/focus without a second fetch.
+export interface JobCompanyRef {
+  id: string;
+  name: string;
+  region: string | null;
+  sponsorshipStatus: VisaTag | null;
+  focusAreas: CompanyFocusAreas;
+}
+
 export interface JobApplicationResponse {
   id: string;
   userId: string;
   company: string;
+  companyId: string | null;
+  companyRef: JobCompanyRef | null;
   roleTitle: string;
   url: string | null;
   location: string | null;
@@ -986,6 +998,7 @@ export interface JobApplicationResponse {
 
 export interface CreateJobApplicationRequest {
   company: string;
+  companyId?: string | null;
   roleTitle: string;
   url?: string | null;
   location?: string | null;

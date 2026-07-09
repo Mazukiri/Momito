@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { JOB_APPLICATION_STATUSES, type JobApplicationStatus } from '@momito/shared';
-import { jobsApi, missionsApi, remindersApi } from '../../../lib/api-client';
+import { JOB_APPLICATION_STATUSES, type CompanyResponse, type JobApplicationStatus } from '@momito/shared';
+import { companiesApi, jobsApi, missionsApi, remindersApi } from '../../../lib/api-client';
 import { Badge, Card, ErrorBanner, Spinner } from '../../../components/ui';
 import { InterviewRoundsCard } from '../../../components/InterviewRoundsCard';
 import { JobReadinessCard } from '../../../components/JobReadinessCard';
@@ -23,14 +23,19 @@ export default function JobDetailPage() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const [missionId, setMissionId] = useState<string | null>(null);
+  // MOM-122: catalog + the currently-linked company, for fixing/removing a link.
+  const [companies, setCompanies] = useState<CompanyResponse[]>([]);
+  const [companyId, setCompanyId] = useState<string>('');
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await jobsApi.get(params.id);
+      const [data, companyList] = await Promise.all([jobsApi.get(params.id), companiesApi.list()]);
       setJob(data);
       setStatus(data.status);
+      setCompanies(companyList);
+      setCompanyId(data.companyId ?? '');
       const relatedMission = await missionsApi.list();
       setMissionId(relatedMission.find((item) => item.jobApplicationId === params.id)?.id ?? null);
     } catch (err: unknown) {
@@ -52,6 +57,20 @@ export default function JobDetailPage() {
       await load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update job');
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function linkCompany() {
+    setWorking(true);
+    try {
+      // Empty selection unlinks (companyId: null) — free-text company is untouched.
+      const picked = companies.find((item) => item.id === companyId);
+      await jobsApi.update(params.id, { companyId: companyId || null, ...(picked ? { company: picked.name } : {}) });
+      await load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to link company');
     } finally {
       setWorking(false);
     }
@@ -190,6 +209,26 @@ export default function JobDetailPage() {
               {JOB_APPLICATION_STATUSES.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
             <button onClick={updateStatus} disabled={working || status === job.status} className="mt-3 w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Update</button>
+          </Card>
+
+          <Card>
+            <h2 className="mb-3 font-semibold text-zinc-800 dark:text-zinc-100">Company</h2>
+            {job.companyRef ? (
+              <p className="mb-2 text-sm text-zinc-600 dark:text-zinc-300">
+                Linked to <span className="font-medium">{job.companyRef.name}</span>
+                {job.companyRef.sponsorshipStatus === 'sponsored' && <span className="ml-1 text-emerald-600 dark:text-emerald-400">· sponsors visas</span>}
+                {job.companyRef.sponsorshipStatus === 'not_sponsoring' && <span className="ml-1 text-rose-600 dark:text-rose-400">· no sponsorship</span>}
+              </p>
+            ) : (
+              <p className="mb-2 text-sm text-zinc-500">Not linked to the catalog — free text “{job.company}”.</p>
+            )}
+            <select value={companyId} onChange={(event) => setCompanyId(event.target.value)} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+              <option value="">— not linked —</option>
+              {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            <button onClick={linkCompany} disabled={working || companyId === (job.companyId ?? '')} className="mt-3 w-full rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">
+              {companyId ? 'Link company' : 'Unlink'}
+            </button>
           </Card>
 
           <Card>
