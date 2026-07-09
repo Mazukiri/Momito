@@ -782,7 +782,7 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 - **MOM-119** Referral network view + Today thank-you nudges · BLOCKED on MOM-117
 
 ### Track P — Company Intelligence & Job↔Company Linkage · CareerOS Gate 2/5
-- **MOM-120** SPIKE-012 + DESIGN: structured `Company` (rounds, focus-area weights vs `CAREER_ROLE_AREA_IDS`, `sponsorshipStatus`, `compBand`) + nullable `JobApplication.companyId` FK · NEEDS_SPIKE · CLAUDE
+- **MOM-120** SPIKE-012 + DESIGN: structured `Company` (rounds, focus-area weights vs `CAREER_ROLE_AREA_IDS`, `sponsorshipStatus`, `compBand`) + nullable `JobApplication.companyId` FK · **DESIGN DONE** 2026-07-10 (ADR-0010 ACCEPTED, D-017; SPIKE-012 measured 86% backfill on live data — 6/7 jobs match a unique catalog name, out-of-catalog "Datadog" stays null; Json columns + exact ci name-match with `HAVING count(*)=1` dup guard; two additive migrations MOM-121 then MOM-122).
 - **MOM-121** Implement structured `Company` columns + migrate 20 seed packs' focus/track prose · BLOCKED on MOM-120 · *migration*
 - **MOM-122** Add `companyId` FK + link/backfill UI (**highest-risk migration**) · BLOCKED on MOM-120 · *migration*
 - **MOM-123** Company detail page (interview process, focus, sponsorship, linked content) · BLOCKED on MOM-121

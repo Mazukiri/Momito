@@ -216,3 +216,20 @@ the PlanItem/Task dual-write anti-pattern (cross-links D-015). `InterviewRound` 
 failed/mixed debrief emits `WeaknessSignal`/`LearningEvidence` (D-013), closing the loop.
 **Consequences:** Additive migration (D-004). Enables interview-date reminders (MOM-112), countdown
 (MOM-140-full), auto-prep (MOM-141), and the outcome→weakness edge (MOM-113).
+
+### D-017 — Structured `Company` columns as Json + name-match backfill for the job↔company FK
+**Context:** `JobApplication.company` is free text disconnected from the 20-company catalog; `Company`'s
+focus/track info is prose in `notes`; no structured sponsorship/comp. ADR-0010 / SPIKE-012. The FK
+migration is the plan's single highest-risk change (busiest table + seed).
+**Decision:** Store the new structured company fields as **Json** (`focusAreas` map `{area: 1–5}`,
+`roleTrackIds`, `interviewProcess`) plus scalar `sponsorshipStatus` (a `VISA_TAGS` value, null = no data)
+and free-text `compBand` — matching the Question tag convention, since the taxonomy is TS-owned and the
+query is always per-row (MOM-121). Add a **nullable `companyId` FK** with the free-text `company` column
+**kept** and `onDelete: SetNull` (MOM-122); backfill by **exact case-insensitive name match** against
+catalog names that are unique (`HAVING count(*)=1`) — no fuzzy matching, non-matches stay null and are
+user-linkable. SPIKE-012 measured 86% backfill on live data (only out-of-catalog names miss). Split into
+two independently-revertible additive migrations (columns, then FK).
+**Consequences:** Zero data loss (free text never touched; backfill fills only NULLs). Enables
+company-weighted readiness (MOM-130/131), sponsorship filter (MOM-124), targeting shortlist (MOM-125),
+company detail (MOM-123). DTO validates `focusAreas` keys against `CAREER_ROLE_AREA_IDS`. Trade-off:
+denormalized `company` text can drift after a rename — display prefers `companyRef.name` when linked.

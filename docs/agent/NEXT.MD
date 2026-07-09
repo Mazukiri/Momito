@@ -64,13 +64,16 @@ missing conflict/failure/ambiguity). **★ CareerOS Gate 1 spine is COMPLETE** �
 weakness → Today prep + weak-area-first job_prep + lowered "ready for Meta?" verdict + behavioral gap map +
 auto prep-queue countdown. Everything in Gate 1 that does **not** require the company-FK migration is done.
 
-**Active PR-sized task: MOM-120 (Phase 1D, company context — LAST, highest-risk)** — SPIKE-012 + a D-004
-DESIGN-doc PR (planner, no `migrate` run) for: structured `Company` columns (interview rounds, focus-area
-weights vs `CAREER_ROLE_AREA_IDS`, `sponsorshipStatus`, `compBand`) **and** a nullable `companyId` FK on
-`JobApplication` with a free-text `company` fallback + name-match backfill. This is the busiest table + the
-20 seed packs, so it goes **design-first, then a separate human-approved implementer PR** (MOM-121 structured
-Company, then MOM-122 the FK) tested on fresh **and** existing DB with rollback notes. It retro-enriches
-MOM-125/130/131/128 (real company focus weights + FK instead of name match).
+**Shipped since:** **MOM-120 DESIGN** (ADR-0010 ACCEPTED, D-017; SPIKE-012 = 86% backfill on live data).
+Design is fixed: Json company columns + exact ci name-match FK backfill, two additive migrations.
+
+**Active PR-sized task: MOM-121 (Phase 1D migration 1)** — implement the structured `Company` columns
+(`focusAreas Json`, `roleTrackIds Json`, `interviewProcess Json`, `sponsorshipStatus String?`,
+`compBand String?`), hand-map the 20 seed packs' `notes` prose into them (`seed-data.ts`), validate
+`focusAreas` keys against `CAREER_ROLE_AREA_IDS` in the companies DTOs, expose the fields on
+`CompanyResponse` in shared. Additive migration; rollback = drop 5 columns. Then **MOM-122** (the
+`companyId` FK + name-match backfill + link UI), then downstream MOM-123/124/125. Full detail in the
+approved handoff plan and ADR-0010.
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).

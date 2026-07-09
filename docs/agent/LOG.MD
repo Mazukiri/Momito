@@ -1,5 +1,28 @@
 # LOG
 
+## 2026-07-10 - MOM-120: DESIGN — company-as-FK + structured intelligence (CLAUDE, docs only)
+
+**Actor:** CLAUDE (planner). Branch `feat/careeros-phase-0`. **Docs only, no migration run** — the design
+gate for Phase 1D, the plan's highest-risk change (job↔company FK on the busiest table + 20 seed packs).
+
+**SPIKE-012 (read-only, live dev DB):** of 7 job applications, **6 backfill** by exact case-insensitive
+match to a unique catalog `Company.name`; the 1 miss ("Datadog") is out-of-catalog and correctly stays
+null. Zero duplicate company names, but users can create dupes via `POST /companies` → backfill guards
+with `HAVING count(*)=1`. Fuzzy matching rejected (a wrong link is worse than no link).
+
+**Design (ADR-0010 → ACCEPTED, D-017):** two additive migrations. **MOM-121** adds structured `Company`
+columns as **Json** (`focusAreas {area:1–5}`, `roleTrackIds`, `interviewProcess`) + scalar
+`sponsorshipStatus` (VISA_TAGS value, null=no data) + free-text `compBand`, and hand-maps the 20 packs'
+existing `notes` prose into them. **MOM-122** adds nullable `companyId` FK (`companyRef`, `onDelete:SetNull`)
+keeping the free-text `company` column, with a name-match backfill in the migration SQL. Json (not a
+relation table) matches the Question tag convention since the area taxonomy is TS-owned and queries are
+per-row; DTO validates `focusAreas` keys against `CAREER_ROLE_AREA_IDS`.
+
+**Files:** `docs/adr/0010-company-as-fk-structured-intelligence.md` (PROPOSED→ACCEPTED, full design),
+`docs/agent/DECISIONS.MD` (D-017), BACKLOG/NEXT/LOG.
+
+**Next:** MOM-121 — implement the structured Company columns + seed enrichment (additive migration 1).
+
 ## 2026-07-09 - MOM-131: story coverage → target-scoped behavioral gap map (CLAUDE, no schema)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Closes the last Gate-1 spine
