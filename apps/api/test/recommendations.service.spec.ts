@@ -13,11 +13,13 @@ function buildService(
     openSignals?: Array<Record<string, unknown>>;
   },
   jobs: Array<Record<string, unknown>> = [],
+  upcomingRounds: Array<Record<string, unknown>> = [],
 ) {
   const prisma = {
     task: { findMany: vi.fn().mockResolvedValue([]) },
     jobApplication: { findMany: vi.fn().mockResolvedValue(jobs) },
     learningHighlight: { count: vi.fn().mockResolvedValue(0) },
+    interviewRound: { findMany: vi.fn().mockResolvedValue(upcomingRounds) },
   };
   const career = { listActiveReadiness: vi.fn().mockResolvedValue([]) };
   const missions = { list: vi.fn().mockResolvedValue([]) };
@@ -64,6 +66,48 @@ function job(overrides: Record<string, unknown>): Record<string, unknown> {
     ...overrides,
   };
 }
+
+function round(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const daysAhead = (overrides.daysAhead as number | undefined) ?? 3;
+  const scheduledAt = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000);
+  delete overrides.daysAhead;
+  return {
+    id: 'round-1',
+    roundType: 'system_design',
+    scheduledAt,
+    jobApplicationId: 'job-1',
+    jobApplication: { id: 'job-1', company: 'Meta' },
+    ...overrides,
+  };
+}
+
+describe('RecommendationsService — interview countdown (MOM-141)', () => {
+  it('surfaces an upcoming round as the top-ranked Today card, scaling by proximity', async () => {
+    const service = buildService({}, [], [round({ daysAhead: 3 })]);
+
+    const recommendations = await service.list('user-1');
+
+    const card = recommendations.find((item) => item.id === 'round:round-1');
+    expect(card).toBeDefined();
+    expect(card).toMatchObject({
+      type: 'job',
+      title: 'Prep your Meta System design in 3 days',
+      targetHref: '/jobs/job-1',
+    });
+    // 101 + (14 - 3) = 112 — above overdue tasks (100).
+    expect(card?.priority).toBe(112);
+    expect(card?.reason).toBe('Your System design round is in 3 days — build your prep queue now.');
+  });
+
+  it('reads "tomorrow"/"today" and ranks a nearer round higher', async () => {
+    const tomorrow = (await buildService({}, [], [round({ daysAhead: 1 })]).list('user-1')).find(
+      (item) => item.id === 'round:round-1',
+    );
+    expect(tomorrow?.title).toBe('Prep your Meta System design tomorrow');
+    expect(tomorrow?.priority).toBe(114); // 101 + (14 - 1)
+    expect(tomorrow?.reason).toBe('Your System design round is tomorrow — lock in your prep.');
+  });
+});
 
 describe('RecommendationsService — weakness repair', () => {
   it('recommends repairing an area with repeated struggles, naming the count', async () => {

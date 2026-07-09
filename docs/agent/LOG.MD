@@ -1,5 +1,32 @@
 # LOG
 
+## 2026-07-09 - MOM-141: auto-assembled round-scoped prep queue + interview countdown on Today (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Two parts, both riding
+existing infrastructure: (1) a daily cron that fires MOM-111's `generatePrep` for imminent rounds, and (2)
+an interview **countdown** card injected into the existing `recommendations.service` Today brain.
+
+**Part 1 — auto-assemble (`InterviewRoundsService.autoAssembleUpcomingPrep(withinDays=7)` + `InterviewPrepScheduler`):**
+finds `pending` rounds scheduled within the window that have **zero** tasks (`_count.tasks === 0`) and fires
+`generatePrep` for each, returning `{ roundsPrepared, tasksCreated }`. Rounds that already have a prep queue
+are skipped (idempotent — safe to run daily). `InterviewPrepScheduler.tick()` runs `@Cron(EVERY_DAY_AT_6AM)`
+and logs only when it prepared something. Registered in `InterviewRoundsModule` providers.
+
+**Part 2 — countdown card (`recommendations.service.list`):** queries `interviewRound.findMany` for `pending`
+rounds with `scheduledAt` in `[now, now+14d]`, top 3 by soonest, and emits a `type:'job'` card
+*"Prep your \<company\> \<RoundType\> \<today|tomorrow|in N days\>"* linking to `/jobs/:id`. Priority
+`101 + (14 − daysUntil)` (101–115) so it sits **above overdue tasks (100)** and scales with proximity — a
+nearer round outranks a farther one. Reason speaks the urgency ("in 3 days — build your prep queue now").
+
+**Checks:** `pnpm -r lint/typecheck` green; **209 API tests** (+4: countdown ranks/copies by proximity for
+3-days and tomorrow; autoAssemble preps only task-less rounds and no-ops on an empty window). **Live** on
+:3001: created a `coding` round 3 days out → Today's top card became *"Prep your Meta Coding in 3 days"*
+(priority 112), above a pre-existing Behavioral round 6 days out (109) and overdue tasks (100). Recommendations-
+only injection (no new UI component, like MOM-142) → no screenshot.
+
+**Next:** MOM-131 — story coverage → interview behavioral gap map (role-scoped version doable now). Then
+Phase 1D company-FK migration (MOM-120→121→122, highest-risk, DESIGN PR first).
+
 ## 2026-07-09 - MOM-112: per-round interview-date reminder automation (CLAUDE, migration)
 
 **Actor:** CLAUDE (implementer). Additive migration under the D-004 gate (blanket approval). Branch

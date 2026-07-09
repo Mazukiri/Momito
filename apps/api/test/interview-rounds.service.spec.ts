@@ -315,6 +315,50 @@ describe('InterviewRoundsService.generatePrep (MOM-111)', () => {
   });
 });
 
+describe('InterviewRoundsService.autoAssembleUpcomingPrep (MOM-141)', () => {
+  const jobRow = { id: 'job-1', company: 'Meta', roleTitle: 'E5 SWE', roleTrackId: 'big-tech-swe', deadline: null };
+
+  it('generates prep only for upcoming rounds that have no tasks yet', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 1 });
+    const listFindMany = vi.fn().mockResolvedValue([
+      { id: 'round-1', jobApplicationId: 'job-1', userId: 'user-1', _count: { tasks: 0 } },
+      { id: 'round-2', jobApplicationId: 'job-1', userId: 'user-1', _count: { tasks: 3 } },
+    ]);
+    const prisma = makePrisma({
+      jobApplication: { findFirst: vi.fn().mockResolvedValue(jobRow) },
+      interviewRound: {
+        // First call (the scan) lists the candidate rounds; generatePrep's own
+        // findFirst then resolves each round it prepares.
+        findMany: listFindMany,
+        findFirst: vi.fn().mockResolvedValue(roundRow({ roundType: 'system_design', scheduledAt: new Date('2026-08-01T00:00:00.000Z') })),
+      },
+      task: { createMany },
+    });
+    const service = makeService(prisma);
+
+    const result = await service.autoAssembleUpcomingPrep();
+
+    // round-2 already has a prep queue → skipped; only round-1 is prepared.
+    expect(result).toEqual({ roundsPrepared: 1, tasksCreated: 1 });
+    expect(createMany).toHaveBeenCalledTimes(1);
+    expect(listFindMany.mock.calls[0][0].where).toMatchObject({ outcome: 'pending' });
+  });
+
+  it('no-ops when no rounds are within the window', async () => {
+    const createMany = vi.fn();
+    const prisma = makePrisma({
+      interviewRound: { findMany: vi.fn().mockResolvedValue([]) },
+      task: { createMany },
+    });
+    const service = makeService(prisma);
+
+    const result = await service.autoAssembleUpcomingPrep();
+
+    expect(result).toEqual({ roundsPrepared: 0, tasksCreated: 0 });
+    expect(createMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('InterviewRoundsService.remove', () => {
   it('deletes an owned round', async () => {
     const prisma = makePrisma({ interviewRound: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) } });

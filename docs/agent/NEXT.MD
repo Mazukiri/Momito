@@ -46,17 +46,16 @@ verdict).
 
 **Shipped since:** **MOM-111** (round-scoped `generatePrep` + `Task.interviewRoundId`); **MOM-112**
 (`ensureRoundReminder` + `Reminder.interviewRoundId` — a scheduled round auto-lands a countdown reminder;
-live-verified). Phase 1 sub-phases 1A (outcome edge) + 1B (grounded verdict) + most of 1C are done.
+live-verified); **MOM-141** (`autoAssembleUpcomingPrep` + `InterviewPrepScheduler` `@Cron(6AM)` auto-fires
+`generatePrep` for imminent task-less rounds; `recommendations.service` injects an interview **countdown**
+card priority `101+(14−daysUntil)`, above overdue tasks; 209 API tests, live-verified: a round 3 days out
+became Today's top card "Prep your Meta Coding in 3 days"). **Phase 1 sub-phases 1A + 1B + 1C are DONE.**
 
-**Active PR-sized task: MOM-141** — auto-assemble the round-scoped prep queue + interview countdown on
-Today. Two parts, both **no schema**: (1) when an `InterviewRound` has a `scheduledAt` within a window
-(say ≤7 days) and no prep tasks yet (`interviewRoundId` count 0), auto-fire MOM-111's `generatePrep` so
-the queue assembles itself — trigger from the recommendations/Today read path or the existing reminder
-scheduler (idempotent: `generatePrep` uses `skipDuplicates`, and gate on "no round tasks yet" to avoid
-re-firing). (2) Surface an interview **countdown** card in `recommendations.service` ("Prep for your Meta
-onsite in 3 days") ranked high by proximity, linking to the job. Reuse the `JOB_STAGE_CARD` +
-openSignals patterns already there. This is the **last core Gate-1 polish** (auto prep-queue counts down
-to a date). Then **MOM-131** (story gap map — role-scoped now).
+**Active PR-sized task: MOM-131** — story coverage → specific-interview behavioral **gap map** ("you have
+ownership + conflict but no ambiguity story for Meta"). The role-scoped version is doable **now** (map the
+Story bank's covered behavioral competencies against the target role's required behavioral areas; surface
+missing ones as a card/gap). Full company-scoped weighting enriches once MOM-121's structured Company lands.
+Reuse the Story bank + `CAREER_ROLE_AREA_IDS` behavioral taxonomy; no schema expected.
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).

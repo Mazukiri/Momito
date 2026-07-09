@@ -172,6 +172,31 @@ export class InterviewRoundsService {
     return { created: created.count };
   }
 
+  // MOM-141: for every pending round scheduled within `withinDays` that has no
+  // prep tasks yet, auto-fire generatePrep so the prep queue assembles itself as
+  // the date approaches. Idempotent — skips rounds that already have tasks — so
+  // it is safe to run on a daily cron (InterviewPrepScheduler).
+  async autoAssembleUpcomingPrep(withinDays = 7): Promise<{ roundsPrepared: number; tasksCreated: number }> {
+    const now = new Date();
+    const horizon = new Date(now.getTime() + withinDays * 24 * 60 * 60 * 1000);
+    const rounds = await this.prisma.interviewRound.findMany({
+      where: { outcome: 'pending', scheduledAt: { gte: now, lte: horizon } },
+      select: { id: true, jobApplicationId: true, userId: true, _count: { select: { tasks: true } } },
+    });
+
+    let roundsPrepared = 0;
+    let tasksCreated = 0;
+    for (const round of rounds) {
+      if (round._count.tasks > 0) continue; // already has a prep queue
+      const { created } = await this.generatePrep(round.jobApplicationId, round.id, round.userId);
+      if (created > 0) {
+        roundsPrepared += 1;
+        tasksCreated += created;
+      }
+    }
+    return { roundsPrepared, tasksCreated };
+  }
+
   private offsetDays(base: Date, days: number): Date {
     return new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
   }

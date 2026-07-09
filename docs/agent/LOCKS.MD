@@ -13,12 +13,13 @@
 
 | Task | Owner | Files / globs | Claimed (UTC) | Notes |
 |------|-------|---------------|---------------|-------|
-| _(none)_ | | | | |
+| _(none active)_ | | | | |
 
 ## Released locks
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-141 | CLAUDE | `apps/api/src/recommendations/recommendations.service.ts`, `apps/api/src/interview-rounds/**`, `apps/api/test/{recommendations,interview-rounds}.service.spec.ts`, `docs/agent/*.MD` | 2026-07-09 |
 | MOM-112 | CLAUDE | `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**`, `apps/api/src/interview-rounds/interview-rounds.service.ts`, `apps/api/test/interview-rounds.service.spec.ts`, `docs/agent/*.MD` | 2026-07-09 |
 | MOM-111 | CLAUDE | `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**`, `apps/api/src/interview-rounds/**`, `apps/web/app/lib/api-client.ts`, `apps/web/app/components/InterviewRoundsCard.tsx`, `apps/api/test/interview-rounds.service.spec.ts`, `docs/agent/*.MD` | 2026-07-09 |
 | MOM-130 | CLAUDE | `apps/api/src/career/**`, `apps/api/src/weaknesses/weaknesses.service.ts`, `packages/shared/src/index.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/components/JobReadinessCard.tsx` (new), `apps/web/app/(authenticated)/jobs/[id]/page.tsx`, `apps/api/test/career.service.spec.ts`, `docs/agent/*.MD` | 2026-07-09 |

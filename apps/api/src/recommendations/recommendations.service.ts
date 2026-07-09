@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PracticeRecommendationResponse } from '@momito/shared';
+import { INTERVIEW_ROUND_TYPE_LABELS, PracticeRecommendationResponse } from '@momito/shared';
 import { CareerService } from '../career/career.service';
 import { MissionsService } from '../missions/missions.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -31,7 +31,18 @@ const RECOMMENDATION_REASONS = {
     if (source === 'manual') return `You flagged this weakness to repair${times}.`;
     return `A recurring weakness surfaced from your recent attempts${times}.`;
   },
+  // MOM-141: a scheduled interview round counts down toward its date so the
+  // sharpest prep floats to the top of Today as the interview approaches.
+  interviewCountdown: (roundLabel: string, days: number) => {
+    if (days <= 0) return `Your ${roundLabel} round is today — do a final review.`;
+    if (days === 1) return `Your ${roundLabel} round is tomorrow — lock in your prep.`;
+    return `Your ${roundLabel} round is in ${days} days — build your prep queue now.`;
+  },
 };
+
+// MOM-141: how far ahead an interview round starts appearing on Today. Rounds
+// further out than this aren't urgent enough to outrank day-to-day study.
+const INTERVIEW_COUNTDOWN_WINDOW_DAYS = 14;
 
 // A weak signal needs at least this many struggles before it drives a
 // recommendation — one bad attempt is noise, not a pattern.
@@ -83,24 +94,64 @@ export class RecommendationsService {
   ) {}
 
   async list(userId: string): Promise<PracticeRecommendationResponse[]> {
-    const [readiness, activeMissions, overdueTasks, jobs, inboxCount, weaknessSummary] = await Promise.all([
-      this.career.listActiveReadiness(userId),
-      this.missions.list(userId),
-      this.prisma.task.findMany({
-        where: { userId, status: { not: 'done' }, dueDate: { lt: new Date() } },
-        orderBy: { dueDate: 'asc' },
-        take: 3,
-      }),
-      this.prisma.jobApplication.findMany({
-        where: { userId, status: { in: ['saved', 'applied', 'oa', 'interview', 'onsite'] } },
-        orderBy: [{ deadline: 'asc' }, { updatedAt: 'desc' }],
-        take: 3,
-      }),
-      this.prisma.learningHighlight.count({ where: { userId, isDeleted: false, reviewedAt: null } }),
-      this.weaknesses.summary(userId),
-    ]);
+    const now = new Date();
+    const countdownHorizon = new Date(now.getTime() + INTERVIEW_COUNTDOWN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const [readiness, activeMissions, overdueTasks, jobs, inboxCount, weaknessSummary, upcomingRounds] =
+      await Promise.all([
+        this.career.listActiveReadiness(userId),
+        this.missions.list(userId),
+        this.prisma.task.findMany({
+          where: { userId, status: { not: 'done' }, dueDate: { lt: new Date() } },
+          orderBy: { dueDate: 'asc' },
+          take: 3,
+        }),
+        this.prisma.jobApplication.findMany({
+          where: { userId, status: { in: ['saved', 'applied', 'oa', 'interview', 'onsite'] } },
+          orderBy: [{ deadline: 'asc' }, { updatedAt: 'desc' }],
+          take: 3,
+        }),
+        this.prisma.learningHighlight.count({ where: { userId, isDeleted: false, reviewedAt: null } }),
+        this.weaknesses.summary(userId),
+        // MOM-141: interview rounds still ahead of us, scheduled within the countdown
+        // window and not yet decided — these become the top-ranked Today cards.
+        this.prisma.interviewRound.findMany({
+          where: {
+            userId,
+            outcome: 'pending',
+            scheduledAt: { gte: now, lte: countdownHorizon },
+          },
+          orderBy: { scheduledAt: 'asc' },
+          take: 3,
+          include: { jobApplication: { select: { id: true, company: true } } },
+        }),
+      ]);
 
     const recommendations: PracticeRecommendationResponse[] = [];
+
+    // MOM-141: a scheduled interview is the single most time-critical thing on the
+    // board — an onsite in 3 days outranks every study card. Priority scales with
+    // proximity (sooner = higher), landing at/above overdue tasks (100) so the
+    // countdown always leads Today, and the card links to the job so tapping it
+    // reaches the round + its auto-assembled prep queue.
+    for (const round of upcomingRounds) {
+      const scheduledAt = round.scheduledAt;
+      if (!scheduledAt) continue;
+      const daysUntil = Math.max(0, Math.ceil((scheduledAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+      const roundLabel = INTERVIEW_ROUND_TYPE_LABELS[round.roundType as keyof typeof INTERVIEW_ROUND_TYPE_LABELS];
+      const company = round.jobApplication?.company ?? 'your interview';
+      const whenText = daysUntil <= 0 ? 'today' : daysUntil === 1 ? 'tomorrow' : `in ${daysUntil} days`;
+      recommendations.push({
+        id: `round:${round.id}`,
+        type: 'job',
+        title: `Prep your ${company} ${roundLabel} ${whenText}`,
+        reason: RECOMMENDATION_REASONS.interviewCountdown(roundLabel, daysUntil),
+        roleTrackId: null,
+        area: null,
+        targetHref: `/jobs/${round.jobApplicationId}`,
+        // 101–115: above overdue tasks (100); the nearer the round, the higher.
+        priority: 101 + Math.max(0, INTERVIEW_COUNTDOWN_WINDOW_DAYS - daysUntil),
+      });
+    }
 
     // MOM-142: interview-grounded weaknesses come first. Open WeaknessSignals —
     // emitted by the MOM-113 debrief edge (or manual entry), stored and decayed by
