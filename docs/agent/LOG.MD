@@ -1,5 +1,43 @@
 # LOG
 
+## 2026-07-09 - MOM-146: Readwise highlight → FSRS spaced-repetition review — the read→retain loop (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Net-new task (not in the
+CareerOS plan) taken on the owner's explicit ask to "really think hard about how the Readwise features can
+be improved to truly help the learner."
+
+**The diagnosis.** The Readwise feature *captured* highlights (sync) and let you *tag* them (role/area), then
+a reviewed highlight was filed into a write-only `LearningEvidence` ledger — and never seen again. But the
+learner highlighted it *because they want to remember it*, and Momito's entire edge over plain Readwise is
+**FSRS spaced repetition tied to a concrete target**. The highlight dead-ended exactly one step before the
+app's core value: nothing made you *retain* it. Meanwhile the review engine (`ReviewState`) is already
+polymorphic (`objectType/objectId`, ADR-0002) — highlights just weren't wired to it.
+
+**The fix — highlights that stick.** A reviewed highlight now enters the same FSRS queue as questions and
+stories. `REVIEWABLE_OBJECT_TYPES` gains `'highlight'` (a string-union add — `ReviewState.objectType` is a
+plain `String` column and `objectId` is `@db.Uuid`, matching `LearningHighlight.id`, so **zero migration**).
+- `reviews.service`: `'highlight'` supported; ownership-checked like Story (per-user private, ADR-0003);
+  `listDue` titles a due highlight by its **source** ("you highlighted something in *Atomic Habits* — what
+  was it?"), the text being the reveal.
+- `learning.service.updateHighlight`: reviewing a highlight as anything but "ignored" seeds a `ReviewState`
+  via `reviews.record(userId,'highlight',id,3)` (Good — you just read+understood it; FSRS picks the first
+  interval). Best-effort (a scheduling hiccup can't fail the review). Ignored = filed to ledger only. Added
+  `getHighlight` for the review card's reveal path (`GET /learning/highlights/:id`). A highlight deleted
+  upstream in Readwise **suspends** its review state on the next sync so it stops resurfacing.
+- Web: `TodayReviewCard` gains a highlight branch (cue → recall → reveal text+note → grade); inbox primary
+  action relabeled **"Review" → "Remember"** with copy explaining it drops into the spaced-repetition queue.
+
+**Checks:** `pnpm -r lint/typecheck` green; **220 API tests** (+11: highlight schedule/ownership/title-cue/
+fallback in reviews; review-seeding on useful, not on ignored, not on retag, best-effort, getHighlight in
+learning) + **25 web tests** (+1: highlight card cues by source, withholds text until reveal, grades
+`('highlight','hl-1',3)`). **Live** on :3001 (seeded a real highlight for the demo user): review "useful" →
+200 → `ReviewState` created (`objectType:highlight`, reps 1); `GET /learning/highlights/:id` returns text;
+backdated its due → appears in `/reviews/due` titled **"Atomic Habits"**, type `highlight`; marked deleted →
+suspended → gone from due. Cleaned up the seeded rows.
+
+**Next:** back to the CareerOS Phase-1 plan — **MOM-131** (story coverage → behavioral gap map, role-scoped),
+then Phase 1D company-FK migration (MOM-120→121→122, highest-risk, DESIGN PR first).
+
 ## 2026-07-09 - MOM-141: auto-assembled round-scoped prep queue + interview countdown on Today (CLAUDE, no schema)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Two parts, both riding

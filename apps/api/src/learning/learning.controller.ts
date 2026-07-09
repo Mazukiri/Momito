@@ -30,6 +30,13 @@ export class LearningController {
     return this.learning.inbox(user.id);
   }
 
+  // MOM-146: single highlight, for the review card to reveal its text when a
+  // due 'highlight' review is expanded on Today.
+  @Get('learning/highlights/:id')
+  getHighlight(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.learning.getHighlight(id, user.id);
+  }
+
   @Patch('learning/highlights/:id')
   updateHighlight(
     @Param('id', ParseUUIDPipe) id: string,

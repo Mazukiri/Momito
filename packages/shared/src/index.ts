@@ -1302,6 +1302,10 @@ export const REVIEWABLE_OBJECT_TYPES = [
   'system_design_case',
   'behavioral_prompt',
   'cs_card',
+  // MOM-146: a synced Readwise highlight the learner chose to remember. Enters
+  // the same FSRS queue as questions/stories so a saved insight actually
+  // resurfaces and sticks, instead of dead-ending in a write-only ledger.
+  'highlight',
 ] as const;
 export type ReviewableObjectType = (typeof REVIEWABLE_OBJECT_TYPES)[number];
 

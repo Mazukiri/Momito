@@ -4,11 +4,12 @@ import { useState } from 'react';
 import Link from 'next/link';
 import {
   SELF_RATING_SCALE,
+  type LearningHighlightResponse,
   type QuestionResponse,
   type ReviewStateResponse,
   type StoryResponse,
 } from '@momito/shared';
-import { attemptsApi, questionsApi, reviewsApi, storiesApi } from '../lib/api-client';
+import { attemptsApi, learningApi, questionsApi, reviewsApi, storiesApi } from '../lib/api-client';
 import { useTimer } from '../lib/use-timer';
 import { Badge, Card, Spinner } from './ui';
 import { Markdown } from './Markdown';
@@ -38,13 +39,19 @@ export function TodayReviewCard({
   const [loading, setLoading] = useState(false);
   const [question, setQuestion] = useState<QuestionResponse | null>(null);
   const [story, setStory] = useState<StoryResponse | null>(null);
+  const [highlight, setHighlight] = useState<LearningHighlightResponse | null>(null);
   const [recallText, setRecallText] = useState('');
   const [saving, setSaving] = useState(false);
   // Same interval-based timing as session AnswerForm (MOM-036) — started when
   // the prompt appears, read when the grade is saved.
   const timer = useTimer(false);
 
-  const detailHref = review.objectType === 'story' ? '/stories' : `/questions/${review.objectId}`;
+  const detailHref =
+    review.objectType === 'story'
+      ? '/stories'
+      : review.objectType === 'highlight'
+        ? '/learning'
+        : `/questions/${review.objectId}`;
 
   async function expand() {
     if (phase !== 'collapsed') {
@@ -57,6 +64,8 @@ export function TodayReviewCard({
         setQuestion(await questionsApi.get(review.objectId));
       } else if (review.objectType === 'story') {
         setStory(await storiesApi.get(review.objectId));
+      } else if (review.objectType === 'highlight') {
+        setHighlight(await learningApi.getHighlight(review.objectId));
       }
       timer.reset();
       timer.start();
@@ -102,7 +111,11 @@ export function TodayReviewCard({
           <p className="mt-1 text-xs text-zinc-400">Due {new Date(review.due).toLocaleString()}</p>
         </Link>
         <div className="flex shrink-0 items-center gap-2">
-          <Badge label={review.objectType === 'story' ? 'Story' : 'Review'} />
+          <Badge
+            label={
+              review.objectType === 'story' ? 'Story' : review.objectType === 'highlight' ? 'Reading' : 'Review'
+            }
+          />
           <button
             onClick={expand}
             disabled={loading}
@@ -199,6 +212,43 @@ export function TodayReviewCard({
                   </div>
                 ))}
             </dl>
+          )}
+        </div>
+      )}
+
+      {phase !== 'collapsed' && highlight && (
+        <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          {phase === 'recall' && (
+            <>
+              <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                You saved a highlight from{' '}
+                <span className="font-medium text-zinc-800 dark:text-zinc-100">
+                  {highlight.source?.title ?? 'a source'}
+                </span>
+                . Recall the idea and why it mattered, then reveal it to check yourself.
+              </p>
+              <button
+                onClick={() => setPhase('revealed')}
+                className="mt-3 rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                Reveal highlight
+              </button>
+            </>
+          )}
+          {phase === 'revealed' && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+                Your highlight
+              </p>
+              <blockquote className="whitespace-pre-wrap rounded-lg border-l-2 border-emerald-300 bg-emerald-50/50 p-3 text-sm text-zinc-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-zinc-300">
+                {highlight.text}
+              </blockquote>
+              {highlight.note && (
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  <span className="font-medium">Your note:</span> {highlight.note}
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}

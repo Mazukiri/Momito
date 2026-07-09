@@ -51,11 +51,18 @@ live-verified); **MOM-141** (`autoAssembleUpcomingPrep` + `InterviewPrepSchedule
 card priority `101+(14−daysUntil)`, above overdue tasks; 209 API tests, live-verified: a round 3 days out
 became Today's top card "Prep your Meta Coding in 3 days"). **Phase 1 sub-phases 1A + 1B + 1C are DONE.**
 
+**Detour shipped (owner ask, 2026-07-09): MOM-146** — "really think hard about how the Readwise features can
+be improved to truly help the learner." Diagnosis: highlights were captured + tagged, then filed into a
+write-only ledger and never resurfaced — dead-ending one step before the app's FSRS retention edge. Fix:
+a reviewed highlight now **enters the FSRS queue** (`ReviewState.objectType:'highlight'`, no migration) and
+resurfaces on Today cued by its source until it sticks; "Review" → "Remember". 220 API + 25 web tests;
+live-verified end-to-end. See LOG.MD.
+
 **Active PR-sized task: MOM-131** — story coverage → specific-interview behavioral **gap map** ("you have
 ownership + conflict but no ambiguity story for Meta"). The role-scoped version is doable **now** (map the
 Story bank's covered behavioral competencies against the target role's required behavioral areas; surface
 missing ones as a card/gap). Full company-scoped weighting enriches once MOM-121's structured Company lands.
-Reuse the Story bank + `CAREER_ROLE_AREA_IDS` behavioral taxonomy; no schema expected.
+Reuse the Story bank + `STORY_COMPETENCIES` / `CAREER_ROLE_AREA_IDS` behavioral taxonomy; no schema expected.
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).

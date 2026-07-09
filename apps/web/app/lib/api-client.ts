@@ -636,6 +636,9 @@ export const learningApi = {
   inbox: () =>
     request<LearningHighlightResponse[]>('/learning/inbox'),
 
+  getHighlight: (id: string) =>
+    request<LearningHighlightResponse>(`/learning/highlights/${id}`),
+
   updateHighlight: (id: string, body: { roleTrackId?: string | null; area?: string | null; topicId?: string | null; reviewed?: boolean; usefulness?: string | null }) =>
     request<LearningHighlightResponse>(`/learning/highlights/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
