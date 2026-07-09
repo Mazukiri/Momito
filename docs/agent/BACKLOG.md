@@ -757,14 +757,14 @@ primary, the two readiness engines consolidate into one FSRS-grounded engine (MO
 task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), tested on fresh + existing DB.
 
 ### Track M — Pipeline Truth & Funnel Analytics · CareerOS Gate 2
-- **MOM-101** Funnel & conversion endpoint + dashboard card (saved→…→offer, response rate, per-source/per-visaTag) · READY · EITHER · *small, no schema*
-- **MOM-102** Auto-create `JobEvent` on status transition (from→to, ts) via `update()` · READY · EITHER · *small, no schema*
-- **MOM-103** SPIKE-009 + migration DESIGN: per-stage timestamps / `StatusTransition` history · NEEDS_SPIKE · CLAUDE
-- **MOM-104** Implement timestamp + transition-history migration + service writes · BLOCKED on MOM-103 · *migration*
-- **MOM-105** Time-in-stage stall detection on job list + Today · BLOCKED on MOM-104,117
-- **MOM-106** Rejection-reason + loss-analysis capture (`REJECTION_REASONS` enum on transition) · BLOCKED on MOM-104
+- **MOM-101** Funnel & conversion endpoint + dashboard card (saved→…→offer, response rate, per-source/per-visaTag) · **DONE** Phase 0 (`daf5cd1`; `jobs.service.funnel()` + `JobFunnelCard`, current-status buckets, response rate, bySource/byVisaTag).
+- **MOM-102** Auto-create `JobEvent` on status transition (from→to, ts) via `update()` · **DONE** Phase 0 (`897df85`; `jobs.service.update()` writes a `type:'status_change'` event `${from} → ${to}` when status actually changes).
+- **MOM-103** SPIKE-009 + migration DESIGN: per-stage timestamps / `StatusTransition` history · **DESIGN DONE** 2026-07-10 (SPIKE-009 resolved in ADR-0009: structured `fromStatus`/`toStatus` columns on the existing `JobEvent`, NOT a new table nor 8 per-stage timestamps; backfill by parsing MOM-102's machine-written titles). Rolled into MOM-104.
+- **MOM-104** Implement timestamp + transition-history migration + service writes · READY (design fixed by MOM-103) · *migration*
+- **MOM-105** Time-in-stage stall detection on job list + Today · BLOCKED on MOM-104 *(the "117" contact dep was for follow-up cadence, not stall detection — stall detection needs only 104)*
+- **MOM-106** Rejection-reason + loss-analysis capture (`REJECTION_REASONS` on JobApplication) · BLOCKED on MOM-104
 - **MOM-107** Kanban board pipeline view (drag → existing status `update()`) · READY · EITHER
-- **MOM-108** Quick-add / paste-JD rapid capture (reuse `extractJdSkills`) · READY · EITHER · *no schema*
+- **MOM-108** Quick-add / paste-JD rapid capture (reuse `extractJdSkills`) · **DONE** Phase 0 (`a5d6476`; paste-JD capture + `extractJdSkills` + MOM-134-lite ATS coverage).
 
 ### Track N — Interview Rounds, Debriefs & Offers · CareerOS Gate 3
 - **MOM-109** SPIKE-010 + DESIGN: `InterviewRound` (roundType, interviewer, scheduledAt, outcome, debrief) · **DESIGN DONE** (ADR-0013 / D-016, 2026-07-09) · CLAUDE. SPIKE-010 resolved: round owns no prep/practice — attaches via a nullable `interviewRoundId` back-ref on `Task`/`InterviewSession` (added in MOM-111/141), no dual-write; reminders keyed per-round; coexists with `JobEvent` (no backfill); outcome independent of pipeline status. Additive migration → MOM-110 awaits D-004.
@@ -800,15 +800,15 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 ### Track Q — Résumé Versioning, Tailoring & Artifacts · CareerOS Gate 4 *(AI-first; key coming)*
 - **MOM-132** SPIKE-014 + DESIGN: `ResumeVersion` decoupled from `@unique Profile` · NEEDS_SPIKE · CLAUDE
 - **MOM-133** Implement `ResumeVersion` CRUD + link to `JobApplication` · BLOCKED on MOM-132 · *migration*
-- **MOM-134** ATS keyword coverage vs a JD (deterministic; extend `extractJdSkills`) · READY (lite form in Phase 0) · EITHER
-- **MOM-135** Gap → Task bridge from `score-profile`/ATS (reuse `generatePrep` pattern) · READY · EITHER · *no schema*
+- **MOM-134** ATS keyword coverage vs a JD (deterministic; extend `extractJdSkills`) · **DONE (lite)** Phase 0 (`a5d6476`; `AtsCoverageResponse` + coverage vs base profile). Full form (vs a `ResumeVersion.contentMd`) = MOM-134-full, BLOCKED on MOM-133.
+- **MOM-135** Gap → Task bridge from `score-profile`/ATS (reuse `generatePrep` pattern) · **DONE** Phase 0 (`b79cde5`; résumé-score gaps become executable Tasks).
 - **MOM-136** AI résumé/bullet analysis service (dormant-until-key; reuse `grading.service`) · BLOCKED on MOM-133 · *AI-dormant*
 - **MOM-137** AI bullet rewriting per JD · BLOCKED on MOM-136 · *AI-dormant*
 - **MOM-138** AI cover-letter drafting per job (visa-context framing) · BLOCKED on MOM-136 · *AI-dormant*
 - **MOM-139** Résumé export — Markdown then ATS-safe PDF · BLOCKED on MOM-133
 
 ### Track S — Career Today, Automation & Loop Closure · CareerOS Gate 1/5
-- **MOM-140** Stage-aware Today cards + interview countdown · READY (lite copy in Phase 0) · EITHER
+- **MOM-140** Stage-aware Today cards + interview countdown · **DONE** (lite copy `b9e9ac5` Phase 0 — stage-aware `JOB_STAGE_CARD` copy/ranking; full interview countdown shipped in MOM-141 `bf125f7`).
 - **MOM-141** Auto-assembled company/round-scoped prep queue on approaching date · **DONE** 2026-07-09 (no schema; `InterviewRoundsService.autoAssembleUpcomingPrep` + `InterviewPrepScheduler` `@Cron(EVERY_DAY_AT_6AM)` fires MOM-111's `generatePrep` for imminent `pending` rounds with no tasks yet (idempotent); `recommendations.service` injects an interview **countdown** card (priority `101+(14−daysUntil)`, above overdue tasks) for rounds within 14 days. 209 API tests; live-verified: a round 3 days out became Today's top card "Prep your Meta Coding in 3 days" (112), above a 6-day round (109). Company-tag/needed-story enrichment deepens when MOM-121/131 land.) · *the round-scoped prep loop closes the auto-PREP edge of Gate 1*
 - **MOM-142** Register career-target items in `recommendations.service` · **DONE** 2026-07-09 (open `WeaknessSignal`s — the MOM-113 debrief output — surface as ranked `Repair:` Today cards at priority 95–99, deduped against the derived path; readiness-gap cards already existed. 190 API tests; live + Playwright verified: 3 Meta debrief signals render on Today. **Completes CareerOS Gate 1 loop visibility.**) · *Stall-detection cards (the MOM-105 sub-part) fold in when MOM-105 lands in Phase 2.*
 - **MOM-145** Conversion analytics by source **and** résumé version · BLOCKED on MOM-101,133
