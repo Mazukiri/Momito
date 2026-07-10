@@ -9,6 +9,7 @@ import { InterviewRoundsCard } from '../../../components/InterviewRoundsCard';
 import { JobReadinessCard } from '../../../components/JobReadinessCard';
 import { StoryGapCard } from '../../../components/StoryGapCard';
 import { ContactsCard } from '../../../components/ContactsCard';
+import { OfferCard } from '../../../components/OfferCard';
 
 type JobDetail = Awaited<ReturnType<typeof jobsApi.get>>;
 
@@ -212,6 +213,8 @@ export default function JobDetailPage() {
           <StoryGapCard jobId={params.id} />
 
           <ContactsCard jobId={params.id} />
+
+          <OfferCard jobId={params.id} />
 
           <Card>
             <h2 className="mb-3 font-semibold text-zinc-800 dark:text-zinc-100">Status</h2>

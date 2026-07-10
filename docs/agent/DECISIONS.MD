@@ -251,3 +251,17 @@ idempotency lives in the migration SQL. CRUD mirrors `interview-rounds`, exposin
 contacts card (MOM-117), follow-up cadence (MOM-118), and the referral-network view (MOM-119). Rollback =
 drop the table + FK (referralName still displays). Trade-off: referralName and its backfilled Contact can
 diverge after edits — the Contact is the source of truth going forward; referralName is legacy display.
+
+### D-019 — Minimal `Offer` model; normalized-total-at-read, single-currency v1
+**Context:** the pipeline reaches `offer` but can't record or compare what an offer *is*. ADR-0015 /
+SPIKE-015 flagged over-modeling (multi-currency FX, vesting schedules, tax) as the risk.
+**Decision:** New `Offer` model, **one per application** (`jobApplicationId @unique`, Cascade). Comp as
+`Decimal?` (`baseSalary`, `bonus`, `equityTotal`) + `equityYears Int @default(4)`, plus `currency`,
+`location?`, `visaSponsored Boolean?`, `deadline?`, `notes?`, `status` ∈ OFFER_STATUSES. **Normalized annual
+total = base + bonus + equityTotal/equityYears computed at read time** (null when no comp set). **No FX in v1**
+— the comparison shows each offer in its own currency and warns when they differ (the explicit SPIKE-015 scope
+cut). API: `GET /offers` (comparison) + per-job `GET/PUT/DELETE /jobs/:jobId/offer` (PUT upserts on the unique
+FK so the UI never handles an offer id). `compensationNotes` kept (D-004).
+**Consequences:** Enables offer comparison (MOM-115) + the job-page offer card (MOM-114). Rollback = drop the
+table. Accepted v1 trade-offs: no FX, flat equity amortization (no cliffs), no tax/COL adjustment. The one
+emigration-specific column is `visaSponsored` — it can override a higher headline number.

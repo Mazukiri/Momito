@@ -123,15 +123,22 @@ have a job contact; `FollowUpModule` + scheduler; live-verified nudge + idempote
 chips; `👥 Contacts` nav; the Today thank-you nudge is already delivered by the MOM-118 `thank_you` reminder, so
 no redundant rec card). **★ Wave 3 contacts (MOM-116/117/118/119) COMPLETE.**
 
-**Active PR-sized task: MOM-114 + MOM-115 — Offer model + comparison (DESIGN + implement, migration; SPIKE-015).**
-Model `Offer`: `id, userId, jobApplicationId @unique?` (one offer per app; nullable FK, Cascade), `baseSalary
-Decimal?, bonus Decimal?, equityTotal Decimal?, equityYears Int? @default(4), currency String @default("USD"),
-location?, visaSponsored Boolean?, deadline Date?, notes?, status String @default('received')` ∈
-received|negotiating|accepted|declined|expired. Keep `compensationNotes` as fallback. Comparison view
-(`/jobs/offers` or a career-page card): normalized annual total = base + bonus + equityTotal/equityYears,
-**single-currency v1 (no FX — note in UI)**, visa-adjusted flag column. No multi-currency conversion in v1
-(the SPIKE-015 over-modeling risk). ADR-0015, D-019. Then Wave 4 (résumé artifacts AI-first:
-MOM-132/133/134/139/136/137/138/145). Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
+**Shipped since:** **MOM-114+115** (migration `offers` — one-per-job `Offer` model with Decimal comp +
+normalized-annual-total serializer; `offers` module `/offers` + `/jobs/:jobId/offer`; `OfferCard` on the job
+page + `/offers` comparison table (single-currency v1, visa column); ADR-0015 ACCEPTED, D-019, SPIKE-015
+resolved; live: normalized 275k, currency upper-cased, 400 guard, delete). **★ Wave 3 (contacts + offers)
+COMPLETE.**
+
+**Active PR-sized task — Wave 4 opens: MOM-132 + MOM-133 — ResumeVersion (DESIGN + implement, migration;
+SPIKE-014, ADR-0012 exists as a stub).** Model `ResumeVersion`: `id, userId, label String` ("Google-tailored
+v2"), `targetRoleTrackId String?`, `jobApplicationId String? @db.Uuid` FK (SetNull — records "this version was
+sent to this job"), `contentMd String` (canonical Markdown, derived initially from `Profile` JSON via a
+serializer), `baseProfileSnapshot Json?`, `aiSuggestions Json @default("[]")` (MOM-137 writes here), timestamps.
+`Profile` stays master (D-014); versions are derived artifacts. CRUD module `apps/api/src/resumes/`; web page
+`/profile/resumes` listing versions + "duplicate from profile" + link-to-job. Flesh out ADR-0012 to ACCEPTED,
+D-020. Then MOM-134-full (ATS coverage vs a ResumeVersion), MOM-139 (export md|pdf), MOM-136/137/138 (AI
+résumé analysis/bullet-rewrite/cover-letter, dormant-until-key like `grading.service.ts`), MOM-145 (conversion
+by résumé version). Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).

@@ -472,6 +472,8 @@ import type {
   MissionTodayResponse,
   JobReadinessResponse,
   JobStoryGapResponse,
+  OfferResponse,
+  UpsertOfferRequest,
   PracticeRecommendationResponse,
   ReadwiseConnectionResponse,
   ReadwiseSyncRunResponse,
@@ -533,6 +535,20 @@ export const contactsApi = {
 
   remove: (id: string) =>
     request<void>(`/contacts/${id}`, { method: 'DELETE' }),
+};
+
+export const offersApi = {
+  list: () =>
+    request<OfferResponse[]>('/offers'),
+
+  getForJob: (jobId: string) =>
+    request<OfferResponse | null>(`/jobs/${jobId}/offer`),
+
+  upsertForJob: (jobId: string, body: UpsertOfferRequest) =>
+    request<OfferResponse>(`/jobs/${jobId}/offer`, { method: 'PUT', body: JSON.stringify(body) }),
+
+  removeForJob: (jobId: string) =>
+    request<void>(`/jobs/${jobId}/offer`, { method: 'DELETE' }),
 };
 
 export const jobsApi = {

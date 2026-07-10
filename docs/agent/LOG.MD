@@ -1,5 +1,28 @@
 # LOG
 
+## 2026-07-10 - MOM-114+115: Offer model + comparison (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration** `offers` (new table).
+Gives the end of the pipeline a place to land — record and compare offers.
+
+**Design (SPIKE-015 resolved → ADR-0015, D-019):** new `Offer` model, **one per application**
+(`jobApplicationId @unique`, `onDelete: Cascade`; nullable so it can be standalone). Comp as `Decimal?`
+(`baseSalary`, `bonus`, `equityTotal`) + `equityYears Int @default(4)`, plus `currency`, `location?`,
+`visaSponsored Boolean?`, `deadline?`, `notes?`, `status` ∈ `OFFER_STATUSES`. **Normalized annual total =
+base + bonus + equityTotal/equityYears, computed at read time** (null when no comp figure set). **No FX in v1**
+— the comparison shows each offer in its own currency and warns on mixed currencies (the SPIKE-015 scope cut).
+
+**API:** `offers` module — `GET /offers` (comparison list) + per-job `GET/PUT/DELETE /jobs/:jobId/offer`; PUT
+upserts on the unique FK so the UI never handles an offer id. Decimal → number at the boundary; currency
+upper-cased. **Web:** `OfferCard` on the job detail page (edit comp + status, see the normalized total);
+`/offers` comparison table (sorted by normalized total desc, visa-sponsored column, mixed-currency warning);
+`💰 Offers` nav entry.
+
+**Checks:** shared build; API + web lint/typecheck green; **267 API tests** (+6: normalized-total math,
+null-total, upsert + ownership, currency upper-casing, NotFound on delete/foreign job) + 26 web tests. **Live:**
+a Meta offer (190k base + 25k bonus + 240k/4 equity) returned `normalizedAnnualTotal 275000`, `currency` `usd`
+→ `USD`; appeared in `/offers`; `status:'pending'` → 400; delete cleaned up to 0. Rollback: drop the table.
+
 ## 2026-07-10 - MOM-119: referral network view (CLAUDE, no schema)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema, web-only.** Completes the

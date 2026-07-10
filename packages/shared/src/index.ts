@@ -1112,6 +1112,47 @@ export interface CreateContactRequest {
 
 export type UpdateContactRequest = Partial<CreateContactRequest>;
 
+// MOM-114/115 (ADR-0015): a job offer, kept minimal (SPIKE-015). Money as numbers;
+// `normalizedAnnualTotal` = base + bonus + equityTotal/equityYears, single-currency
+// v1 (no FX — the UI notes the assumption).
+export const OFFER_STATUSES = ['received', 'negotiating', 'accepted', 'declined', 'expired'] as const;
+export type OfferStatus = (typeof OFFER_STATUSES)[number];
+
+export interface OfferResponse {
+  id: string;
+  userId: string;
+  jobApplicationId: string | null;
+  /** The linked job's company, for the comparison view (null if standalone). */
+  company: string | null;
+  baseSalary: number | null;
+  bonus: number | null;
+  equityTotal: number | null;
+  equityYears: number;
+  currency: string;
+  location: string | null;
+  visaSponsored: boolean | null;
+  deadline: string | null;
+  notes: string | null;
+  status: OfferStatus;
+  /** base + bonus + equityTotal/equityYears; null when no comp figures are set. */
+  normalizedAnnualTotal: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertOfferRequest {
+  baseSalary?: number | null;
+  bonus?: number | null;
+  equityTotal?: number | null;
+  equityYears?: number;
+  currency?: string;
+  location?: string | null;
+  visaSponsored?: boolean | null;
+  deadline?: string | null;
+  notes?: string | null;
+  status?: OfferStatus;
+}
+
 export interface JobEventResponse {
   id: string;
   userId: string;

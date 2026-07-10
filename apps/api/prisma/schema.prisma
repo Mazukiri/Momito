@@ -51,6 +51,7 @@ model User {
   weaknessSignals WeaknessSignal[]
   interviewRounds InterviewRound[]
   contacts       Contact[]
+  offers         Offer[]
 
   @@map("users")
 }
@@ -428,6 +429,7 @@ model JobApplication {
   weaknessSignals   WeaknessSignal[]
   interviewRounds   InterviewRound[]
   contacts          Contact[]
+  offer             Offer?
 
   @@index([userId])
   @@index([status])
@@ -918,4 +920,32 @@ model Contact {
   @@index([userId])
   @@index([jobApplicationId])
   @@map("contacts")
+}
+
+// MOM-114/115 (ADR-0015, D-019, SPIKE-015): a job offer, kept deliberately
+// minimal — enough to compare without over-modeling. At most one per application
+// (jobApplicationId @unique; Cascade so it dies with the job). Money is stored as
+// Decimal; the normalized annual total (base + bonus + equity/years) and any FX is
+// computed at read/display time. `status` is one of OFFER_STATUSES.
+model Offer {
+  id               String          @id @default(uuid()) @db.Uuid
+  userId           String          @map("user_id") @db.Uuid
+  jobApplicationId String?         @unique @map("job_application_id") @db.Uuid
+  baseSalary       Decimal?        @map("base_salary") @db.Decimal(14, 2)
+  bonus            Decimal?        @db.Decimal(14, 2)
+  equityTotal      Decimal?        @map("equity_total") @db.Decimal(14, 2)
+  equityYears      Int             @default(4) @map("equity_years")
+  currency         String          @default("USD")
+  location         String?
+  visaSponsored    Boolean?        @map("visa_sponsored")
+  deadline         DateTime?       @db.Date
+  notes            String?
+  status           String          @default("received") // OFFER_STATUSES
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("offers")
 }
