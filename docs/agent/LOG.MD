@@ -1,5 +1,30 @@
 # LOG
 
+## 2026-07-10 - MOM-116+117: Contact model (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration** `contacts` (new table +
+FK + create-only backfill). Opens Wave 3 — networking becomes first-class.
+
+**Design (SPIKE-011 resolved → ADR-0014, D-018):** new `Contact` model (`name`, `email?`, `linkedinUrl?`,
+`company?`, `relationship` ∈ `CONTACT_RELATIONSHIPS` = recruiter|referrer|hiring_manager|peer|other, `notes?`)
+with a **nullable `jobApplicationId` FK, `onDelete: SetNull`** (standalone or job-attached; a job has many;
+survives the job's deletion). `JobApplication.referralName` kept (D-004 fallback). **Backfill is create-only,
+idempotent, dedup-safe**: `DISTINCT ON (userId, lower(name))` collapses a repeated referral to one contact
+(earliest job wins), `NOT EXISTS` makes a re-run a no-op; no unique DB constraint (namesakes are legal). Used
+`--create-only` → appended the backfill SQL → applied.
+
+**API:** `contacts` module mirrors `interview-rounds` but one controller carries **both** route groups —
+`/contacts` (standalone list/create/update/delete) and `/jobs/:jobId/contacts` (job-scoped list/create).
+DTOs validate relationship, email, URL; the service ownership-checks any job link. **Web:** `ContactsCard`
+on the job detail page (list + inline add + optimistic delete) fed by a new `contactsApi`.
+
+**Checks:** shared build; API + web lint/typecheck green; **257 API tests** (+6: serialize, standalone create
+with job validation, cross-user job rejection, nested create-from-path, update/remove NotFound) + 26 web tests.
+**Live:** the migration backfilled 0 (no demo job has a referralName) — proven correct by a probe that gave a
+job a referralName, ran the exact backfill SQL (inserted 1 `referrer` linked to the job, re-run inserted 0),
+then cleaned up. Full CRUD round-trip: create-on-job → list → update relationship → appears in `/contacts` →
+bad relationship 400 → delete 200. Rollback: drop the table + FK (referralName still displays).
+
 ## 2026-07-10 - MOM-107: Kanban pipeline view (CLAUDE, no schema)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema, web-only.** Completes Wave 2

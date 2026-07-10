@@ -50,6 +50,7 @@ model User {
   pushSubscriptions PushSubscription[]
   weaknessSignals WeaknessSignal[]
   interviewRounds InterviewRound[]
+  contacts       Contact[]
 
   @@map("users")
 }
@@ -426,6 +427,7 @@ model JobApplication {
   learningEvidence  LearningEvidence[]
   weaknessSignals   WeaknessSignal[]
   interviewRounds   InterviewRound[]
+  contacts          Contact[]
 
   @@index([userId])
   @@index([status])
@@ -891,4 +893,29 @@ model InterviewRound {
   @@index([jobApplicationId])
   @@index([scheduledAt])
   @@map("interview_rounds")
+}
+
+// MOM-116/117 (ADR-0014, D-018): a networking contact. Can be standalone or
+// attached to a job (jobApplicationId, SetNull so the contact survives the job's
+// deletion). `relationship` is one of CONTACT_RELATIONSHIPS (string-constrained
+// at the DTO). Supersedes the free-text JobApplication.referralName (kept as a
+// backfilled fallback, D-004).
+model Contact {
+  id               String          @id @default(uuid()) @db.Uuid
+  userId           String          @map("user_id") @db.Uuid
+  jobApplicationId String?         @map("job_application_id") @db.Uuid
+  name             String
+  email            String?
+  linkedinUrl      String?         @map("linkedin_url")
+  company          String?
+  relationship     String? // CONTACT_RELATIONSHIPS
+  notes            String?
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([jobApplicationId])
+  @@map("contacts")
 }

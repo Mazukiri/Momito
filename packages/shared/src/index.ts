@@ -1080,6 +1080,38 @@ export interface CreateJobApplicationRequest {
 
 export type UpdateJobApplicationRequest = Partial<CreateJobApplicationRequest>;
 
+// MOM-116/117 (ADR-0014): a networking contact — recruiter, referrer, etc. Can be
+// standalone or attached to a job. Supersedes JobApplication.referralName.
+export const CONTACT_RELATIONSHIPS = ['recruiter', 'referrer', 'hiring_manager', 'peer', 'other'] as const;
+export type ContactRelationship = (typeof CONTACT_RELATIONSHIPS)[number];
+
+export interface ContactResponse {
+  id: string;
+  userId: string;
+  jobApplicationId: string | null;
+  name: string;
+  email: string | null;
+  linkedinUrl: string | null;
+  company: string | null;
+  relationship: ContactRelationship | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateContactRequest {
+  name: string;
+  email?: string | null;
+  linkedinUrl?: string | null;
+  company?: string | null;
+  relationship?: ContactRelationship | null;
+  notes?: string | null;
+  // Only honored on the standalone POST /contacts route (attach at creation).
+  jobApplicationId?: string | null;
+}
+
+export type UpdateContactRequest = Partial<CreateContactRequest>;
+
 export interface JobEventResponse {
   id: string;
   userId: string;

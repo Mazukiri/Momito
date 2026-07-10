@@ -110,19 +110,20 @@ native HTML5 drag → optimistic `moveJob` calling the live-verified `jobsApi.up
 stay on list view). **★ Wave 2 (pipeline truth: MOM-103/104/105/106/107) is COMPLETE** — transitions are
 timed, stalls surface, losses are analyzed, and the pipeline is a draggable board.
 
-**Active PR-sized task: MOM-116 + MOM-117 — Contact model (DESIGN + implement, migration).** New `Contact`
-model: `id, userId, name, email?, linkedinUrl?, company?` (free text), `relationship String?`
-(`CONTACT_RELATIONSHIPS` = recruiter|referrer|hiring_manager|peer|other), `notes?`, timestamps, plus
-`jobApplicationId String? @db.Uuid` FK (SetNull — a contact can be standalone or attached to a job; a job has
-many contacts). Keep `JobApplication.referralName` (D-004 fallback); **backfill:** for each job with a non-null
-`referralName`, create a `Contact {name: referralName, relationship: 'referrer', jobApplicationId}` if no
-same-name contact exists for that user (idempotent by `(userId, lower(name))` check in the migration SQL, not a
-DB constraint). CRUD module `apps/api/src/contacts/` mirroring `interview-rounds` (routes `/jobs/:jobId/contacts`
-+ `/contacts`); web: contacts card on job detail + referralName input → contact picker (keep legacy referralName
-if set). New ADR-0014 (contacts & follow-up cadence), D-018; SPIKE-011 resolves inline (backfill is create-only,
-no data loss, rollback = drop table + FK). Then MOM-118 (follow-up cadence scheduler, no schema), MOM-119
-(referral view, no schema), then MOM-114/115 (Offer model + comparison). Then Wave 4 (résumé artifacts AI-first:
-MOM-132/133/134/139/136/137/138/145). Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
+**Shipped since:** **MOM-116+117** (migration `contacts` — new `Contact` model, `jobApplicationId` FK SetNull,
+create-only idempotent referralName backfill; `contacts` module exposing `/contacts` + `/jobs/:jobId/contacts`;
+`ContactsCard` on the job detail page; ADR-0014 ACCEPTED, D-018, SPIKE-011 resolved; live: CRUD round-trip +
+backfill SQL proven idempotent/dedup-safe). **★ Wave 3 opened — networking is first-class.**
+
+**Active PR-sized task: MOM-118 — follow-up cadence (no schema; needs MOM-104 ✓ + MOM-117 ✓).** New
+`follow-up.scheduler.ts` in the jobs (or contacts) module, daily `@Cron`: (a) a job in `applied` with no
+activity for N days (from the MOM-104/105 stage timing) → an idempotent reminder "Follow up with {company}"
+keyed `type:'follow_up'` + jobApplicationId (reuse the `ensureRoundReminder` sentinel-upsert idea from
+`interview-rounds`); (b) an `InterviewRound` whose `outcome` flipped from pending within the last day and a
+contact exists → "Send a thank-you note" reminder. Cap one open follow-up reminder per job. Then MOM-119
+(referral network view + Today thank-you nudge, no schema), then MOM-114/115 (Offer model + comparison,
+migration). Then Wave 4 (résumé artifacts AI-first: MOM-132/133/134/139/136/137/138/145). Full design in the
+approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).

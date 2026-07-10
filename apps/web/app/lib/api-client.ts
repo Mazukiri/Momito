@@ -453,6 +453,8 @@ export const profileScoresApi = {
 import type {
   CareerGoalResponse,
   CareerRoleTrack,
+  ContactResponse,
+  CreateContactRequest,
   CreateInterviewRoundRequest,
   CreateJobApplicationRequest,
   CreateMissionRequest,
@@ -477,6 +479,7 @@ import type {
   RoleReadinessResponse,
   TargetShortlistResponse,
   TaskResponse,
+  UpdateContactRequest,
   UpdateJobApplicationRequest,
   UpdateMissionRequest,
   UpdateTaskRequest,
@@ -510,6 +513,26 @@ export const careerApi = {
 
   targetShortlist: () =>
     request<TargetShortlistResponse>('/career/target-shortlist'),
+};
+
+export const contactsApi = {
+  list: () =>
+    request<ContactResponse[]>('/contacts'),
+
+  listForJob: (jobId: string) =>
+    request<ContactResponse[]>(`/jobs/${jobId}/contacts`),
+
+  createForJob: (jobId: string, body: CreateContactRequest) =>
+    request<ContactResponse>(`/jobs/${jobId}/contacts`, { method: 'POST', body: JSON.stringify(body) }),
+
+  create: (body: CreateContactRequest) =>
+    request<ContactResponse>('/contacts', { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (id: string, body: UpdateContactRequest) =>
+    request<ContactResponse>(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  remove: (id: string) =>
+    request<void>(`/contacts/${id}`, { method: 'DELETE' }),
 };
 
 export const jobsApi = {

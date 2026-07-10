@@ -15,6 +15,7 @@ import { ProfileScoresModule } from './profile-scores/profile-scores.module';
 import { CareerModule } from './career/career.module';
 import { JobsModule } from './jobs/jobs.module';
 import { InterviewRoundsModule } from './interview-rounds/interview-rounds.module';
+import { ContactsModule } from './contacts/contacts.module';
 import { TasksModule } from './tasks/tasks.module';
 import { LearningModule } from './learning/learning.module';
 import { MissionsModule } from './missions/missions.module';
@@ -55,6 +56,7 @@ import { RequestLoggingMiddleware } from './common/request-logging.middleware';
     CareerModule,
     JobsModule,
     InterviewRoundsModule,
+    ContactsModule,
     TasksModule,
     LearningModule,
     MissionsModule,

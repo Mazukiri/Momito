@@ -233,3 +233,21 @@ two independently-revertible additive migrations (columns, then FK).
 company-weighted readiness (MOM-130/131), sponsorship filter (MOM-124), targeting shortlist (MOM-125),
 company detail (MOM-123). DTO validates `focusAreas` keys against `CAREER_ROLE_AREA_IDS`. Trade-off:
 denormalized `company` text can drift after a rename — display prefers `companyRef.name` when linked.
+
+### D-018 — First-class `Contact` model with create-only `referralName` backfill
+**Context:** networking is invisible in the pipeline — a job's only contact signal is the free-text
+`JobApplication.referralName`. ADR-0014 / SPIKE-011. Referrers/recruiters need to be reusable records,
+attachable to jobs, and later listable as a network (MOM-119).
+**Decision:** New `Contact` model (`name`, `email?`, `linkedinUrl?`, `company?`, `relationship` ∈
+`CONTACT_RELATIONSHIPS`, `notes?`) with a **nullable `jobApplicationId` FK, `onDelete: SetNull`** so a
+contact survives its job's deletion and can be standalone. Keep `JobApplication.referralName` (D-004
+fallback, never dropped). **Backfill is create-only** (SPIKE-011 resolved): each job's non-empty
+`referralName` becomes a `Contact {relationship:'referrer', jobApplicationId}` — `DISTINCT ON (userId,
+lower(name))` collapses a repeated referral to one contact (earliest job wins), `NOT EXISTS` makes a
+re-run a no-op. No unique DB constraint on `(userId, name)` (users may legitimately have namesakes) — the
+idempotency lives in the migration SQL. CRUD mirrors `interview-rounds`, exposing both `/contacts` and
+`/jobs/:jobId/contacts`.
+**Consequences:** Zero data loss (referralName untouched; backfill only inserts). Enables the job-detail
+contacts card (MOM-117), follow-up cadence (MOM-118), and the referral-network view (MOM-119). Rollback =
+drop the table + FK (referralName still displays). Trade-off: referralName and its backfilled Contact can
+diverge after edits — the Contact is the source of truth going forward; referralName is legacy display.

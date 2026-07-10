@@ -776,8 +776,8 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 - **MOM-115** Offer comparison decision view (normalized, visa-adjusted) · BLOCKED on MOM-114
 
 ### Track O — Contacts, Referrals & Follow-up Cadence · CareerOS Gate 3
-- **MOM-116** SPIKE-011 + DESIGN: `Contact` model; migrate `referralName` · NEEDS_SPIKE · CLAUDE
-- **MOM-117** Implement `Contact` CRUD + attach to job + `referralName` backfill · BLOCKED on MOM-116 · *migration*
+- **MOM-116** SPIKE-011 + DESIGN: `Contact` model; migrate `referralName` · **DESIGN DONE** 2026-07-10 (ADR-0014 ACCEPTED, D-018; SPIKE-011 resolved: create-only, DISTINCT ON + NOT EXISTS backfill, no unique constraint). Implemented with MOM-117.
+- **MOM-117** Implement `Contact` CRUD + attach to job + `referralName` backfill · **DONE** 2026-07-10 (migration `contacts`: new table, `jobApplicationId` FK SetNull, create-only idempotent referralName backfill; `contacts` module — `/contacts` + `/jobs/:jobId/contacts`; `ContactsCard` on job detail. 257 API tests; live: CRUD round-trip + backfill SQL proven idempotent/dedup-safe.) · *migration*
 - **MOM-118** Stage-driven follow-up cadence reminders · BLOCKED on MOM-104,117
 - **MOM-119** Referral network view + Today thank-you nudges · BLOCKED on MOM-117
 
@@ -837,7 +837,7 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 | SPIKE-008 | Render cold-start reality + keep-warm — **DESIGNED, dormant** 2026-07-06: `.github/workflows/keepwarm.yml` pings `/health` every 10 min during study hours (07:00-24:59 ICT), skips cleanly if `API_HEALTH_URL` isn't set. Real cold-start behavior unverified (no live Render deploy in this environment). | MOM-021 |
 | SPIKE-009 | ✅ RESOLVED (MOM-103, ADR-0009): structured `fromStatus`/`toStatus` columns on the existing `JobEvent` — not a new table (avoids permanent dual-write), not per-stage timestamps (can't model revisits, bloats the busy row). Implemented in MOM-104. | MOM-103 |
 | SPIKE-010 | (CareerOS) `InterviewRound` + interview-date modeling + reminder idempotency; link to `InterviewSession`/`Task` **without repeating the PlanItem/Task dual-write anti-pattern** · **RESOLVED 2026-07-09** (ADR-0013 §SPIKE-010): round owns no rows — back-ref `interviewRoundId` FK on Task/Session (deferred to MOM-111/141); reminder sentinel keyed per-round; JobEvent coexists, no backfill; outcome ⟂ status. | MOM-109 |
-| SPIKE-011 | (CareerOS) Migrate `referralName` String → `Contact` rows without data loss | MOM-116 |
+| SPIKE-011 | ✅ RESOLVED (MOM-116, ADR-0014): create-only backfill — `DISTINCT ON (userId, lower(name))` (earliest job wins) + `NOT EXISTS` guard, no unique DB constraint. Zero data loss (referralName kept). | MOM-116 |
 | SPIKE-012 | (CareerOS) `JobApplication.company` free-text → `companyId` FK backfill by name-match with free-text fallback; structure `Company` focus-area weights vs `CAREER_ROLE_AREA_IDS`. **Highest-risk migration** (busiest table + seed) | MOM-120 |
 | SPIKE-013 | (CareerOS) `WeaknessSignal` schema + tagging attempts with `roleTrackId/area`; is FSRS retrievability cheaply queryable to ground readiness per area? · **RESOLVED 2026-07-08** (ADR-0011 §SPIKE-013 findings): table stores only event-sourced signals (derived path kept for practice struggles); FSRS-per-area = bounded indexed service-layer join, no `ReviewState` denorm; tags on `AnswerAttempt` not `ReviewState`; `companyId` deferred to post-MOM-122, `jobApplicationId` scoping for now. | MOM-126 |
 | SPIKE-014 | (CareerOS) `ResumeVersion` decoupling from `@unique Profile`; ATS-safe PDF-export library choice (new dep); AI tailoring cost/prompt/structured-output budget mirroring MOM-068 | MOM-132, MOM-136 |
