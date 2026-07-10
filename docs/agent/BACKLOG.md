@@ -778,7 +778,7 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 ### Track O — Contacts, Referrals & Follow-up Cadence · CareerOS Gate 3
 - **MOM-116** SPIKE-011 + DESIGN: `Contact` model; migrate `referralName` · **DESIGN DONE** 2026-07-10 (ADR-0014 ACCEPTED, D-018; SPIKE-011 resolved: create-only, DISTINCT ON + NOT EXISTS backfill, no unique constraint). Implemented with MOM-117.
 - **MOM-117** Implement `Contact` CRUD + attach to job + `referralName` backfill · **DONE** 2026-07-10 (migration `contacts`: new table, `jobApplicationId` FK SetNull, create-only idempotent referralName backfill; `contacts` module — `/contacts` + `/jobs/:jobId/contacts`; `ContactsCard` on job detail. 257 API tests; live: CRUD round-trip + backfill SQL proven idempotent/dedup-safe.) · *migration*
-- **MOM-118** Stage-driven follow-up cadence reminders · BLOCKED on MOM-104,117
+- **MOM-118** Stage-driven follow-up cadence reminders · **DONE** 2026-07-10 (no schema: `FollowUpService.sweep` daily @Cron — (a) `applied` app stale ≥10d with no open `follow_up` → "Follow up with {company}" reminder; (b) round decided in the last day with a job contact → "Send a thank-you note"; both idempotent/capped. 261 API tests; live: follow-up nudge created + idempotent re-run verified.)
 - **MOM-119** Referral network view + Today thank-you nudges · BLOCKED on MOM-117
 
 ### Track P — Company Intelligence & Job↔Company Linkage · CareerOS Gate 2/5

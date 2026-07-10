@@ -1,5 +1,23 @@
 # LOG
 
+## 2026-07-10 - MOM-118: follow-up cadence (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Turns the pipeline + contacts
+into proactive reminders.
+
+**Service (`follow-up/FollowUpService.sweep`):** a daily idempotent sweep. (a) an `applied` app whose current
+stage entered ≥ 10 days ago (from the MOM-104 status_change timing, else createdAt) with **no open `follow_up`
+reminder** → creates "Follow up with {company}" (10d fires earlier than the MOM-105 stall threshold of 21d — a
+nudge before it's officially stale). (b) an `InterviewRound` decided within the last day (`outcome != pending`,
+`updatedAt ≥ now-1d`) that has a **contact on its job** and no existing `thank_you` reminder → creates "Send a
+thank-you note for your {company} interview". Both caps make a re-run a no-op. `FollowUpScheduler` fires it via
+`@Cron(EVERY_DAY_AT_7AM)`; new `FollowUpModule` (PrismaModule only — no cross-service deps).
+
+**Checks:** API lint/typecheck green; **261 API tests** (+4: stale-applied nudge, within-threshold/already-open
+skips, thank-you create, no-contact/duplicate skips). **Live:** a probe set a job to `applied` + backdated its
+stage 15d — sweep #1 created "Follow up with NVIDIA" (pending); sweep #2 created 0 (count stayed 1, idempotent);
+restored. Thank-you path is unit-verified. Rollback: delete the module (reminders are inert data).
+
 ## 2026-07-10 - MOM-116+117: Contact model (CLAUDE, migration)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration** `contacts` (new table +

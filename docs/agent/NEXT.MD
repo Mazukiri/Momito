@@ -115,15 +115,17 @@ create-only idempotent referralName backfill; `contacts` module exposing `/conta
 `ContactsCard` on the job detail page; ADR-0014 ACCEPTED, D-018, SPIKE-011 resolved; live: CRUD round-trip +
 backfill SQL proven idempotent/dedup-safe). **★ Wave 3 opened — networking is first-class.**
 
-**Active PR-sized task: MOM-118 — follow-up cadence (no schema; needs MOM-104 ✓ + MOM-117 ✓).** New
-`follow-up.scheduler.ts` in the jobs (or contacts) module, daily `@Cron`: (a) a job in `applied` with no
-activity for N days (from the MOM-104/105 stage timing) → an idempotent reminder "Follow up with {company}"
-keyed `type:'follow_up'` + jobApplicationId (reuse the `ensureRoundReminder` sentinel-upsert idea from
-`interview-rounds`); (b) an `InterviewRound` whose `outcome` flipped from pending within the last day and a
-contact exists → "Send a thank-you note" reminder. Cap one open follow-up reminder per job. Then MOM-119
-(referral network view + Today thank-you nudge, no schema), then MOM-114/115 (Offer model + comparison,
-migration). Then Wave 4 (résumé artifacts AI-first: MOM-132/133/134/139/136/137/138/145). Full design in the
-approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
+**Shipped since:** **MOM-118** (follow-up cadence — `FollowUpService.sweep` daily @Cron emits idempotent
+`follow_up` reminders for `applied` apps stale ≥10d and `thank_you` reminders for just-decided rounds that
+have a job contact; `FollowUpModule` + scheduler; live-verified nudge + idempotency).
+
+**Active PR-sized task: MOM-119 — referral network view (no schema; needs MOM-117 ✓).** New contacts list page
+`/contacts` grouped by relationship, each contact showing its linked job(s); reuse the `contactsApi.list()`
+already built. A Today nudge via `recommendations.service` when an offer/onsite outcome landed and the referrer
+contact hasn't had a `thank_you` reminder dismissed (small — the MOM-118 thank_you reminder already exists;
+this surfaces it as a ranked Today card). Add a nav entry. Then MOM-114/115 (Offer model + comparison,
+migration — ADR-0015, D-019, SPIKE-015). Then Wave 4 (résumé artifacts AI-first:
+MOM-132/133/134/139/136/137/138/145). Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).
