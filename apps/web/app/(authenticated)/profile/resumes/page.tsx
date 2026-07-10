@@ -108,6 +108,15 @@ export default function ResumesPage() {
     }
   }
 
+  async function download(id: string, format: 'md' | 'pdf') {
+    setError('');
+    try {
+      await resumesApi.download(id, format);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to export résumé');
+    }
+  }
+
   async function remove(id: string) {
     setError('');
     try {
@@ -167,8 +176,10 @@ export default function ResumesPage() {
             <Card>
               <input value={draftLabel} onChange={(e) => setDraftLabel(e.target.value)} className="mb-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
               <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={22} spellCheck={false} className="w-full rounded-lg border border-zinc-300 px-3 py-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button onClick={save} disabled={saving} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
+                <button onClick={() => download(selected.id, 'md')} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-200">Export .md</button>
+                <button onClick={() => download(selected.id, 'pdf')} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-200">Export .pdf</button>
                 <span className="text-xs text-zinc-400">Markdown · {draft.length} chars</span>
               </div>
 

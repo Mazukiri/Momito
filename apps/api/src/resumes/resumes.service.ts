@@ -10,6 +10,13 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateResumeVersionDto } from './dto/create-resume-version.dto';
 import { UpdateResumeVersionDto } from './dto/update-resume-version.dto';
+import { resumeMarkdownToPdf } from './resume-pdf.util';
+
+export interface ResumeExport {
+  filename: string;
+  contentType: string;
+  body: Buffer;
+}
 
 type ResumeRow = Prisma.ResumeVersionGetPayload<{ include: { jobApplication: { select: { company: true } } } }>;
 const resumeInclude = { jobApplication: { select: { company: true } } } satisfies Prisma.ResumeVersionInclude;
@@ -80,6 +87,21 @@ export class ResumesService {
   async remove(id: string, userId: string): Promise<void> {
     const result = await this.prisma.resumeVersion.deleteMany({ where: { id, userId } });
     if (result.count === 0) throw new NotFoundException('Résumé version not found');
+  }
+
+  // MOM-139: export a version as a downloadable file. Markdown = contentMd as-is;
+  // PDF = an ATS-safe single-column render (see resume-pdf.util). No new dependency.
+  async export(id: string, userId: string, format: string): Promise<ResumeExport> {
+    const version = await this.prisma.resumeVersion.findFirst({ where: { id, userId }, select: { label: true, contentMd: true } });
+    if (!version) throw new NotFoundException('Résumé version not found');
+    const base = (version.label.replace(/[^a-z0-9-_]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'resume').toLowerCase();
+    if (format === 'md') {
+      return { filename: `${base}.md`, contentType: 'text/markdown; charset=utf-8', body: Buffer.from(version.contentMd, 'utf-8') };
+    }
+    if (format === 'pdf') {
+      return { filename: `${base}.pdf`, contentType: 'application/pdf', body: resumeMarkdownToPdf(version.contentMd) };
+    }
+    throw new BadRequestException("format must be 'md' or 'pdf'");
   }
 
   // MOM-132: the master Profile → canonical Markdown. Deterministic; the starting

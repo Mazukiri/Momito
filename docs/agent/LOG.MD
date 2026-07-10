@@ -1,5 +1,31 @@
 # LOG
 
+## 2026-07-10 - MOM-139: résumé export md|pdf (CLAUDE, no schema, no new dep)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No migration. Depends on ResumeVersion (MOM-133).
+
+**What:** `GET /resumes/:id/export?format=md|pdf` (declared before `:id` so it never shadows the plain GET).
+MD = `contentMd` as a `text/markdown` attachment. PDF = an ATS-safe single-column render.
+
+**Dependency decision (the plan flagged pdfkit vs puppeteer):** neither — **no new dependency**. An ATS parser
+reads a PDF's text from its content stream using a standard font's glyph widths, so the safest possible output is
+plain text, one column, in a built-in (non-embedded) font. That needs no library. `resume-pdf.util.ts` is a small,
+deterministic, dependency-free PDF writer: Markdown → styled/wrapped lines → paginated Helvetica content streams
+→ a correctly cross-referenced PDF. Accents/typographic symbols are transliterated to ASCII (ATS-preferred).
+Anything heavier would be strictly worse for ATS parsing, so there was nothing to gain from a binary dep — and it
+also sidesteps touching the (pre-existing, not-ours) `pnpm-lock.yaml`.
+
+**Web:** `/profile/resumes` gains "Export .md" / "Export .pdf" buttons — `resumesApi.download` fetches with the
+Bearer header (a plain `<a href>` can't authenticate) and triggers a blob download using the server's filename.
+
+**Checks:** API + web lint/typecheck green; **281 API tests** (+3: MD verbatim + slug filename, valid PDF
+header/xref/EOF + text op, 400 unknown format / 404 foreign version). **Live-verified** against local Postgres:
+MD round-trips; the PDF is byte-deterministic (1545B, identical across repeated requests) and — the real proof —
+**parses cleanly in `pypdf`**, extracting every résumé section (name, contact, Skills, Experience, Projects,
+Education) as readable text; 400 on `format=docx`, 404 on a foreign id; demo version deleted afterwards.
+
+**Rollback:** revert code — no schema, no dependency, no data.
+
 ## 2026-07-10 - MOM-134-full: ATS coverage vs a ResumeVersion (CLAUDE, no schema)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No migration. Builds on MOM-134-lite

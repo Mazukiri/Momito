@@ -142,11 +142,22 @@ on the response; new `POST /profile-scores/ats-coverage/generate-tasks` applies 
 JD keywords; `/profile/resumes` gains an ATS panel with covered/missing chips + "Add missing to tasks"; 278 API tests;
 live: résumé 0.25 vs profile 0.125, 6 tasks then 0 idempotent, 404 on foreign version).
 
-**Active PR-sized task — MOM-139: résumé export (`GET /resumes/:id/export?format=md|pdf`).** Markdown = `contentMd`
-as an attachment (trivial, ship first). PDF = ATS-safe single-column via a lightweight lib — evaluate `pdfkit`
-(no browser) over puppeteer (heavy); **new apps/api dependency** — note it in LOG + `apps/api/package.json` only.
-Then MOM-136/137/138 (AI résumé analysis/bullet-rewrite/cover-letter, dormant-until-key like `grading.service.ts`),
-MOM-145 (conversion by résumé version). Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
+**Shipped since:** **MOM-139** (résumé export `GET /resumes/:id/export?format=md|pdf` — MD = `contentMd`
+attachment; PDF = ATS-safe single-column render via a **dependency-free** hand-rolled writer `resume-pdf.util.ts`
+(standard Helvetica, no embedding, no binary dep — the safest ATS output is plain text + a standard font, which
+needs no library, and this avoids touching the not-ours `pnpm-lock.yaml`); `/profile/resumes` export buttons via
+an auth-header blob download; 281 API tests; live: PDF byte-deterministic + **verified parseable by pypdf**).
+**★ Résumé artifacts are now editable, ATS-scored against a JD, and exportable.**
+
+**Active PR-sized task — MOM-136/137/138: AI résumé analysis / bullet-rewrite / cover-letter (dormant-until-key).**
+Mirror `apps/api/src/ai/grading.service.ts` exactly: new `apps/api/src/ai/resume-ai.service.ts` with `isAvailable()`
+= `Boolean(getAnthropicApiKey())`, `client.messages.parse` + `zodOutputFormat`, budget via `budget.checkAndReserve/
+record`. Zod schemas in shared: `ResumeAnalysis` (per-bullet impact/seniority), `BulletRewrite` (original→rewritten
+per JD), `CoverLetterDraft` (visa-context paragraph). MOM-137 writes suggestions into `ResumeVersion.aiSuggestions`;
+UI shows accept/reject (accept = patch `contentMd`). **All tests fully mocked, zero-network**; mark the backlog rows
+"DONE (scaffold) — VERIFICATION-BLOCKED on live key" exactly like MOM-068–074. Never claim the live path works.
+Then MOM-145 (conversion by source + résumé version — extend `jobs.service.funnel()` with `byResumeVersion`). Full
+design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).

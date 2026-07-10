@@ -85,3 +85,41 @@ describe('ResumesService (MOM-133)', () => {
     await expect(del.service.remove('missing', 'user-1')).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+describe('ResumesService.export (MOM-139)', () => {
+  const contentMd = '# Ada Lovelace\nada@x.com · https://github.com/ada\n\n## Skills\nTypeScript, Rust\n\n## Experience\n### SWE — Meta (3y)\nBuilt distributed systems serving millions.';
+
+  function exportService(overrides: Record<string, unknown> = {}) {
+    return makeService({
+      resumeVersion: { findFirst: vi.fn().mockResolvedValue(versionRow({ label: 'Google tailored v2!', contentMd })) },
+      ...overrides,
+    }).service;
+  }
+
+  it('exports markdown as-is with a slugified filename', async () => {
+    const file = await exportService().export('rv-1', 'user-1', 'md');
+    expect(file.contentType).toBe('text/markdown; charset=utf-8');
+    expect(file.filename).toBe('google_tailored_v2.md');
+    expect(file.body.toString('utf-8')).toBe(contentMd);
+  });
+
+  it('exports a valid single-column PDF (magic header, xref, EOF)', async () => {
+    const file = await exportService().export('rv-1', 'user-1', 'pdf');
+    expect(file.contentType).toBe('application/pdf');
+    expect(file.filename).toBe('google_tailored_v2.pdf');
+    const bytes = file.body.toString('latin1');
+    expect(bytes.startsWith('%PDF-1.4')).toBe(true);
+    expect(bytes).toContain('/BaseFont /Helvetica');
+    expect(bytes).toContain('xref');
+    expect(bytes.trimEnd().endsWith('%%EOF')).toBe(true);
+    // The résumé text made it into a content stream (accents transliterated).
+    expect(bytes).toContain('(Ada Lovelace) Tj');
+    expect(file.body.length).toBeGreaterThan(400);
+  });
+
+  it('rejects an unknown format and a foreign version', async () => {
+    await expect(exportService().export('rv-1', 'user-1', 'docx')).rejects.toBeInstanceOf(BadRequestException);
+    const foreign = makeService({ resumeVersion: { findFirst: vi.fn().mockResolvedValue(null) } }).service;
+    await expect(foreign.export('rv-1', 'user-2', 'md')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});

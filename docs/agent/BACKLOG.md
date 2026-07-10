@@ -805,7 +805,7 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 - **MOM-136** AI résumé/bullet analysis service (dormant-until-key; reuse `grading.service`) · BLOCKED on MOM-133 · *AI-dormant*
 - **MOM-137** AI bullet rewriting per JD · BLOCKED on MOM-136 · *AI-dormant*
 - **MOM-138** AI cover-letter drafting per job (visa-context framing) · BLOCKED on MOM-136 · *AI-dormant*
-- **MOM-139** Résumé export — Markdown then ATS-safe PDF · BLOCKED on MOM-133
+- **MOM-139** Résumé export — Markdown then ATS-safe PDF · **DONE** 2026-07-10 — `GET /resumes/:id/export?format=md|pdf`. MD = `contentMd` attachment; PDF = ATS-safe single-column render via a **dependency-free** hand-rolled writer (`resume-pdf.util.ts`, standard Helvetica, no font embedding, no binary dep — chosen over pdfkit/puppeteer because the safest ATS output is exactly plain text + a standard font, and that needs no library). Web: `/profile/resumes` "Export .md/.pdf" buttons (auth-header fetch → blob download). 281 API tests; live: MD round-trip, PDF deterministic (1545B, identical across runs) and **verified parseable by pypdf** — clean text extraction of every section; 400 on unknown format, 404 on foreign version. Rollback: revert code (no schema, no dep).
 
 ### Track S — Career Today, Automation & Loop Closure · CareerOS Gate 1/5
 - **MOM-140** Stage-aware Today cards + interview countdown · **DONE** (lite copy `b9e9ac5` Phase 0 — stage-aware `JOB_STAGE_CARD` copy/ranking; full interview countdown shipped in MOM-141 `bf125f7`).

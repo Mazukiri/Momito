@@ -565,6 +565,30 @@ export const resumesApi = {
 
   remove: (id: string) =>
     request<void>(`/resumes/${id}`, { method: 'DELETE' }),
+
+  // MOM-139: fetch the export with the auth header (a plain <a href> can't send
+  // the Bearer token), then trigger a browser download of the returned blob.
+  download: async (id: string, format: 'md' | 'pdf') => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/resumes/${id}/export?format=${format}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      if (res.status === 401) notifyUnauthorized();
+      throw new ApiClientError({ statusCode: res.status, error: res.statusText, message: `Export failed (${res.status})` });
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') ?? '';
+    const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `resume.${format}`;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  },
 };
 
 export const offersApi = {

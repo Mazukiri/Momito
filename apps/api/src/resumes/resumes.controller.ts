@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser } from '../common/current-user.decorator';
 import { AuthenticatedUser } from '../common/jwt-auth.guard';
 import { CreateResumeVersionDto } from './dto/create-resume-version.dto';
@@ -17,6 +18,23 @@ export class ResumesController {
   @Post()
   create(@Body() dto: CreateResumeVersionDto, @CurrentUser() user: AuthenticatedUser) {
     return this.resumes.create(dto, user.id);
+  }
+
+  // MOM-139: download a version as .md or .pdf. Static-suffix route declared
+  // before :id so `:id/export` never shadows the plain `:id` GET.
+  @Get(':id/export')
+  async export(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('format') format = 'md',
+    @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const file = await this.resumes.export(id, user.id, format);
+    res.set({
+      'Content-Type': file.contentType,
+      'Content-Disposition': `attachment; filename="${file.filename}"`,
+    });
+    return new StreamableFile(file.body);
   }
 
   @Get(':id')
