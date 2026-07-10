@@ -1,5 +1,23 @@
 # LOG
 
+## 2026-07-10 - MOM-107: Kanban pipeline view (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema, web-only.** Completes Wave 2
+(pipeline truth).
+
+**Web (`jobs/page.tsx`):** a list ↔ board view toggle in the header. The board renders one column per active
+funnel stage (`JOB_FUNNEL_STAGES`: saved…offer; terminal outcomes stay in the list view). Cards are draggable
+via **native HTML5 drag events** (no new dependency); dropping a card in another column calls `moveJob`, which
+optimistically updates local state and calls the existing `jobsApi.update(id, {status})` — the same endpoint
+that already writes the MOM-102/104 transition event and MOM-106 reason handling — reverting on error. Cards
+show company/role, a compact stall pill, and a deadline chip; the funnel card + filter pills remain on the
+list view only. A `dragJobId` state dims the card in flight and provides a dataTransfer fallback.
+
+**Checks:** web lint/typecheck green; **26 web tests** (unchanged — no API/shared change; API stays 251). No
+Playwright binary in this checkout for a board screenshot; the drag path delegates to `jobsApi.update(status)`,
+which is live-verified end-to-end by MOM-102/104/106 (transition event + timing + reason). Rollback: revert the
+page (the board is purely presentational over the existing status-update API).
+
 ## 2026-07-10 - MOM-106: rejection reasons (CLAUDE, migration)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration**

@@ -105,14 +105,23 @@ service enforces rejected-only, clears on reopen, copies to the transition event
 breakdown; job-page reason select + funnel "Why rejected" row; live-verified 400 guard / store+note / breakdown /
 auto-clear). **★ Pipeline truth (Wave 2) is nearly done — only the Kanban view (MOM-107) remains.**
 
-**Active PR-sized task: MOM-107 — Kanban pipeline view (no schema).** `apps/web/app/(authenticated)/jobs/page.tsx`
-gets a view toggle (list | board). Board: one column per active status (`saved, applied, oa, interview, onsite,
-offer` from `JOB_FUNNEL_STAGES`); cards draggable between columns calling the existing `jobsApi.update(id, {status})`
-(which already writes the MOM-102/104 transition event). Use native HTML5 drag events (no new dependency) with an
-optimistic move + revert-on-error, matching the repo's optimistic-update pattern. Keep the funnel card + filter
-pills on the list view. Playwright screenshot (skip if no Playwright bin — this checkout has none). Then Wave 3
-(contacts/offers: MOM-116/117 Contact model DESIGN+impl, MOM-118 follow-up cadence, MOM-119 referral view,
-MOM-114/115 Offer model + comparison) and Wave 4 (résumé artifacts AI-first:
+**Shipped since:** **MOM-107** (Kanban board — list↔board toggle on the jobs page; column per `JOB_FUNNEL_STAGES`;
+native HTML5 drag → optimistic `moveJob` calling the live-verified `jobsApi.update(id,{status})`; funnel + pills
+stay on list view). **★ Wave 2 (pipeline truth: MOM-103/104/105/106/107) is COMPLETE** — transitions are
+timed, stalls surface, losses are analyzed, and the pipeline is a draggable board.
+
+**Active PR-sized task: MOM-116 + MOM-117 — Contact model (DESIGN + implement, migration).** New `Contact`
+model: `id, userId, name, email?, linkedinUrl?, company?` (free text), `relationship String?`
+(`CONTACT_RELATIONSHIPS` = recruiter|referrer|hiring_manager|peer|other), `notes?`, timestamps, plus
+`jobApplicationId String? @db.Uuid` FK (SetNull — a contact can be standalone or attached to a job; a job has
+many contacts). Keep `JobApplication.referralName` (D-004 fallback); **backfill:** for each job with a non-null
+`referralName`, create a `Contact {name: referralName, relationship: 'referrer', jobApplicationId}` if no
+same-name contact exists for that user (idempotent by `(userId, lower(name))` check in the migration SQL, not a
+DB constraint). CRUD module `apps/api/src/contacts/` mirroring `interview-rounds` (routes `/jobs/:jobId/contacts`
++ `/contacts`); web: contacts card on job detail + referralName input → contact picker (keep legacy referralName
+if set). New ADR-0014 (contacts & follow-up cadence), D-018; SPIKE-011 resolves inline (backfill is create-only,
+no data loss, rollback = drop table + FK). Then MOM-118 (follow-up cadence scheduler, no schema), MOM-119
+(referral view, no schema), then MOM-114/115 (Offer model + comparison). Then Wave 4 (résumé artifacts AI-first:
 MOM-132/133/134/139/136/137/138/145). Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
