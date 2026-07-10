@@ -1,5 +1,23 @@
 # LOG
 
+## 2026-07-10 - MOM-119: referral network view (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema, web-only.** Completes the
+contacts triad (116/117/118/119) — the network is now browsable as a whole.
+
+**Web:** new `/contacts` page grouping the user's contacts by relationship (recruiters → referrers → hiring
+managers → peers → other → unspecified; empty groups hidden), each card showing name, company, email,
+LinkedIn, and a chip linking to the contact's job (company name resolved by joining `contactsApi.list()`
+with `jobsApi.list()` client-side — no backend change). `👥 Contacts` nav entry after Companies.
+
+**Today thank-you nudge:** intentionally *not* a new `recommendations.service` card — the MOM-118
+`thank_you` reminder already surfaces on Today via the reminder feed, so a second card would double-nudge.
+Noted here as a deliberate scoping call.
+
+**Checks:** web lint/typecheck green; **26 web tests** (unchanged — no API/shared change; API stays 261). The
+page renders over `contactsApi.list()`/`jobsApi.list()`, both live-verified in MOM-117. No Playwright binary
+for a screenshot. Rollback: delete the page + nav row.
+
 ## 2026-07-10 - MOM-118: follow-up cadence (CLAUDE, no schema)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Turns the pipeline + contacts

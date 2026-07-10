@@ -119,12 +119,18 @@ backfill SQL proven idempotent/dedup-safe). **★ Wave 3 opened — networking i
 `follow_up` reminders for `applied` apps stale ≥10d and `thank_you` reminders for just-decided rounds that
 have a job contact; `FollowUpModule` + scheduler; live-verified nudge + idempotency).
 
-**Active PR-sized task: MOM-119 — referral network view (no schema; needs MOM-117 ✓).** New contacts list page
-`/contacts` grouped by relationship, each contact showing its linked job(s); reuse the `contactsApi.list()`
-already built. A Today nudge via `recommendations.service` when an offer/onsite outcome landed and the referrer
-contact hasn't had a `thank_you` reminder dismissed (small — the MOM-118 thank_you reminder already exists;
-this surfaces it as a ranked Today card). Add a nav entry. Then MOM-114/115 (Offer model + comparison,
-migration — ADR-0015, D-019, SPIKE-015). Then Wave 4 (résumé artifacts AI-first:
+**Shipped since:** **MOM-119** (referral network view — `/contacts` page grouped by relationship with linked-job
+chips; `👥 Contacts` nav; the Today thank-you nudge is already delivered by the MOM-118 `thank_you` reminder, so
+no redundant rec card). **★ Wave 3 contacts (MOM-116/117/118/119) COMPLETE.**
+
+**Active PR-sized task: MOM-114 + MOM-115 — Offer model + comparison (DESIGN + implement, migration; SPIKE-015).**
+Model `Offer`: `id, userId, jobApplicationId @unique?` (one offer per app; nullable FK, Cascade), `baseSalary
+Decimal?, bonus Decimal?, equityTotal Decimal?, equityYears Int? @default(4), currency String @default("USD"),
+location?, visaSponsored Boolean?, deadline Date?, notes?, status String @default('received')` ∈
+received|negotiating|accepted|declined|expired. Keep `compensationNotes` as fallback. Comparison view
+(`/jobs/offers` or a career-page card): normalized annual total = base + bonus + equityTotal/equityYears,
+**single-currency v1 (no FX — note in UI)**, visa-adjusted flag column. No multi-currency conversion in v1
+(the SPIKE-015 over-modeling risk). ADR-0015, D-019. Then Wave 4 (résumé artifacts AI-first:
 MOM-132/133/134/139/136/137/138/145). Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
