@@ -90,16 +90,20 @@ distinct role track; `GET /career/target-shortlist`; "Where to apply next" top-3
 live: NVIDIA 51 → Amazon 15, ByteDance unknown ×0.7 → 15). **★ Wave 1 (Phase 1D company context, MOM-120→125)
 is COMPLETE** — the target catalog is structured, linked to the pipeline, browsable, filterable, and ranked.
 
-**Active PR-sized task: MOM-103 + MOM-104 — transition history (one PR, migration).** Add structured
-`fromStatus`/`toStatus` columns to `JobEvent` (NOT a StatusTransition table, NOT per-stage timestamps —
-SPIKE-009 resolved). Backfill from the machine-written MOM-102 `title` ("saved → applied") via idempotent
-raw SQL with an IN-guard on the known statuses. `jobs.service.update()` writes the structured pair on each
-`status_change` event (keep `title` for display); `funnel()` gains per-stage timing (`medianDaysInStage`)
-from consecutive `status_change` eventAt diffs. Write the DESIGN into ADR-0009 and flip it ACCEPTED. Then
-MOM-105 (stall detection, no schema), MOM-106 (rejectionReason column, small migration), MOM-107 (Kanban
-board, no schema — can run any time). Then Wave 3 (contacts/offers: MOM-116/117/118/119, 114/115) and Wave 4
-(résumé artifacts AI-first: MOM-132/133/134/139/136/137/138/145). Full design in the approved handoff plan
-(`~/.claude/plans/…mossy-moore.md`).
+**Shipped since:** **MOM-103+104** (migration `job_event_transition_status` — `JobEvent.fromStatus`/`toStatus`
+structured columns + title-parse backfill; `jobs.service.update()` writes the pair; `funnel()` emits
+per-stage `medianDaysInStage` from ordered transition timing; funnel card shows `~Nd`; ADR-0009 ACCEPTED;
+live-verified backfill + fresh transition + median 1.5/0). **★ Pipeline truth now has a time dimension.**
+
+**Active PR-sized task: MOM-105 — stall detection (no schema; needs MOM-104 ✓).** Shared
+`JOB_STAGE_STALL_THRESHOLDS` (days): saved 14, applied 21, oa 7, interview 14, onsite 14, offer 7 (terminal
+never stalls). Time-in-current-stage = `now − (latest status_change eventAt ?? job.createdAt)` via a `take:1`
+filtered relation in `jobInclude`. Serializer adds `daysInStage` + `isStalled`; the job list renders a stall
+badge; `recommendations.service` gains a stalled-job card reusing the MOM-141 urgency pattern
+("Google — 25 days in applied. Follow up or mark no response."), priority ~60–70. Then MOM-106 (rejection
+reasons, small migration), MOM-107 (Kanban board, no schema — can run any time). Then Wave 3 (contacts/offers:
+MOM-116/117/118/119, 114/115) and Wave 4 (résumé artifacts AI-first: MOM-132/133/134/139/136/137/138/145).
+Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).

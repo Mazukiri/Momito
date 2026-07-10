@@ -1,5 +1,30 @@
 # LOG
 
+## 2026-07-10 - MOM-103+104: transition history + funnel timing (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration**
+`job_event_transition_status`. Gives the pipeline a real sense of *time*, not just current position.
+
+**Schema (SPIKE-009 resolved → ADR-0009 ACCEPTED):** `JobEvent` gains `fromStatus`/`toStatus` (`String?`,
+set only on `status_change` events). Chose structured columns on the existing event row over (a) a separate
+`StatusTransition` table (would force a permanent dual-write with the MOM-102 audit trail) and (b) 8 per-stage
+timestamp columns on `JobApplication` (can't model stage revisits; bloats the busiest row). **Backfill** in the
+migration reconstructs the pair from the machine-written MOM-102 title via `split_part(title, ' → ', 1/2)`,
+guarded idempotent (`from_status IS NULL`) and safe (both endpoints must be known statuses). `--create-only`
+→ edited in the backfill → applied, so the checksum covers the final SQL.
+
+**Service:** `jobs.service.update()` writes the structured pair on each transition (keeps `title` for display);
+`serializeEvent` exposes them. `funnel()` now loads the ordered `status_change` events and diffs consecutive
+`eventAt`s per job to emit `medianDaysInStage` per stage (first stage entry approximated by `job.createdAt`;
+open current stage contributes no sample; revisits each sample → median, not a single span). Web: the funnel
+card renders a `~Nd` median-time column per stage.
+
+**Checks:** shared build; API + web lint/typecheck green; **241 API tests** (+2: median-days computed from
+transitions & ignores the open stage; `fromStatus`/`toStatus` written on the event). **Live** (existing DB):
+the 1 pre-existing `applied → oa` event backfilled correctly; a fresh `interview → onsite` transition landed
+`fromStatus=interview toStatus=onsite`; funnel returned `medianDaysInStage` interview 1.5, applied 0. Meta job
+restored to `interview`. Rollback: drop the 2 columns (free-text title untouched).
+
 ## 2026-07-10 - MOM-125: targeting shortlist (CLAUDE, no schema)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Answers "who should I apply

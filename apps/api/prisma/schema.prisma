@@ -440,6 +440,10 @@ model JobEvent {
   type             String
   title            String
   notes            String?
+  // MOM-103/104: structured transition endpoints for a `status_change` event
+  // (null for other event types). Backfilled from the machine-written `title`.
+  fromStatus       String?        @map("from_status")
+  toStatus         String?        @map("to_status")
   eventAt          DateTime       @map("event_at") @db.Timestamptz(6)
   createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)

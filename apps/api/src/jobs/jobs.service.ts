@@ -63,14 +63,25 @@ export class JobsService {
     };
   }
 
-  // MOM-101: the job-hunt funnel + conversion analytics, computed from current
-  // status only (no transition history yet — see JobFunnelResponse doc + MOM-104).
+  // MOM-101: the job-hunt funnel + conversion analytics. Cumulative counts come
+  // from current status; MOM-104 adds per-stage median timing from the structured
+  // status_change transition history.
   async funnel(userId: string): Promise<JobFunnelResponse> {
-    const jobs = await this.prisma.jobApplication.findMany({
-      where: { userId },
-      select: { status: true, source: true, visaTag: true },
-    });
+    const [jobs, transitions] = await Promise.all([
+      this.prisma.jobApplication.findMany({
+        where: { userId },
+        select: { id: true, status: true, source: true, visaTag: true, createdAt: true },
+      }),
+      // Ordered so each job's transitions are chronological; fromStatus/toStatus
+      // reconstruct how long each stage was occupied before the app moved on.
+      this.prisma.jobEvent.findMany({
+        where: { userId, type: 'status_change' },
+        select: { jobApplicationId: true, fromStatus: true, toStatus: true, eventAt: true },
+        orderBy: [{ jobApplicationId: 'asc' }, { eventAt: 'asc' }],
+      }),
+    ]);
 
+    const medianByStage = this.stageTimings(jobs, transitions);
     const stageIndex = new Map(JOB_FUNNEL_STAGES.map((stage, index) => [stage as string, index]));
     const atStage = JOB_FUNNEL_STAGES.map(() => 0);
     let rejected = 0;
@@ -94,6 +105,7 @@ export class JobsService {
       atStage: atStage[index],
       reached: reached[index],
       conversionFromPrev: index === 0 ? null : this.ratio(reached[index], reached[index - 1]),
+      medianDaysInStage: medianByStage.get(stage) ?? null,
     }));
 
     const appliedIdx = stageIndex.get('applied')!;
@@ -136,6 +148,53 @@ export class JobsService {
   private ratio(numerator: number, denominator: number): number | null {
     if (denominator <= 0) return null;
     return Math.round((numerator / denominator) * 1000) / 1000;
+  }
+
+  // MOM-104: median days each funnel stage was occupied, reconstructed from the
+  // ordered status_change transitions. A stage is *entered* at the eventAt of the
+  // transition into it (or the app's createdAt for its very first stage) and *left*
+  // at the next transition's eventAt; the gap is one completed occupancy sample.
+  // The current (still-open) stage contributes no sample. Stage revisits each count
+  // as their own sample, which is why we take a median rather than a single span.
+  private stageTimings(
+    jobs: Array<{ id: string; createdAt: Date }>,
+    transitions: Array<{ jobApplicationId: string; fromStatus: string | null; toStatus: string | null; eventAt: Date }>,
+  ): Map<string, number> {
+    const funnelStages = new Set<string>(JOB_FUNNEL_STAGES);
+    const createdAt = new Map(jobs.map((job) => [job.id, job.createdAt]));
+    const byJob = new Map<string, Array<{ fromStatus: string | null; eventAt: Date }>>();
+    for (const transition of transitions) {
+      if (!byJob.has(transition.jobApplicationId)) byJob.set(transition.jobApplicationId, []);
+      byJob.get(transition.jobApplicationId)!.push({ fromStatus: transition.fromStatus, eventAt: transition.eventAt });
+    }
+
+    const samples = new Map<string, number[]>();
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    for (const [jobId, events] of byJob) {
+      // Entry into the stage being left by the first transition is the app's
+      // creation (a pre-MOM-102 approximation, documented in ADR-0009).
+      let enteredAt = createdAt.get(jobId) ?? events[0].eventAt;
+      for (const event of events) {
+        const stage = event.fromStatus;
+        const days = (event.eventAt.getTime() - enteredAt.getTime()) / MS_PER_DAY;
+        if (stage && funnelStages.has(stage) && days >= 0) {
+          if (!samples.has(stage)) samples.set(stage, []);
+          samples.get(stage)!.push(days);
+        }
+        enteredAt = event.eventAt;
+      }
+    }
+
+    const medians = new Map<string, number>();
+    for (const [stage, values] of samples) medians.set(stage, this.median(values));
+    return medians;
+  }
+
+  private median(values: number[]): number {
+    const sorted = [...values].sort((left, right) => left - right);
+    const mid = Math.floor(sorted.length / 2);
+    const raw = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+    return Math.round(raw * 10) / 10;
   }
 
   async create(dto: CreateJobDto, userId: string): Promise<JobApplicationResponse> {
@@ -191,6 +250,10 @@ export class JobsService {
           jobApplicationId: id,
           type: 'status_change',
           title: `${previousStatus} → ${dto.status}`,
+          // MOM-103: the structured pair drives funnel timing (MOM-104) and stall
+          // detection (MOM-105); `title` stays for human-readable display.
+          fromStatus: previousStatus,
+          toStatus: dto.status,
           eventAt: new Date(),
         },
       });
@@ -374,6 +437,8 @@ export class JobsService {
       type: event.type,
       title: event.title,
       notes: event.notes,
+      fromStatus: event.fromStatus,
+      toStatus: event.toStatus,
       eventAt: event.eventAt.toISOString(),
       createdAt: event.createdAt.toISOString(),
     };

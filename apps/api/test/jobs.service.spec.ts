@@ -106,6 +106,9 @@ describe('JobsService.update — status transition logging (MOM-102)', () => {
         jobApplicationId: 'job-1',
         type: 'status_change',
         title: 'applied → interview',
+        // MOM-103: structured transition endpoints alongside the display title.
+        fromStatus: 'applied',
+        toStatus: 'interview',
       }),
     });
   });
@@ -183,8 +186,14 @@ describe('JobsService — company link (MOM-122)', () => {
 });
 
 describe('JobsService.funnel', () => {
-  function serviceWith(jobs: Array<{ status: string; source: string | null; visaTag: string | null }>) {
-    const prisma = { jobApplication: { findMany: vi.fn().mockResolvedValue(jobs) } };
+  function serviceWith(
+    jobs: Array<{ status: string; source: string | null; visaTag: string | null }>,
+    transitions: Array<{ jobApplicationId: string; fromStatus: string | null; toStatus: string | null; eventAt: Date }> = [],
+  ) {
+    const prisma = {
+      jobApplication: { findMany: vi.fn().mockResolvedValue(jobs) },
+      jobEvent: { findMany: vi.fn().mockResolvedValue(transitions) },
+    };
     return new JobsService(prisma as never, {} as never);
   }
 
@@ -256,5 +265,30 @@ describe('JobsService.funnel', () => {
     const funnel = await serviceWith(jobs).funnel('user-1');
     expect(funnel.bySource[0].key).toBe('unspecified');
     expect(funnel.byVisaTag[0].key).toBe('unknown');
+  });
+
+  it('leaves every stage median null with no transition history', async () => {
+    const funnel = await serviceWith([{ status: 'applied', source: null, visaTag: null }]).funnel('user-1');
+    expect(funnel.stages.every((row) => row.medianDaysInStage === null)).toBe(true);
+  });
+
+  it('computes median days-in-stage from transitions (MOM-104), ignoring the open current stage', async () => {
+    // Job A: saved 2d (7/1→7/3), applied 5d (7/3→7/8), now open in oa.
+    // Job B: saved 4d (7/1→7/5), now open in applied.
+    const jobs = [
+      { id: 'A', status: 'oa', source: null, visaTag: null, createdAt: new Date('2026-07-01T00:00:00Z') },
+      { id: 'B', status: 'applied', source: null, visaTag: null, createdAt: new Date('2026-07-01T00:00:00Z') },
+    ] as never;
+    const transitions = [
+      { jobApplicationId: 'A', fromStatus: 'saved', toStatus: 'applied', eventAt: new Date('2026-07-03T00:00:00Z') },
+      { jobApplicationId: 'A', fromStatus: 'applied', toStatus: 'oa', eventAt: new Date('2026-07-08T00:00:00Z') },
+      { jobApplicationId: 'B', fromStatus: 'saved', toStatus: 'applied', eventAt: new Date('2026-07-05T00:00:00Z') },
+    ];
+    const funnel = await serviceWith(jobs, transitions).funnel('user-1');
+
+    const byStage = Object.fromEntries(funnel.stages.map((row) => [row.stage, row.medianDaysInStage]));
+    expect(byStage.saved).toBe(3); // median of [2, 4]
+    expect(byStage.applied).toBe(5); // only [5]
+    expect(byStage.oa).toBeNull(); // still open, no completed sample
   });
 });

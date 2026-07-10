@@ -19,6 +19,7 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-103+104 | CLAUDE | `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**`, `apps/api/src/jobs/jobs.service.ts`, `packages/shared/src/index.ts`, `apps/web/app/components/JobFunnelCard.tsx`, `apps/api/test/jobs.service.spec.ts`, `docs/adr/0009-*.md`, `docs/agent/*.MD` | 2026-07-10 |
 | MOM-125 | CLAUDE | `apps/api/src/career/career.service.ts`, `apps/api/src/career/career.controller.ts`, `packages/shared/src/index.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/(authenticated)/career/page.tsx`, `apps/api/test/career.service.spec.ts`, `docs/agent/*.MD` | 2026-07-10 |
 | MOM-124 | CLAUDE | `apps/web/app/(authenticated)/companies/page.tsx`, `apps/web/app/(authenticated)/jobs/page.tsx`, `apps/web/app/(authenticated)/companies/__tests__/**` (new), `docs/agent/*.MD` | 2026-07-10 |
 | MOM-123 | CLAUDE | `apps/web/app/(authenticated)/companies/**` (new), `apps/web/app/lib/navigation.ts`, `apps/api/src/companies/companies.service.ts`, `packages/shared/src/index.ts`, `apps/api/test/companies.service.spec.ts`, `docs/agent/*.MD` | 2026-07-10 |

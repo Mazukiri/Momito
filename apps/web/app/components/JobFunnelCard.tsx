@@ -41,9 +41,13 @@ export function JobFunnelCard({ funnel }: { funnel: JobFunnelResponse }) {
             <span className="w-12 shrink-0 text-right text-[11px] text-zinc-400">
               {row.conversionFromPrev === null ? '' : pct(row.conversionFromPrev)}
             </span>
+            <span className="w-16 shrink-0 text-right text-[11px] text-zinc-400" title="Median days in this stage">
+              {row.medianDaysInStage === null ? '' : `~${row.medianDaysInStage}d`}
+            </span>
           </div>
         ))}
       </div>
+      <p className="mt-1 pl-[76px] text-[10px] uppercase tracking-wide text-zinc-300 dark:text-zinc-600">reached · conv · median time</p>
 
       {(funnel.rejected > 0 || funnel.withdrawn > 0) && (
         <p className="mt-2 text-xs text-zinc-400">

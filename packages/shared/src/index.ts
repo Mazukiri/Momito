@@ -1063,6 +1063,10 @@ export interface JobEventResponse {
   type: string;
   title: string;
   notes: string | null;
+  // MOM-103: structured transition endpoints on a `status_change` event; null on
+  // other event types (and on pre-MOM-102 rows).
+  fromStatus: string | null;
+  toStatus: string | null;
   eventAt: string;
   createdAt: string;
 }
@@ -1150,6 +1154,9 @@ export interface JobFunnelStageRow {
   atStage: number; // active apps whose current status is exactly this stage
   reached: number; // active apps currently at this stage or deeper (cumulative)
   conversionFromPrev: number | null; // reached[i] / reached[i-1]; null for the first stage
+  // MOM-104: median days apps historically spent in this stage before moving on,
+  // from `status_change` transition timing. null when no completed occupancy exists.
+  medianDaysInStage: number | null;
 }
 
 export interface JobFunnelBreakdownRow {
@@ -1161,8 +1168,9 @@ export interface JobFunnelBreakdownRow {
 }
 
 // Honest v1: computed from CURRENT status only — an app that was rejected after
-// an onsite is counted as an outcome, not as having reached onsite, because no
-// transition history exists yet. True stage timing/history lands with MOM-104.
+// an onsite is counted as an outcome, not as having reached onsite, because the
+// cumulative `reached` counts use current status. Per-stage *timing* is grounded
+// in real transition history (MOM-104 `medianDaysInStage`).
 export interface JobFunnelResponse {
   total: number;
   active: number; // not rejected/withdrawn
