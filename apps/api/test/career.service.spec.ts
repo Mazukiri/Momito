@@ -14,6 +14,7 @@ function buildService(mastery: Map<string, unknown>, extra: { prisma?: Record<st
     learningHighlight: { findMany: vi.fn().mockResolvedValue([]) },
     jobApplication: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
     task: { findMany: vi.fn().mockResolvedValue([]) },
+    company: { findMany: vi.fn().mockResolvedValue([]) },
     ...extra.prisma,
   };
   const readiness = {
@@ -125,6 +126,72 @@ describe('CareerService.getJobReadiness — "am I ready?" verdict (MOM-130)', ()
     expect(verdict.score).toBe(39);
     // dsa drags hardest for this company (5*(100-45)=275 > behavioral 1*(100-10)=90).
     expect(verdict.weakestAreas[0].area).toBe('dsa');
+  });
+});
+
+describe('CareerService.getTargetShortlist — targeting shortlist (MOM-125)', () => {
+  // dsa strong (score .9 → pct 45 with empty coverage), system_design weak (.2 → 10).
+  const mastery = () =>
+    new Map<string, unknown>([
+      ['dsa', { area: 'dsa', retrievability: 0.9, reviewedCount: 3, gradedAttempts: 5, positiveAttempts: 5, score: 0.9 }],
+      ['system_design', { area: 'system_design', retrievability: 0.2, reviewedCount: 2, gradedAttempts: 3, positiveAttempts: 1, score: 0.2 }],
+    ]);
+
+  function company(over: Record<string, unknown>) {
+    return { id: over.name as string, name: 'X', region: 'Global', focusAreas: {}, roleTrackIds: ['big-tech-swe'], sponsorshipStatus: 'sponsored', ...over };
+  }
+
+  it('ranks by focus-weighted fit × sponsorship, scaling non-sponsors down and skipping focus-less companies', async () => {
+    const service = buildService(mastery(), {
+      prisma: {
+        company: {
+          findMany: vi.fn().mockResolvedValue([
+            company({ name: 'Alpha', focusAreas: { dsa: 5, system_design: 1 }, sponsorshipStatus: 'sponsored' }),
+            company({ name: 'Beta', focusAreas: { dsa: 5, system_design: 1 }, sponsorshipStatus: 'not_sponsoring' }),
+            company({ name: 'Gamma', focusAreas: {} }), // no emphasis → not scorable
+          ]),
+        },
+        jobApplication: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
+      },
+    });
+
+    const result = await service.getTargetShortlist('user-1');
+
+    // Gamma dropped; Alpha (sponsored) outranks Beta (not sponsoring) on the same fit.
+    expect(result.items.map((item) => item.name)).toEqual(['Alpha', 'Beta']);
+    // fit = round((45*5 + 10*1)/6) = 39.
+    expect(result.items[0]).toMatchObject({ name: 'Alpha', fitScore: 39, sponsorshipMultiplier: 1, score: 39 });
+    expect(result.items[1]).toMatchObject({ name: 'Beta', fitScore: 39, sponsorshipMultiplier: 0.2, score: 8 });
+    // Top focus area carries the company weight and the user's readiness in it.
+    expect(result.items[0].topFocusAreas[0]).toEqual({ area: 'dsa', weight: 5, percentage: 45 });
+    expect(result.preferredRegions).toEqual([]);
+  });
+
+  it('demerits an off-target region only once the pipeline reveals a preference', async () => {
+    const service = buildService(mastery(), {
+      prisma: {
+        company: {
+          findMany: vi.fn().mockResolvedValue([
+            company({ name: 'USorg', region: 'US', focusAreas: { dsa: 5 } }),
+            company({ name: 'EUorg', region: 'EU', focusAreas: { dsa: 5 } }),
+          ]),
+        },
+        // An existing linked job in the US makes 'us' the preferred region.
+        jobApplication: { findMany: vi.fn().mockResolvedValue([{ companyRef: { region: 'US' } }]), findFirst: vi.fn().mockResolvedValue(null) },
+      },
+    });
+
+    const result = await service.getTargetShortlist('user-1');
+
+    expect(result.preferredRegions).toEqual(['us']);
+    const us = result.items.find((item) => item.name === 'USorg')!;
+    const eu = result.items.find((item) => item.name === 'EUorg')!;
+    expect(us.regionMultiplier).toBe(1);
+    expect(eu.regionMultiplier).toBe(0.85);
+    // Same fit (45), EU discounted → US ranks first.
+    expect(result.items[0].name).toBe('USorg');
+    expect(us.score).toBe(45);
+    expect(eu.score).toBe(38); // round(45 * 0.85)
   });
 });
 

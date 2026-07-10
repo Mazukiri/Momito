@@ -650,6 +650,42 @@ export interface JobStoryGapResponse {
   totalStories: number;
 }
 
+// MOM-125: the targeting shortlist — catalog companies ranked by how well the
+// user's grounded readiness matches what each company drills, weighted by whether
+// it sponsors visas and by region preference. Answers "who should I apply to next?".
+export interface TargetShortlistFocusArea {
+  area: CareerRoleAreaId;
+  /** The company's 1–5 interview weight for this area. */
+  weight: number;
+  /** The user's current grounded readiness (0–100) in this area. */
+  percentage: number;
+}
+
+export interface TargetShortlistItem {
+  companyId: string;
+  name: string;
+  region: string | null;
+  sponsorshipStatus: VisaTag | null;
+  roleTrackId: CareerRoleTrackId;
+  /** Focus-weighted grounded readiness for this company's emphasis (0–100). */
+  fitScore: number;
+  /** Sponsored 1.0 / unknown 0.7 / not_sponsoring 0.2. */
+  sponsorshipMultiplier: number;
+  /** 1.0 for Global/preferred regions, discounted otherwise. */
+  regionMultiplier: number;
+  /** fitScore × sponsorshipMultiplier × regionMultiplier, 0–100. The ranking key. */
+  score: number;
+  /** The company's top-weighted focus areas with the user's readiness in each. */
+  topFocusAreas: TargetShortlistFocusArea[];
+  reason: string;
+}
+
+export interface TargetShortlistResponse {
+  items: TargetShortlistItem[];
+  /** Regions inferred as preferred from the user's existing pipeline (empty = no signal). */
+  preferredRegions: string[];
+}
+
 export const MISSION_SOURCE_TYPES = ['manual', 'career_goal', 'job_application'] as const;
 export type MissionSourceType = (typeof MISSION_SOURCE_TYPES)[number];
 

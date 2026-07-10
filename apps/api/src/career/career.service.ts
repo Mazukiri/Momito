@@ -14,6 +14,10 @@ import {
   RoleReadinessResponse,
   STORY_COMPETENCIES,
   StoryGapCompetency,
+  TargetShortlistFocusArea,
+  TargetShortlistItem,
+  TargetShortlistResponse,
+  VisaTag,
 } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReadinessService, type AreaMastery } from '../readiness/readiness.service';
@@ -34,6 +38,19 @@ const ALMOST_THRESHOLD = 50;
 // competency set when a role track's behavioral checklist doesn't name concrete
 // STORY_COMPETENCIES ids in its keywords (e.g. infra's "incident/postmortem").
 const DEFAULT_BEHAVIORAL_COMPETENCIES = ['ownership', 'conflict', 'ambiguity', 'failure'];
+
+// MOM-125 targeting shortlist tuning. Sponsorship gates emigration, so it scales
+// the whole score hard; a null status is treated as 'unknown' (some hope, unproven).
+const SPONSORSHIP_FIT_MULTIPLIER: Record<VisaTag, number> = {
+  sponsored: 1.0,
+  unknown: 0.7,
+  not_sponsoring: 0.2,
+};
+// A specific region the user hasn't shown interest in is a soft demerit only;
+// 'Global'/null and regions already in their pipeline stay at full weight.
+const REGION_MATCH_MULTIPLIER = 1.0;
+const REGION_OFF_TARGET_MULTIPLIER = 0.85;
+const GLOBAL_REGION = 'global';
 
 type EvidenceContext = {
   profileText: string;
@@ -254,6 +271,102 @@ export class CareerService {
       missingCount: competencies.length - coveredCount,
       totalStories: stories.length,
     };
+  }
+
+  // MOM-125: the targeting shortlist — "who should I apply to next?". Ranks catalog
+  // companies by how well the user's grounded readiness (MOM-129) matches each
+  // company's interview emphasis (MOM-121 focusAreas), scaled by whether the company
+  // sponsors visas (the emigration gate) and by region preference. Reuses the same
+  // focus-weighting as the "am I ready for Meta?" verdict, run across the catalog.
+  async getTargetShortlist(userId: string): Promise<TargetShortlistResponse> {
+    const [companies, linkedJobs] = await Promise.all([
+      this.prisma.company.findMany({
+        select: { id: true, name: true, region: true, focusAreas: true, roleTrackIds: true, sponsorshipStatus: true },
+        orderBy: { name: 'asc' },
+      }),
+      // Region preference is inferred from the user's existing pipeline: the regions
+      // of companies they've already linked jobs to. No pipeline → no preference.
+      this.prisma.jobApplication.findMany({
+        where: { userId, companyId: { not: null } },
+        select: { companyRef: { select: { region: true } } },
+      }),
+    ]);
+
+    const preferredRegions = new Set(
+      linkedJobs
+        .map((job) => job.companyRef?.region?.trim().toLowerCase())
+        .filter((region): region is string => Boolean(region) && region !== GLOBAL_REGION),
+    );
+
+    // Memoize grounded readiness per distinct role track (companies share tracks, so
+    // this is a handful of computations, not one heavy evidence load per company).
+    const readinessByTrack = new Map<CareerRoleTrackId, RoleReadinessResponse>();
+    const trackReadiness = async (trackId: CareerRoleTrackId) => {
+      const cached = readinessByTrack.get(trackId);
+      if (cached) return cached;
+      const computed = await this.getReadiness(trackId, userId);
+      readinessByTrack.set(trackId, computed);
+      return computed;
+    };
+
+    const items: TargetShortlistItem[] = [];
+    for (const company of companies) {
+      const focusAreas = this.asFocusAreas(company.focusAreas);
+      if (Object.keys(focusAreas).length === 0) continue; // can't score fit without an emphasis
+
+      const roleTrackId = this.firstRoleTrack(company.roleTrackIds) ?? DEFAULT_JOB_ROLE_TRACK;
+      const readiness = await trackReadiness(roleTrackId);
+      const fitScore = this.companyWeightedPercentage(readiness.areas, focusAreas);
+
+      const sponsorship = (company.sponsorshipStatus as VisaTag | null) ?? 'unknown';
+      const sponsorshipMultiplier = SPONSORSHIP_FIT_MULTIPLIER[sponsorship];
+      const regionMultiplier = this.regionMultiplier(company.region, preferredRegions);
+      const score = Math.round(fitScore * sponsorshipMultiplier * regionMultiplier);
+
+      const percentageByArea = new Map(readiness.areas.map((area) => [area.area, area.percentage]));
+      const topFocusAreas: TargetShortlistFocusArea[] = Object.entries(focusAreas)
+        .sort((left, right) => (right[1] ?? 0) - (left[1] ?? 0))
+        .slice(0, 3)
+        .map(([area, weight]) => ({
+          area: area as CareerRoleAreaId,
+          weight: weight ?? 0,
+          percentage: percentageByArea.get(area as CareerRoleAreaId) ?? 0,
+        }));
+
+      items.push({
+        companyId: company.id,
+        name: company.name,
+        region: company.region,
+        sponsorshipStatus: company.sponsorshipStatus as VisaTag | null,
+        roleTrackId,
+        fitScore,
+        sponsorshipMultiplier,
+        regionMultiplier,
+        score,
+        topFocusAreas,
+        reason: this.shortlistReason(fitScore, sponsorship, topFocusAreas),
+      });
+    }
+
+    items.sort((left, right) => right.score - left.score || right.fitScore - left.fitScore || left.name.localeCompare(right.name));
+    return { items, preferredRegions: [...preferredRegions] };
+  }
+
+  // 'Global'/null regions and regions already in the user's pipeline stay at full
+  // weight; a specific off-target region is a soft demerit. With no pipeline signal
+  // at all, nothing is penalized (we don't guess a preference).
+  private regionMultiplier(region: string | null, preferred: Set<string>): number {
+    const normalized = region?.trim().toLowerCase();
+    if (!normalized || normalized === GLOBAL_REGION || preferred.size === 0) return REGION_MATCH_MULTIPLIER;
+    return preferred.has(normalized) ? REGION_MATCH_MULTIPLIER : REGION_OFF_TARGET_MULTIPLIER;
+  }
+
+  private shortlistReason(fitScore: number, sponsorship: VisaTag, topFocusAreas: TargetShortlistFocusArea[]): string {
+    const sponsorshipPhrase =
+      sponsorship === 'sponsored' ? 'sponsors visas' : sponsorship === 'not_sponsoring' ? 'no sponsorship' : 'sponsorship unknown';
+    const focus = topFocusAreas[0];
+    const focusPhrase = focus ? `drills ${focus.area.replace(/_/g, ' ')} — you're at ${focus.percentage}%` : 'general fit';
+    return `${fitScore}% focus-weighted readiness · ${sponsorshipPhrase} · ${focusPhrase}`;
   }
 
   // The behavioral competencies a role's loop expects: the concrete

@@ -1,5 +1,29 @@
 # LOG
 
+## 2026-07-10 - MOM-125: targeting shortlist (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Answers "who should I apply
+to next?" by ranking the whole catalog with the same focus-weighted grounded readiness the "am I ready for
+Meta?" verdict uses per-job.
+
+**Logic (`career.service.getTargetShortlist`):** for each catalog company with a focus profile, fit =
+`companyWeightedPercentage(readiness.areas, focusAreas)` — the user's grounded (MOM-129 FSRS) readiness
+weighted by that company's 1–5 interview emphasis. Grounded readiness is computed once per **distinct role
+track** (memoized `readinessByTrack`), so ~20 companies cost a handful of evidence loads, not 20. Final
+`score = fit × sponsorshipMultiplier × regionMultiplier`, rounded. Sponsorship gate (emigration-critical):
+sponsored 1.0 / unknown 0.7 / not_sponsoring 0.2 (`null`→unknown). Region: inferred from the user's existing
+pipeline (regions of their linked companies); 'Global'/null and preferred regions stay at 1.0, a specific
+off-target region takes a 0.85 demerit — but with no pipeline signal nothing is penalized. Each item carries
+`topFocusAreas` (weight + the user's % in each) and a human `reason`. Route `GET /career/target-shortlist`
+(static, ordered before the `:jobId` routes). Web: a "Where to apply next" top-3 card on the career page,
+each row linking to the company detail.
+
+**Checks:** `pnpm --filter @momito/shared build`; API + web lint/typecheck green; **239 API tests** (+2:
+fit-ranking with sponsorship scaling + focus-less companies skipped; region demerit only once a pipeline
+preference exists) + 26 web tests. **Live:** the demo catalog ranks NVIDIA 51 → … → Amazon 15; ByteDance
+(the sole `unknown` pack) correctly drops to score 15 on a 0.7 multiplier despite fit 21. Rollback: drop the
+route + method + shared types (inert).
+
 ## 2026-07-10 - MOM-124: visa/sponsorship filter + sort (CLAUDE, no schema)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema, web-only.** Makes the

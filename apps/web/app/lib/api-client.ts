@@ -475,6 +475,7 @@ import type {
   ReadwiseSyncRunResponse,
   ReminderResponse,
   RoleReadinessResponse,
+  TargetShortlistResponse,
   TaskResponse,
   UpdateJobApplicationRequest,
   UpdateMissionRequest,
@@ -506,6 +507,9 @@ export const careerApi = {
 
   jobStoryGaps: (jobId: string) =>
     request<JobStoryGapResponse>(`/career/jobs/${jobId}/story-gaps`),
+
+  targetShortlist: () =>
+    request<TargetShortlistResponse>('/career/target-shortlist'),
 };
 
 export const jobsApi = {

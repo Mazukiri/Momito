@@ -84,15 +84,22 @@ side of the loop now has a browsable face.**
 `sponsorshipKey` buckets null with 'unknown'; jobs list also sorts sponsored-first via `jobSponsorship` =
 `companyRef.sponsorshipStatus ?? visaTag ?? 'unknown'`; filters compose with the status pills; 26 web tests).
 
-**Active PR-sized task: MOM-125 — targeting shortlist** (no schema; needs MOM-121 ✓ + MOM-130 ✓).
-`career.service.getTargetShortlist(userId)`: rank catalog companies by fit = company focus-weights · the
-user's per-area grounded readiness (reuse `ReadinessService.areaMastery` + `getReadiness` areas) ×
-sponsorship multiplier (sponsored 1.0 / unknown 0.7 / not_sponsoring 0.2) × region preference. Route
-`GET /career/target-shortlist`; surface top-3 as a card on the career page; optionally one
-`recommendations.service` item. Tests mirror `career.service.spec.ts` buildService pattern. Then Waves 2–4 in
-the approved handoff plan (`~/.claude/plans/…mossy-moore.md`): pipeline truth (MOM-103/104/105/106/107),
-contacts/offers (MOM-116/117/118/119, 114/115), résumé artifacts AI-first
-(MOM-132/133/134/139/136/137/138/145).
+**Shipped since:** **MOM-125** (targeting shortlist — `career.getTargetShortlist` ranks the catalog by
+focus-weighted grounded readiness × sponsorship multiplier × region preference; readiness memoized per
+distinct role track; `GET /career/target-shortlist`; "Where to apply next" top-3 card on the career page;
+live: NVIDIA 51 → Amazon 15, ByteDance unknown ×0.7 → 15). **★ Wave 1 (Phase 1D company context, MOM-120→125)
+is COMPLETE** — the target catalog is structured, linked to the pipeline, browsable, filterable, and ranked.
+
+**Active PR-sized task: MOM-103 + MOM-104 — transition history (one PR, migration).** Add structured
+`fromStatus`/`toStatus` columns to `JobEvent` (NOT a StatusTransition table, NOT per-stage timestamps —
+SPIKE-009 resolved). Backfill from the machine-written MOM-102 `title` ("saved → applied") via idempotent
+raw SQL with an IN-guard on the known statuses. `jobs.service.update()` writes the structured pair on each
+`status_change` event (keep `title` for display); `funnel()` gains per-stage timing (`medianDaysInStage`)
+from consecutive `status_change` eventAt diffs. Write the DESIGN into ADR-0009 and flip it ACCEPTED. Then
+MOM-105 (stall detection, no schema), MOM-106 (rejectionReason column, small migration), MOM-107 (Kanban
+board, no schema — can run any time). Then Wave 3 (contacts/offers: MOM-116/117/118/119, 114/115) and Wave 4
+(résumé artifacts AI-first: MOM-132/133/134/139/136/137/138/145). Full design in the approved handoff plan
+(`~/.claude/plans/…mossy-moore.md`).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).
