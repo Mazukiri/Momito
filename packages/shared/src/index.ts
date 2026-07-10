@@ -1030,6 +1030,11 @@ export interface JobApplicationResponse {
   h1bCountLastYear: number | null;
   compensationNotes: string | null;
   notes: string | null;
+  // MOM-105: days in the current stage (since the latest status_change, or
+  // createdAt); null for terminal statuses. `isStalled` = daysInStage exceeds the
+  // stage's JOB_STAGE_STALL_THRESHOLD.
+  daysInStage: number | null;
+  isStalled: boolean;
   createdAt: string;
   updatedAt: string;
   _count?: { events: number; tasks: number; reminders: number };
@@ -1148,6 +1153,18 @@ export interface UpdateInterviewRoundRequest {
 // outcomes reported separately, not funnel positions.
 export const JOB_FUNNEL_STAGES = ['saved', 'applied', 'oa', 'interview', 'onsite', 'offer'] as const;
 export type JobFunnelStage = (typeof JOB_FUNNEL_STAGES)[number];
+
+// MOM-105: how many days an application can sit in each stage before it's
+// "stalled" and worth a nudge (follow up / mark no-response). Terminal statuses
+// (rejected/withdrawn) and stages absent here never stall.
+export const JOB_STAGE_STALL_THRESHOLDS: Partial<Record<string, number>> = {
+  saved: 14,
+  applied: 21,
+  oa: 7,
+  interview: 14,
+  onsite: 14,
+  offer: 7,
+};
 
 export interface JobFunnelStageRow {
   stage: JobFunnelStage;

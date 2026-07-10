@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { INTERVIEW_ROUND_TYPE_LABELS, PracticeRecommendationResponse } from '@momito/shared';
+import { INTERVIEW_ROUND_TYPE_LABELS, JOB_STAGE_STALL_THRESHOLDS, PracticeRecommendationResponse } from '@momito/shared';
 import { CareerService } from '../career/career.service';
 import { MissionsService } from '../missions/missions.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -38,6 +38,10 @@ const RECOMMENDATION_REASONS = {
     if (days === 1) return `Your ${roundLabel} round is tomorrow — lock in your prep.`;
     return `Your ${roundLabel} round is in ${days} days — build your prep queue now.`;
   },
+  // MOM-105: an application that has sat in one stage past its stall threshold —
+  // the nudge is to act (follow up) or close it out (mark no-response).
+  stalledJob: (stage: string, days: number) =>
+    `This application has sat in ${stage} for ${days} days without moving. Follow up or mark it no-response.`,
 };
 
 // MOM-141: how far ahead an interview round starts appearing on Today. Rounds
@@ -109,6 +113,8 @@ export class RecommendationsService {
           where: { userId, status: { in: ['saved', 'applied', 'oa', 'interview', 'onsite'] } },
           orderBy: [{ deadline: 'asc' }, { updatedAt: 'desc' }],
           take: 3,
+          // MOM-105: the latest status_change dates the current stage, for stall detection.
+          include: { events: { where: { type: 'status_change' }, orderBy: { eventAt: 'desc' }, take: 1, select: { eventAt: true } } },
         }),
         this.prisma.learningHighlight.count({ where: { userId, isDeleted: false, reviewedAt: null } }),
         this.weaknesses.summary(userId),
@@ -261,6 +267,26 @@ export class RecommendationsService {
       }
     }
     for (const job of jobs) {
+      // MOM-105: a stalled app (past its stage threshold) gets a "follow up / mark
+      // no-response" nudge that supersedes the routine stage card — the actionable
+      // move is to unblock it, not to prep it further. Priority sits below the
+      // interview countdown (101+) and deadlines (90) but above routine study.
+      const stallThreshold = JOB_STAGE_STALL_THRESHOLDS[job.status];
+      const enteredAt = job.events?.[0]?.eventAt ?? job.createdAt;
+      const daysInStage = enteredAt ? Math.floor((now.getTime() - enteredAt.getTime()) / (24 * 60 * 60 * 1000)) : null;
+      if (stallThreshold !== undefined && daysInStage !== null && daysInStage >= stallThreshold) {
+        recommendations.push({
+          id: `job-stall:${job.id}`,
+          type: 'job',
+          title: `Follow up on ${job.company} — ${daysInStage}d in ${job.status}`,
+          reason: RECOMMENDATION_REASONS.stalledJob(job.status, daysInStage),
+          roleTrackId: job.roleTrackId as PracticeRecommendationResponse['roleTrackId'],
+          area: null,
+          targetHref: `/jobs/${job.id}`,
+          priority: 68,
+        });
+        continue;
+      }
       const card = JOB_STAGE_CARD[job.status] ?? {
         title: (company: string, role: string) => `Prepare ${company} ${role}`,
         reason: RECOMMENDATION_REASONS.jobActive(),

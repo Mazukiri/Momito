@@ -5,6 +5,7 @@ import {
   CareerRoleTrackId,
   CompanyFocusAreas,
   JOB_FUNNEL_STAGES,
+  JOB_STAGE_STALL_THRESHOLDS,
   JobApplicationResponse,
   JobCompanyRef,
   JobEventResponse,
@@ -23,6 +24,11 @@ const jobInclude = {
   _count: { select: { events: true, tasks: true, reminders: true } },
   // MOM-122: the linked catalog company, slim projection for pipeline display.
   companyRef: { select: { id: true, name: true, region: true, sponsorshipStatus: true, focusAreas: true } },
+  // MOM-105: the most recent status_change gives the current stage's entry time
+  // (falls back to createdAt when the app has never transitioned). take:1 keeps it
+  // cheap on the list query. NOTE: get() overrides `events` with the full timeline,
+  // so it reconstructs this shape from that list before serializing.
+  events: { where: { type: 'status_change' }, orderBy: { eventAt: 'desc' }, take: 1, select: { eventAt: true } },
 } satisfies Prisma.JobApplicationInclude;
 
 type JobWithCounts = Prisma.JobApplicationGetPayload<{ include: typeof jobInclude }>;
@@ -55,8 +61,11 @@ export class JobsService {
     });
     if (!job) throw new NotFoundException('Job not found');
     const { events, tasks, reminders, ...rest } = job;
+    // Reconstruct jobInclude's take:1 status_change shape from the full timeline
+    // so serializeJob can compute daysInStage/isStalled (MOM-105).
+    const latestTransition = events.filter((event) => event.type === 'status_change').slice(0, 1).map((event) => ({ eventAt: event.eventAt }));
     return {
-      ...this.serializeJob(rest),
+      ...this.serializeJob({ ...rest, events: latestTransition }),
       events: events.map((event) => this.serializeEvent(event)),
       tasks,
       reminders,
@@ -403,6 +412,7 @@ export class JobsService {
   }
 
   private serializeJob(job: JobWithCounts): JobApplicationResponse {
+    const { daysInStage, isStalled } = this.stallState(job);
     return {
       id: job.id,
       userId: job.userId,
@@ -423,10 +433,23 @@ export class JobsService {
       h1bCountLastYear: job.h1bCountLastYear,
       compensationNotes: job.compensationNotes,
       notes: job.notes,
+      daysInStage,
+      isStalled,
       createdAt: job.createdAt.toISOString(),
       updatedAt: job.updatedAt.toISOString(),
       _count: job._count,
     };
+  }
+
+  // MOM-105: how long the app has sat in its current stage (since its last
+  // status_change, else since creation) and whether that passes the stage's stall
+  // threshold. Terminal statuses (rejected/withdrawn) never stall → null days.
+  private stallState(job: { status: string; createdAt: Date; events: Array<{ eventAt: Date }> }): { daysInStage: number | null; isStalled: boolean } {
+    const threshold = JOB_STAGE_STALL_THRESHOLDS[job.status];
+    if (threshold === undefined) return { daysInStage: null, isStalled: false };
+    const enteredAt = job.events[0]?.eventAt ?? job.createdAt;
+    const daysInStage = Math.floor((Date.now() - enteredAt.getTime()) / (24 * 60 * 60 * 1000));
+    return { daysInStage, isStalled: daysInStage >= threshold };
   }
 
   private serializeEvent(event: JobEvent): JobEventResponse {

@@ -95,15 +95,20 @@ structured columns + title-parse backfill; `jobs.service.update()` writes the pa
 per-stage `medianDaysInStage` from ordered transition timing; funnel card shows `~Nd`; ADR-0009 ACCEPTED;
 live-verified backfill + fresh transition + median 1.5/0). **★ Pipeline truth now has a time dimension.**
 
-**Active PR-sized task: MOM-105 — stall detection (no schema; needs MOM-104 ✓).** Shared
-`JOB_STAGE_STALL_THRESHOLDS` (days): saved 14, applied 21, oa 7, interview 14, onsite 14, offer 7 (terminal
-never stalls). Time-in-current-stage = `now − (latest status_change eventAt ?? job.createdAt)` via a `take:1`
-filtered relation in `jobInclude`. Serializer adds `daysInStage` + `isStalled`; the job list renders a stall
-badge; `recommendations.service` gains a stalled-job card reusing the MOM-141 urgency pattern
-("Google — 25 days in applied. Follow up or mark no response."), priority ~60–70. Then MOM-106 (rejection
-reasons, small migration), MOM-107 (Kanban board, no schema — can run any time). Then Wave 3 (contacts/offers:
-MOM-116/117/118/119, 114/115) and Wave 4 (résumé artifacts AI-first: MOM-132/133/134/139/136/137/138/145).
-Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
+**Shipped since:** **MOM-105** (stall detection — `JOB_STAGE_STALL_THRESHOLDS` + `daysInStage`/`isStalled`
+on the job response via a `take:1` latest-transition include; `recommendations.service` "Follow up on X —
+Nd in stage" card at priority 68 superseding the stage card; jobs-list `⏳ Stalled` badge; live-verified a
+backdated saved job flips stalled at 30d≥14). **★ The pipeline now nags you about apps that have gone quiet.**
+
+**Active PR-sized task: MOM-106 — rejection reasons (small migration; needs MOM-104 ✓).** Shared
+`REJECTION_REASONS = ['no_response','resume_screen','oa_failed','interview_technical','interview_behavioral','visa_sponsorship','position_closed','other']`.
+Storage: `rejectionReason String?` on `JobApplication` (a property of the terminal outcome — retroactively
+editable, aggregates via GROUP BY like bySource/byVisaTag), NOT on the event; copy into the transition
+event's `notes` when supplied at transition time. DTO: settable only when status is/becomes `rejected`. Web:
+a reason select appears when the status select moves to rejected; funnel card gains a `byRejectionReason`
+breakdown. Rollback: drop 1 column. Then MOM-107 (Kanban board, no schema — can run any time). Then Wave 3
+(contacts/offers: MOM-116/117/118/119, 114/115) and Wave 4 (résumé artifacts AI-first:
+MOM-132/133/134/139/136/137/138/145). Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).

@@ -255,6 +255,11 @@ export default function JobsPage() {
                     <Badge label={job.status} variant={job.status} />
                     {job.roleTrackId && <Badge label={CAREER_ROLE_TRACKS[job.roleTrackId].label} />}
                     {job.visaTag && <Badge label={`visa: ${job.visaTag}`} />}
+                    {job.isStalled && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400" title="No movement past this stage's threshold">
+                        ⏳ Stalled · {job.daysInStage}d
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="text-sm text-zinc-500">

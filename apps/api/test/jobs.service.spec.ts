@@ -79,6 +79,7 @@ describe('JobsService.update — status transition logging (MOM-102)', () => {
       createdAt: new Date('2026-07-01T00:00:00.000Z'),
       updatedAt: new Date('2026-07-08T00:00:00.000Z'),
       _count: { events: 0, tasks: 0, reminders: 0 },
+      events: [], // MOM-105: latest status_change (take:1) for stall detection
       ...overrides,
     };
   }
@@ -136,7 +137,7 @@ describe('JobsService — company link (MOM-122)', () => {
       appliedDate: null, deadline: null, source: null, referralName: null, visaTag: 'unknown',
       h1bCountLastYear: null, compensationNotes: null, notes: null,
       createdAt: new Date('2026-07-01T00:00:00.000Z'), updatedAt: new Date('2026-07-08T00:00:00.000Z'),
-      _count: { events: 0, tasks: 0, reminders: 0 }, ...overrides,
+      _count: { events: 0, tasks: 0, reminders: 0 }, events: [], ...overrides,
     };
   }
 
@@ -182,6 +183,42 @@ describe('JobsService — company link (MOM-122)', () => {
     expect(prisma.jobApplication.updateMany.mock.calls[0][0].data).toEqual({ companyId: null });
     expect(result.companyId).toBeNull();
     expect(result.companyRef).toBeNull();
+  });
+});
+
+describe('JobsService — stall detection (MOM-105)', () => {
+  function listService(job: Record<string, unknown>) {
+    const prisma = { jobApplication: { findMany: vi.fn().mockResolvedValue([job]) } };
+    return new JobsService(prisma as never, {} as never);
+  }
+  function jobRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'job-1', userId: 'user-1', company: 'Google', companyId: null, companyRef: null,
+      roleTitle: 'SWE', url: null, location: null, status: 'applied', roleTrackId: null, jdText: null,
+      appliedDate: null, deadline: null, source: null, referralName: null, visaTag: 'unknown',
+      h1bCountLastYear: null, compensationNotes: null, notes: null,
+      createdAt: new Date(), updatedAt: new Date(), _count: { events: 0, tasks: 0, reminders: 0 },
+      events: [], ...overrides,
+    };
+  }
+
+  it('flags an application past its stage threshold as stalled, dating from the last transition', async () => {
+    const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+    // applied threshold is 21 days; entered 25 days ago via a status_change.
+    const [job] = await listService(jobRow({ status: 'applied', events: [{ eventAt: daysAgo(25) }] })).list('user-1');
+    expect(job.daysInStage).toBe(25);
+    expect(job.isStalled).toBe(true);
+  });
+
+  it('is not stalled within the threshold, and terminal statuses never stall', async () => {
+    const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+    const [fresh] = await listService(jobRow({ status: 'applied', createdAt: daysAgo(3), events: [] })).list('user-1');
+    expect(fresh.daysInStage).toBe(3);
+    expect(fresh.isStalled).toBe(false);
+
+    const [rejected] = await listService(jobRow({ status: 'rejected', createdAt: daysAgo(90), events: [] })).list('user-1');
+    expect(rejected.daysInStage).toBeNull();
+    expect(rejected.isStalled).toBe(false);
   });
 });
 

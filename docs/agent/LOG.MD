@@ -1,5 +1,31 @@
 # LOG
 
+## 2026-07-10 - MOM-105: stall detection (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema** — builds directly on the
+MOM-104 transition timing. Surfaces applications that have gone quiet.
+
+**Shared:** `JOB_STAGE_STALL_THRESHOLDS` (days): saved 14, applied 21, oa 7, interview 14, onsite 14,
+offer 7 (terminal / unlisted stages never stall). `JobApplicationResponse` gains `daysInStage` (null for
+terminal) + `isStalled`.
+
+**Service (`jobs.service`):** `jobInclude` gains a `take:1` filtered `events` relation (latest
+`status_change`) so the list query dates the current stage cheaply; `get()` reconstructs that shape from the
+full timeline it already loads (the events key is overridden there). `serializeJob` computes
+`daysInStage = floor(now − (latestTransition.eventAt ?? createdAt))` and `isStalled = daysInStage ≥ threshold`.
+`recommendations.service` fetches the same `take:1` events for its active-job sample and, when a job is
+stalled, emits a **"Follow up on {company} — {N}d in {stage}"** card (priority 68 — below interview
+countdown 101+ and deadlines 90, above routine study) that *supersedes* the routine stage card for that job.
+
+**Web:** the jobs list renders a `⏳ Stalled · {N}d` amber badge.
+
+**Checks:** shared build; API + web lint/typecheck green; **245 API tests** (+4: stalled past threshold /
+within threshold / terminal-null on the serializer; stall card supersedes the stage card / within-threshold
+keeps it). **Live:** GET /jobs returns `daysInStage`/`isStalled` correctly (rejected → null); backdating a
+saved job's createdAt 30d flipped `isStalled` true (daysInStage 30 ≥ 14), restored after. The stall
+recommendation generates but sat below the top-8 slice on the busy demo board (8 items ≥95) — expected at
+priority 68; the card itself is unit-verified. Rollback: revert (fields are additive/inert).
+
 ## 2026-07-10 - MOM-103+104: transition history + funnel timing (CLAUDE, migration)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration**

@@ -225,3 +225,28 @@ describe('RecommendationsService — stage-aware job cards (MOM-140-lite)', () =
     expect(card?.reason).toBe('You are actively interviewing here.');
   });
 });
+
+describe('RecommendationsService — stall detection (MOM-105)', () => {
+  const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+
+  it('replaces the stage card with a follow-up nudge once an app stalls past its threshold', async () => {
+    // applied threshold = 21 days; entered 25 days ago.
+    const service = buildService({}, [
+      job({ status: 'applied', createdAt: daysAgo(25), events: [{ eventAt: daysAgo(25) }] }),
+    ]);
+
+    const recs = await service.list('user-1');
+    const stall = recs.find((item) => item.id === 'job-stall:job-1');
+    expect(stall).toMatchObject({ type: 'job', title: 'Follow up on Meta — 25d in applied', priority: 68, targetHref: '/jobs/job-1' });
+    expect(stall?.reason).toBe('This application has sat in applied for 25 days without moving. Follow up or mark it no-response.');
+    // The generic stage card is superseded, not duplicated.
+    expect(recs.some((item) => item.id === 'job:job-1')).toBe(false);
+  });
+
+  it('leaves a within-threshold app on its normal stage card', async () => {
+    const service = buildService({}, [job({ status: 'applied', createdAt: daysAgo(5), events: [] })]);
+    const recs = await service.list('user-1');
+    expect(recs.some((item) => item.id === 'job-stall:job-1')).toBe(false);
+    expect(recs.some((item) => item.id === 'job:job-1')).toBe(true);
+  });
+});
