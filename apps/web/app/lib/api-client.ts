@@ -445,8 +445,18 @@ export const profileScoresApi = {
   generateTasks: (id: string) =>
     request<{ created: number }>(`/profile-scores/${id}/generate-tasks`, { method: 'POST' }),
 
-  atsCoverage: (jdText: string) =>
-    request<AtsCoverageResponse>('/profile-scores/ats-coverage', { method: 'POST', body: JSON.stringify({ jdText }) }),
+  atsCoverage: (jdText: string, resumeVersionId?: string) =>
+    request<AtsCoverageResponse>('/profile-scores/ats-coverage', {
+      method: 'POST',
+      body: JSON.stringify({ jdText, resumeVersionId }),
+    }),
+
+  // MOM-134-full: turn the JD keywords missing from a résumé/profile into tasks.
+  atsGenerateTasks: (jdText: string, resumeVersionId?: string) =>
+    request<{ created: number }>('/profile-scores/ats-coverage/generate-tasks', {
+      method: 'POST',
+      body: JSON.stringify({ jdText, resumeVersionId }),
+    }),
 };
 
 // Career OS

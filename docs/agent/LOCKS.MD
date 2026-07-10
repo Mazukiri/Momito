@@ -19,6 +19,7 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-134-full | CLAUDE | `apps/api/src/profile-scores/**`, `packages/shared/src/index.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/(authenticated)/profile/resumes/page.tsx`, `apps/api/test/profile-scores.service.spec.ts`, `docs/agent/*.MD` | 2026-07-10 |
 | MOM-132+133 | CLAUDE | `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**`, `apps/api/src/resumes/**`, `apps/api/src/app.module.ts`, `packages/shared/src/index.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/(authenticated)/profile/resumes/page.tsx`, `apps/web/app/(authenticated)/profile/page.tsx`, `apps/api/test/resumes.service.spec.ts`, `docs/adr/0012-*.md`, `docs/agent/*.MD` | 2026-07-10 |
 | MOM-114+115 | CLAUDE | `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/**`, `apps/api/src/offers/**`, `apps/api/src/app.module.ts`, `packages/shared/src/index.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/lib/navigation.ts`, `apps/web/app/components/OfferCard.tsx`, `apps/web/app/(authenticated)/offers/page.tsx`, `apps/web/app/(authenticated)/jobs/[id]/page.tsx`, `apps/api/test/offers.service.spec.ts`, `docs/adr/0015-*.md`, `docs/agent/*.MD` | 2026-07-10 |
 | MOM-119 | CLAUDE | `apps/web/app/(authenticated)/contacts/page.tsx` (new), `apps/web/app/lib/navigation.ts`, `docs/agent/*.MD` | 2026-07-10 |

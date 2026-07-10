@@ -96,12 +96,14 @@ export class ProfileScoresService {
     return this.serialize(score);
   }
 
-  // MOM-134-lite: deterministic ATS keyword coverage of the base profile skills
-  // against a pasted JD — which JD keywords are present vs missing. Reuses the
-  // same extractJdSkills tokenizer the scorer uses. No persistence, no AI.
-  async atsCoverage(jdText: string, userId: string): Promise<AtsCoverageResponse> {
-    const profile = await this.prisma.profile.findUnique({ where: { userId } });
-    const have = new Set(this.asStringArray(profile?.skills ?? []).map((skill) => this.normalize(skill)));
+  // MOM-134-lite / MOM-134-full: deterministic ATS keyword coverage against a
+  // pasted JD — which JD keywords are present vs missing. Reuses the same
+  // extractJdSkills tokenizer the scorer uses. No persistence, no AI.
+  // - resumeVersionId absent → measure the base profile skills (lite).
+  // - resumeVersionId present → measure that ResumeVersion's contentMd (full),
+  //   so you can see whether a *tailored* résumé actually covers the JD.
+  async atsCoverage(jdText: string, userId: string, resumeVersionId?: string): Promise<AtsCoverageResponse> {
+    const { have, source, versionId } = await this.coverageHaveSet(userId, resumeVersionId);
     const jdKeywords = this.extractJdSkills(jdText);
     const covered = jdKeywords.filter((keyword) => have.has(this.normalize(keyword)));
     const missing = jdKeywords.filter((keyword) => !have.has(this.normalize(keyword)));
@@ -110,7 +112,59 @@ export class ProfileScoresService {
       covered,
       missing,
       coveragePct: jdKeywords.length ? this.round(covered.length / jdKeywords.length) : 0,
+      source,
+      resumeVersionId: versionId,
     };
+  }
+
+  // MOM-134-full: the gap→task bridge (MOM-135 pattern) applied to ATS coverage —
+  // turn the JD keywords missing from a résumé/profile into "Add to résumé: X"
+  // study Tasks. Idempotent by title; capped so one JD can't flood the list.
+  async atsGenerateTasks(jdText: string, userId: string, resumeVersionId?: string): Promise<{ created: number }> {
+    const { missing, resumeVersionId: versionId } = await this.atsCoverage(jdText, userId, resumeVersionId);
+    const titles = missing.slice(0, 8).map((keyword) => `Add to résumé: ${keyword}`.slice(0, 190));
+    if (titles.length === 0) return { created: 0 };
+
+    const existing = await this.prisma.task.findMany({
+      where: { userId, title: { in: titles } },
+      select: { title: true },
+    });
+    const existingTitles = new Set(existing.map((task) => task.title));
+    const toCreate = titles.filter((title) => !existingTitles.has(title));
+    if (toCreate.length === 0) return { created: 0 };
+
+    const notes = versionId ? 'Missing ATS keyword vs your target JD.' : 'Missing ATS keyword vs your profile.';
+    const result = await this.prisma.task.createMany({
+      data: toCreate.map((title) => ({ userId, type: 'study', status: 'todo', priority: 'high', title, notes })),
+    });
+    return { created: result.count };
+  }
+
+  // Build the "keywords this artifact already contains" set. Profile → its skills
+  // list (exact skill labels); ResumeVersion → every word token in its contentMd
+  // (so a skill mentioned in a bullet, not just a skills line, still counts).
+  private async coverageHaveSet(
+    userId: string,
+    resumeVersionId?: string,
+  ): Promise<{ have: Set<string>; source: 'profile' | 'resume'; versionId: string | null }> {
+    if (resumeVersionId) {
+      const version = await this.prisma.resumeVersion.findFirst({
+        where: { id: resumeVersionId, userId },
+        select: { id: true, contentMd: true },
+      });
+      if (!version) throw new NotFoundException('Résumé version not found');
+      return { have: this.resumeHaveSet(version.contentMd), source: 'resume', versionId: version.id };
+    }
+    const profile = await this.prisma.profile.findUnique({ where: { userId }, select: { skills: true } });
+    const have = new Set(this.asStringArray(profile?.skills ?? []).map((skill) => this.normalize(skill)));
+    return { have, source: 'profile', versionId: null };
+  }
+
+  // Tokenize résumé Markdown into normalized word tokens (keeping +/#/. so c++,
+  // c#, node.js survive), trimming trailing punctuation, for keyword membership.
+  private resumeHaveSet(contentMd: string): Set<string> {
+    const tokens = contentMd.toLowerCase().match(/[a-z0-9+#][a-z0-9+#.]*/g) ?? [];
+    return new Set(tokens.map((token) => token.replace(/\.+$/, '')));
   }
 
   // MOM-135: turn a score's static gap strings into executable Tasks (the same

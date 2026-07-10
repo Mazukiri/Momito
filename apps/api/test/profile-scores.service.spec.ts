@@ -141,6 +141,90 @@ describe('ProfileScoresService.atsCoverage (MOM-134-lite)', () => {
   });
 });
 
+describe('ProfileScoresService.atsCoverage vs a ResumeVersion (MOM-134-full)', () => {
+  it('measures coverage against the version contentMd, not the profile skills', async () => {
+    const service = new ProfileScoresService({
+      resumeVersion: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'rv-1', contentMd: 'Built Python and SQL pipelines on Kubernetes.' }),
+      },
+      // profile.findUnique must NOT be consulted on the resume path
+      profile: { findUnique: vi.fn().mockRejectedValue(new Error('should not be called')) },
+    } as never);
+
+    const result = await service.atsCoverage('We need Kubernetes, Go, Python and SQL experience.', 'user-1', 'rv-1');
+
+    expect(result.source).toBe('resume');
+    expect(result.resumeVersionId).toBe('rv-1');
+    expect(result.covered).toEqual(expect.arrayContaining(['Kubernetes', 'Python', 'SQL']));
+    expect(result.missing).toEqual(['Go']);
+    expect(result.coveragePct).toBeCloseTo(0.75, 3);
+  });
+
+  it('404s when the résumé version is not the caller\'s', async () => {
+    const service = new ProfileScoresService({
+      resumeVersion: { findFirst: vi.fn().mockResolvedValue(null) },
+    } as never);
+
+    await expect(service.atsCoverage('Rust required.', 'user-2', 'rv-1'))
+      .rejects.toEqual(new NotFoundException('Résumé version not found'));
+  });
+
+  it('reports source=profile with a null version id on the lite path', async () => {
+    const service = new ProfileScoresService({
+      profile: { findUnique: vi.fn().mockResolvedValue({ skills: ['Python'] }) },
+    } as never);
+
+    const result = await service.atsCoverage('Python and Rust.', 'user-1');
+
+    expect(result.source).toBe('profile');
+    expect(result.resumeVersionId).toBeNull();
+  });
+});
+
+describe('ProfileScoresService.atsGenerateTasks (MOM-134-full gap→task bridge)', () => {
+  it('turns missing ATS keywords into idempotent study tasks', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 1 });
+    const service = new ProfileScoresService({
+      resumeVersion: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'rv-1', contentMd: 'Built Python and SQL pipelines on Kubernetes.' }),
+      },
+      task: { findMany: vi.fn().mockResolvedValue([]), createMany },
+    } as never);
+
+    const result = await service.atsGenerateTasks('We need Kubernetes, Go, Python and SQL experience.', 'user-1', 'rv-1');
+
+    expect(result).toEqual({ created: 1 });
+    const created = createMany.mock.calls[0][0].data;
+    expect(created).toEqual([
+      expect.objectContaining({
+        userId: 'user-1',
+        type: 'study',
+        priority: 'high',
+        title: 'Add to résumé: Go',
+        notes: 'Missing ATS keyword vs your target JD.',
+      }),
+    ]);
+  });
+
+  it('skips keyword tasks already tracked', async () => {
+    const createMany = vi.fn();
+    // Echo the queried titles back as "already exists" so the test is agnostic to
+    // the exact "Add to résumé: …" string the service builds.
+    const findMany = vi.fn().mockImplementation(({ where }) => where.title.in.map((title: string) => ({ title })));
+    const service = new ProfileScoresService({
+      resumeVersion: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'rv-1', contentMd: 'Python only.' }),
+      },
+      task: { findMany, createMany },
+    } as never);
+
+    const result = await service.atsGenerateTasks('Go and Python.', 'user-1', 'rv-1');
+
+    expect(result).toEqual({ created: 0 });
+    expect(createMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('ProfileScoresService.generateTasks (MOM-135)', () => {
   const scoreWithGaps = {
     id: 'score-1',

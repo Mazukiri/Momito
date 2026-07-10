@@ -16,7 +16,13 @@ export class ProfileScoresController {
 
   @Post('ats-coverage')
   atsCoverage(@Body() dto: AtsCoverageDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.profileScores.atsCoverage(dto.jdText, user.id);
+    return this.profileScores.atsCoverage(dto.jdText, user.id, dto.resumeVersionId);
+  }
+
+  // MOM-134-full: gap→task bridge — missing ATS keywords become study tasks.
+  @Post('ats-coverage/generate-tasks')
+  atsGenerateTasks(@Body() dto: AtsCoverageDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.profileScores.atsGenerateTasks(dto.jdText, user.id, dto.resumeVersionId);
   }
 
   @Get()

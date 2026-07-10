@@ -1,5 +1,31 @@
 # LOG
 
+## 2026-07-10 - MOM-134-full: ATS coverage vs a ResumeVersion (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No migration. Builds on MOM-134-lite
+(`AtsCoverageResponse` + coverage vs base profile) now that ResumeVersion (MOM-133) exists.
+
+**What:** `profileScores.atsCoverage(jdText, userId, resumeVersionId?)` — when `resumeVersionId` is supplied
+it measures the JD's keywords against that **`ResumeVersion.contentMd`** (every word token in the résumé, so a
+skill named in a bullet counts, not just a skills line), otherwise the base profile skills (lite behaviour
+preserved). The response gains `source: 'profile' | 'resume'` and `resumeVersionId` so the UI can label what was
+measured. New **`POST /profile-scores/ats-coverage/generate-tasks`** applies the MOM-135 gap→task bridge to ATS
+gaps: the JD keywords missing from the résumé become idempotent `Add to résumé: X` study tasks (cap 8,
+dedup-by-title). Web: the `/profile/resumes` editor gains an ATS panel per version — paste a JD, see
+covered/missing keyword chips + coverage %, and "Add missing to tasks".
+
+**Design note:** the tokenizer is deterministic (`extractJdSkills` unchanged); résumé tokens keep `+`/`#`/`.`
+so `c++`/`c#`/`node.js` survive, with trailing dots trimmed for membership. No AI, no persistence for the
+coverage read itself.
+
+**Checks:** shared build; API + web lint/typecheck green; **278 API tests** (+5: résumé-vs-profile coverage,
+404 on foreign version, source=profile null id, gap→task create + idempotency) + 26 web. **Live-verified**
+against local Postgres: created a version, coverage vs résumé = 0.25 vs profile = 0.125 (different artifacts),
+`generate-tasks` created 6 then 0 (idempotent), 404 on a bogus `resumeVersionId`; demo state restored (version
++ 6 tasks deleted).
+
+**Rollback:** revert code — no schema, no data.
+
 ## 2026-07-10 - MOM-132+133: ResumeVersion (CLAUDE, migration)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration** `resume_versions` (new

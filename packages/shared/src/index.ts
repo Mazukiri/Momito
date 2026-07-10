@@ -1004,14 +1004,24 @@ export interface ProfileScoreResponse {
   createdAt: string;
 }
 
-// MOM-134-lite (CareerOS Track Q): deterministic ATS keyword coverage of the
-// user's profile skills against a pasted JD. Full résumé-version ATS lands with
-// ResumeVersion (MOM-133/134); this v1 checks the base profile.
+// MOM-134 (CareerOS Track Q): deterministic ATS keyword coverage against a pasted
+// JD. MOM-134-lite checks the base profile skills; MOM-134-full checks a specific
+// ResumeVersion's contentMd when `resumeVersionId` is supplied. `source` says which
+// artifact was measured so the UI can label the result.
 export interface AtsCoverageResponse {
   jdKeywordCount: number;
   covered: string[];
   missing: string[];
   coveragePct: number; // 0-1
+  source: 'profile' | 'resume'; // MOM-134-full
+  resumeVersionId: string | null; // MOM-134-full — set when source==='resume'
+}
+
+// MOM-134-full: request shape for ATS coverage (optional résumé version) and the
+// gap→task bridge (MOM-135 pattern) that turns missing keywords into study tasks.
+export interface AtsCoverageRequest {
+  jdText: string;
+  resumeVersionId?: string | null;
 }
 
 export const JOB_APPLICATION_STATUSES = [

@@ -136,13 +136,17 @@ editor page + "Résumé versions" button on the profile page; ADR-0012 ACCEPTED,
 tests; live: derive-from-profile "# Demo Candidate …" + CRUD round-trip verified). **★ Wave 4 opened — résumé
 artifacts are first-class, deterministic-first.**
 
-**Active PR-sized task — MOM-134-full: ATS coverage vs a ResumeVersion (no schema).** MOM-134-lite already ships
-`AtsCoverageResponse` + coverage vs base profile (`extractJdSkills` in `profile-scores.service.ts`). Full version:
-coverage computed against a **ResumeVersion's `contentMd`** (optional param `resumeVersionId`), listing missing
-keywords + an "add these to your résumé" gap list that can emit Tasks via the MOM-135 gap→task bridge. Then MOM-139
-(export md|pdf), MOM-136/137/138 (AI résumé analysis/bullet-rewrite/cover-letter, dormant-until-key like
-`grading.service.ts`), MOM-145 (conversion by résumé version). Full design in the approved handoff plan
-(`~/.claude/plans/…mossy-moore.md`).
+**Shipped since:** **MOM-134-full** (ATS coverage vs a `ResumeVersion.contentMd` — `atsCoverage` takes an optional
+`resumeVersionId` and measures that version's Markdown instead of the base profile skills; `source`/`resumeVersionId`
+on the response; new `POST /profile-scores/ats-coverage/generate-tasks` applies the MOM-135 gap→task bridge to missing
+JD keywords; `/profile/resumes` gains an ATS panel with covered/missing chips + "Add missing to tasks"; 278 API tests;
+live: résumé 0.25 vs profile 0.125, 6 tasks then 0 idempotent, 404 on foreign version).
+
+**Active PR-sized task — MOM-139: résumé export (`GET /resumes/:id/export?format=md|pdf`).** Markdown = `contentMd`
+as an attachment (trivial, ship first). PDF = ATS-safe single-column via a lightweight lib — evaluate `pdfkit`
+(no browser) over puppeteer (heavy); **new apps/api dependency** — note it in LOG + `apps/api/package.json` only.
+Then MOM-136/137/138 (AI résumé analysis/bullet-rewrite/cover-letter, dormant-until-key like `grading.service.ts`),
+MOM-145 (conversion by résumé version). Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).
