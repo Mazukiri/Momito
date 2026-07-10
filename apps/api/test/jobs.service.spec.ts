@@ -186,6 +186,78 @@ describe('JobsService — company link (MOM-122)', () => {
   });
 });
 
+describe('JobsService — rejection reasons (MOM-106)', () => {
+  function fullJob(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'job-1', userId: 'user-1', company: 'Meta', companyId: null, companyRef: null,
+      roleTitle: 'E4 SWE', url: null, location: null, status: 'rejected', roleTrackId: null, jdText: null,
+      appliedDate: null, deadline: null, source: null, referralName: null, visaTag: 'unknown',
+      h1bCountLastYear: null, compensationNotes: null, notes: null, rejectionReason: 'oa_failed',
+      createdAt: new Date('2026-07-01T00:00:00.000Z'), updatedAt: new Date('2026-07-08T00:00:00.000Z'),
+      _count: { events: 0, tasks: 0, reminders: 0 }, events: [], ...overrides,
+    };
+  }
+
+  it('rejects a rejectionReason on create when the status is not rejected', async () => {
+    const prisma = { jobApplication: { create: vi.fn() } };
+    const service = new JobsService(prisma as never, {} as never);
+    await expect(
+      service.create({ company: 'Meta', roleTitle: 'E4', status: 'applied', rejectionReason: 'oa_failed' } as never, 'user-1'),
+    ).rejects.toThrow('rejectionReason can only be set when status is rejected');
+    expect(prisma.jobApplication.create).not.toHaveBeenCalled();
+  });
+
+  it('stores the reason on create when the app starts rejected', async () => {
+    const prisma = {
+      jobApplication: { create: vi.fn().mockResolvedValue(fullJob()) },
+      reminder: { findFirst: vi.fn(), upsert: vi.fn() },
+    };
+    const service = new JobsService(prisma as never, {} as never);
+    const result = await service.create({ company: 'Meta', roleTitle: 'E4', status: 'rejected', rejectionReason: 'oa_failed' } as never, 'user-1');
+    expect(prisma.jobApplication.create.mock.calls[0][0].data).toMatchObject({ rejectionReason: 'oa_failed' });
+    expect(result.rejectionReason).toBe('oa_failed');
+  });
+
+  it('on transition to rejected: stores the reason and copies it onto the transition event', async () => {
+    const create = vi.fn().mockResolvedValue({});
+    const prisma = {
+      jobApplication: {
+        findFirst: vi.fn().mockResolvedValue({ status: 'interview' }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue(fullJob({ rejectionReason: 'interview_technical' })),
+      },
+      jobEvent: { create },
+    };
+    const service = new JobsService(prisma as never, {} as never);
+    await service.update('job-1', { status: 'rejected', rejectionReason: 'interview_technical' } as never, 'user-1');
+    expect(prisma.jobApplication.updateMany.mock.calls[0][0].data).toMatchObject({ status: 'rejected', rejectionReason: 'interview_technical' });
+    expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({ toStatus: 'rejected', notes: 'Rejection reason: interview_technical' }) });
+  });
+
+  it('clears a stale reason when the app is moved back out of rejected', async () => {
+    const prisma = {
+      jobApplication: {
+        findFirst: vi.fn().mockResolvedValue({ status: 'rejected' }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue(fullJob({ status: 'applied', rejectionReason: null })),
+      },
+      jobEvent: { create: vi.fn().mockResolvedValue({}) },
+    };
+    const service = new JobsService(prisma as never, {} as never);
+    await service.update('job-1', { status: 'applied' } as never, 'user-1');
+    expect(prisma.jobApplication.updateMany.mock.calls[0][0].data).toMatchObject({ status: 'applied', rejectionReason: null });
+  });
+
+  it('rejects setting a reason on an app that is not (and is not becoming) rejected', async () => {
+    const prisma = {
+      jobApplication: { findFirst: vi.fn().mockResolvedValue({ status: 'interview' }), updateMany: vi.fn() },
+    };
+    const service = new JobsService(prisma as never, {} as never);
+    await expect(service.update('job-1', { rejectionReason: 'other' } as never, 'user-1')).rejects.toThrow('rejectionReason can only be set when status is rejected');
+    expect(prisma.jobApplication.updateMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('JobsService — stall detection (MOM-105)', () => {
   function listService(job: Record<string, unknown>) {
     const prisma = { jobApplication: { findMany: vi.fn().mockResolvedValue([job]) } };
@@ -302,6 +374,20 @@ describe('JobsService.funnel', () => {
     const funnel = await serviceWith(jobs).funnel('user-1');
     expect(funnel.bySource[0].key).toBe('unspecified');
     expect(funnel.byVisaTag[0].key).toBe('unknown');
+  });
+
+  it('breaks down rejected apps by reason, unset → unspecified, most common first (MOM-106)', async () => {
+    const jobs = [
+      { status: 'rejected', source: null, visaTag: null, rejectionReason: 'oa_failed' },
+      { status: 'rejected', source: null, visaTag: null, rejectionReason: 'oa_failed' },
+      { status: 'rejected', source: null, visaTag: null, rejectionReason: null },
+      { status: 'applied', source: null, visaTag: null, rejectionReason: null }, // not rejected → excluded
+    ] as never;
+    const funnel = await serviceWith(jobs).funnel('user-1');
+    expect(funnel.byRejectionReason).toEqual([
+      { key: 'oa_failed', count: 2 },
+      { key: 'unspecified', count: 1 },
+    ]);
   });
 
   it('leaves every stage median null with no transition history', async () => {

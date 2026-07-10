@@ -413,6 +413,8 @@ model JobApplication {
   h1bCountLastYear  Int?               @map("h1b_count_last_year")
   compensationNotes String?            @map("compensation_notes")
   notes             String?
+  // MOM-106: why a rejected application was lost (REJECTION_REASONS); null otherwise.
+  rejectionReason   String?            @map("rejection_reason")
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)

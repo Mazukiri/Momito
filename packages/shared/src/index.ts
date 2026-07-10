@@ -997,6 +997,21 @@ export type JobApplicationStatus = (typeof JOB_APPLICATION_STATUSES)[number];
 export const JOB_APPLICATION_SOURCES = ['referral', 'online', 'linkedin', 'cold_email', 'recruiter', 'other'] as const;
 export type JobApplicationSource = (typeof JOB_APPLICATION_SOURCES)[number];
 
+// MOM-106: why an application was rejected — loss analysis. A property of the
+// terminal outcome (settable only when the status is/becomes `rejected`), so it
+// aggregates via GROUP BY like source/visaTag.
+export const REJECTION_REASONS = [
+  'no_response',
+  'resume_screen',
+  'oa_failed',
+  'interview_technical',
+  'interview_behavioral',
+  'visa_sponsorship',
+  'position_closed',
+  'other',
+] as const;
+export type RejectionReason = (typeof REJECTION_REASONS)[number];
+
 export const VISA_TAGS = ['sponsored', 'unknown', 'not_sponsoring'] as const;
 export type VisaTag = (typeof VISA_TAGS)[number];
 
@@ -1030,6 +1045,8 @@ export interface JobApplicationResponse {
   h1bCountLastYear: number | null;
   compensationNotes: string | null;
   notes: string | null;
+  // MOM-106: set only on a rejected application (loss analysis); null otherwise.
+  rejectionReason: RejectionReason | null;
   // MOM-105: days in the current stage (since the latest status_change, or
   // createdAt); null for terminal statuses. `isStalled` = daysInStage exceeds the
   // stage's JOB_STAGE_STALL_THRESHOLD.
@@ -1057,6 +1074,8 @@ export interface CreateJobApplicationRequest {
   h1bCountLastYear?: number | null;
   compensationNotes?: string | null;
   notes?: string | null;
+  // MOM-106: accepted only when the (resulting) status is `rejected`.
+  rejectionReason?: RejectionReason | null;
 }
 
 export type UpdateJobApplicationRequest = Partial<CreateJobApplicationRequest>;
@@ -1184,6 +1203,13 @@ export interface JobFunnelBreakdownRow {
   conversion: number; // offers / total
 }
 
+// MOM-106: rejected-application loss analysis. A plain count per reason (offers/
+// conversion are meaningless here — these are all terminal losses).
+export interface JobRejectionBreakdownRow {
+  key: string; // a REJECTION_REASONS value, or 'unspecified'
+  count: number;
+}
+
 // Honest v1: computed from CURRENT status only — an app that was rejected after
 // an onsite is counted as an outcome, not as having reached onsite, because the
 // cumulative `reached` counts use current status. Per-stage *timing* is grounded
@@ -1198,6 +1224,8 @@ export interface JobFunnelResponse {
   stages: JobFunnelStageRow[];
   bySource: JobFunnelBreakdownRow[];
   byVisaTag: JobFunnelBreakdownRow[];
+  // MOM-106: reason breakdown over the rejected applications (empty if none).
+  byRejectionReason: JobRejectionBreakdownRow[];
 }
 
 export const TASK_TYPES = [

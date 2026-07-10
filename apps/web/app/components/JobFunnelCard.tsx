@@ -55,6 +55,20 @@ export function JobFunnelCard({ funnel }: { funnel: JobFunnelResponse }) {
         </p>
       )}
 
+      {funnel.byRejectionReason.length > 0 && (
+        <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">Why rejected</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+            {funnel.byRejectionReason.map((row) => (
+              <span key={row.key}>
+                <span className="capitalize">{row.key.replace(/_/g, ' ')}</span>{' '}
+                <span className="text-zinc-400">×{row.count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {topSources.length > 0 && (
         <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">By source</p>

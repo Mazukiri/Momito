@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { JOB_APPLICATION_STATUSES, type CompanyResponse, type JobApplicationStatus } from '@momito/shared';
+import { JOB_APPLICATION_STATUSES, REJECTION_REASONS, type CompanyResponse, type JobApplicationStatus, type RejectionReason } from '@momito/shared';
 import { companiesApi, jobsApi, missionsApi, remindersApi } from '../../../lib/api-client';
 import { Badge, Card, ErrorBanner, Spinner } from '../../../components/ui';
 import { InterviewRoundsCard } from '../../../components/InterviewRoundsCard';
@@ -16,6 +16,7 @@ export default function JobDetailPage() {
   const router = useRouter();
   const [job, setJob] = useState<JobDetail | null>(null);
   const [status, setStatus] = useState<JobApplicationStatus>('saved');
+  const [rejectionReason, setRejectionReason] = useState<RejectionReason | ''>('');
   const [eventTitle, setEventTitle] = useState('');
   const [eventType, setEventType] = useState('note');
   const [eventNotes, setEventNotes] = useState('');
@@ -34,6 +35,7 @@ export default function JobDetailPage() {
       const [data, companyList] = await Promise.all([jobsApi.get(params.id), companiesApi.list()]);
       setJob(data);
       setStatus(data.status);
+      setRejectionReason(data.rejectionReason ?? '');
       setCompanies(companyList);
       setCompanyId(data.companyId ?? '');
       const relatedMission = await missionsApi.list();
@@ -53,7 +55,12 @@ export default function JobDetailPage() {
   async function updateStatus() {
     setWorking(true);
     try {
-      await jobsApi.update(params.id, { status });
+      // MOM-106: send the loss reason only when rejecting; the API clears it
+      // automatically when the status moves away from rejected.
+      await jobsApi.update(params.id, {
+        status,
+        ...(status === 'rejected' ? { rejectionReason: rejectionReason || null } : {}),
+      });
       await load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update job');
@@ -208,7 +215,16 @@ export default function JobDetailPage() {
             <select value={status} onChange={(event) => setStatus(event.target.value as JobApplicationStatus)} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
               {JOB_APPLICATION_STATUSES.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
-            <button onClick={updateStatus} disabled={working || status === job.status} className="mt-3 w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Update</button>
+            {status === 'rejected' && (
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-medium text-zinc-500">Rejection reason (for loss analysis)</label>
+                <select value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value as RejectionReason | '')} className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+                  <option value="">— unspecified —</option>
+                  {REJECTION_REASONS.map((item) => <option key={item} value={item}>{item.replace(/_/g, ' ')}</option>)}
+                </select>
+              </div>
+            )}
+            <button onClick={updateStatus} disabled={working || (status === job.status && rejectionReason === (job.rejectionReason ?? ''))} className="mt-3 w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Update</button>
           </Card>
 
           <Card>

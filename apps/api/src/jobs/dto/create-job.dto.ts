@@ -6,6 +6,8 @@ import {
   JOB_APPLICATION_STATUSES,
   JobApplicationSource,
   JobApplicationStatus,
+  REJECTION_REASONS,
+  RejectionReason,
   VISA_TAGS,
   VisaTag,
 } from '@momito/shared';
@@ -87,4 +89,9 @@ export class CreateJobDto {
   @IsString()
   @MaxLength(4000)
   notes?: string | null;
+
+  // MOM-106: the service enforces this is only accepted when status === 'rejected'.
+  @IsOptional()
+  @IsIn(REJECTION_REASONS)
+  rejectionReason?: RejectionReason | null;
 }

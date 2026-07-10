@@ -100,14 +100,19 @@ on the job response via a `take:1` latest-transition include; `recommendations.s
 Nd in stage" card at priority 68 superseding the stage card; jobs-list `⏳ Stalled` badge; live-verified a
 backdated saved job flips stalled at 30d≥14). **★ The pipeline now nags you about apps that have gone quiet.**
 
-**Active PR-sized task: MOM-106 — rejection reasons (small migration; needs MOM-104 ✓).** Shared
-`REJECTION_REASONS = ['no_response','resume_screen','oa_failed','interview_technical','interview_behavioral','visa_sponsorship','position_closed','other']`.
-Storage: `rejectionReason String?` on `JobApplication` (a property of the terminal outcome — retroactively
-editable, aggregates via GROUP BY like bySource/byVisaTag), NOT on the event; copy into the transition
-event's `notes` when supplied at transition time. DTO: settable only when status is/becomes `rejected`. Web:
-a reason select appears when the status select moves to rejected; funnel card gains a `byRejectionReason`
-breakdown. Rollback: drop 1 column. Then MOM-107 (Kanban board, no schema — can run any time). Then Wave 3
-(contacts/offers: MOM-116/117/118/119, 114/115) and Wave 4 (résumé artifacts AI-first:
+**Shipped since:** **MOM-106** (migration `job_rejection_reason` — `rejectionReason` column + `REJECTION_REASONS`;
+service enforces rejected-only, clears on reopen, copies to the transition event note; `funnel().byRejectionReason`
+breakdown; job-page reason select + funnel "Why rejected" row; live-verified 400 guard / store+note / breakdown /
+auto-clear). **★ Pipeline truth (Wave 2) is nearly done — only the Kanban view (MOM-107) remains.**
+
+**Active PR-sized task: MOM-107 — Kanban pipeline view (no schema).** `apps/web/app/(authenticated)/jobs/page.tsx`
+gets a view toggle (list | board). Board: one column per active status (`saved, applied, oa, interview, onsite,
+offer` from `JOB_FUNNEL_STAGES`); cards draggable between columns calling the existing `jobsApi.update(id, {status})`
+(which already writes the MOM-102/104 transition event). Use native HTML5 drag events (no new dependency) with an
+optimistic move + revert-on-error, matching the repo's optimistic-update pattern. Keep the funnel card + filter
+pills on the list view. Playwright screenshot (skip if no Playwright bin — this checkout has none). Then Wave 3
+(contacts/offers: MOM-116/117 Contact model DESIGN+impl, MOM-118 follow-up cadence, MOM-119 referral view,
+MOM-114/115 Offer model + comparison) and Wave 4 (résumé artifacts AI-first:
 MOM-132/133/134/139/136/137/138/145). Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR

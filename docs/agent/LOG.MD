@@ -1,5 +1,29 @@
 # LOG
 
+## 2026-07-10 - MOM-106: rejection reasons (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration**
+`job_rejection_reason` (pure `ADD COLUMN`, no backfill). Turns "rejected" from a dead end into loss analysis.
+
+**Shared:** `REJECTION_REASONS` (`no_response`, `resume_screen`, `oa_failed`, `interview_technical`,
+`interview_behavioral`, `visa_sponsorship`, `position_closed`, `other`); `rejectionReason` on
+`JobApplicationResponse` + optional on the create/update requests; `byRejectionReason: JobRejectionBreakdownRow[]`
+on `JobFunnelResponse`.
+
+**Schema/service:** `JobApplication.rejectionReason String?` (a property of the terminal outcome —
+retroactively editable, aggregates via GROUP BY like source/visaTag — not on the event). DTO `@IsIn`;
+the **service** enforces it's only accepted when the resulting status is `rejected` (400 otherwise), **clears**
+it when the app is moved back out of rejected, and **copies** it onto the transition event's `notes` when the
+transition *is* the rejection. `funnel()` adds a count-per-reason breakdown (unset → `unspecified`, most common
+first). Web: a reason `<select>` appears on the job page when the status is rejected; the funnel card gains a
+"Why rejected" row.
+
+**Checks:** shared build; API + web lint/typecheck green; **251 API tests** (+6: create/update validation both
+ways, event-note copy, auto-clear on reopen, funnel breakdown). **Live:** setting a reason on a non-rejected
+app → 400; a `saved → rejected {visa_sponsorship}` transition stored the reason AND wrote
+`notes="Rejection reason: visa_sponsorship"` on the event; funnel `byRejectionReason` = visa_sponsorship 1 /
+unspecified 1; restoring the app to `saved` cleared the reason to null. Demo job restored. Rollback: drop 1 column.
+
 ## 2026-07-10 - MOM-105: stall detection (CLAUDE, no schema)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema** — builds directly on the

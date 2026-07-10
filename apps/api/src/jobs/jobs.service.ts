@@ -11,6 +11,8 @@ import {
   JobEventResponse,
   JobFunnelBreakdownRow,
   JobFunnelResponse,
+  JobRejectionBreakdownRow,
+  RejectionReason,
   RoleTemplateId,
   VisaTag,
 } from '@momito/shared';
@@ -79,7 +81,7 @@ export class JobsService {
     const [jobs, transitions] = await Promise.all([
       this.prisma.jobApplication.findMany({
         where: { userId },
-        select: { id: true, status: true, source: true, visaTag: true, createdAt: true },
+        select: { id: true, status: true, source: true, visaTag: true, rejectionReason: true, createdAt: true },
       }),
       // Ordered so each job's transitions are chronological; fromStatus/toStatus
       // reconstruct how long each stage was occupied before the app moved on.
@@ -131,7 +133,20 @@ export class JobsService {
       stages,
       bySource: this.breakdown(jobs, (job) => job.source ?? 'unspecified'),
       byVisaTag: this.breakdown(jobs, (job) => job.visaTag ?? 'unknown'),
+      byRejectionReason: this.rejectionBreakdown(jobs),
     };
+  }
+
+  // MOM-106: loss analysis over the rejected applications — a plain count per
+  // reason (unset → 'unspecified'), most common first.
+  private rejectionBreakdown(jobs: Array<{ status: string; rejectionReason: string | null }>): JobRejectionBreakdownRow[] {
+    const counts = new Map<string, number>();
+    for (const job of jobs) {
+      if (job.status !== 'rejected') continue;
+      const key = job.rejectionReason ?? 'unspecified';
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([key, count]) => ({ key, count })).sort((left, right) => right.count - left.count);
   }
 
   private breakdown(
@@ -209,6 +224,11 @@ export class JobsService {
   async create(dto: CreateJobDto, userId: string): Promise<JobApplicationResponse> {
     if (dto.roleTrackId) this.ensureRole(dto.roleTrackId);
     if (dto.companyId) await this.ensureCompanyExists(dto.companyId);
+    const status = dto.status ?? 'saved';
+    // MOM-106: a rejection reason only belongs on a rejected application.
+    if (dto.rejectionReason != null && status !== 'rejected') {
+      throw new BadRequestException('rejectionReason can only be set when status is rejected');
+    }
     const job = await this.prisma.jobApplication.create({
       data: {
         userId,
@@ -217,7 +237,7 @@ export class JobsService {
         roleTitle: dto.roleTitle.trim(),
         url: this.cleanNullable(dto.url),
         location: this.cleanNullable(dto.location),
-        status: dto.status ?? 'saved',
+        status,
         roleTrackId: dto.roleTrackId ?? null,
         jdText: this.cleanNullable(dto.jdText),
         appliedDate: this.parseDate(dto.appliedDate),
@@ -228,6 +248,7 @@ export class JobsService {
         h1bCountLastYear: dto.h1bCountLastYear ?? null,
         compensationNotes: this.cleanNullable(dto.compensationNotes),
         notes: this.cleanNullable(dto.notes),
+        rejectionReason: status === 'rejected' ? (dto.rejectionReason ?? null) : null,
       },
       include: jobInclude,
     });
@@ -238,12 +259,17 @@ export class JobsService {
   async update(id: string, dto: UpdateJobDto, userId: string): Promise<JobApplicationResponse> {
     if (dto.roleTrackId) this.ensureRole(dto.roleTrackId);
     if (dto.companyId) await this.ensureCompanyExists(dto.companyId);
-    // MOM-102: capture the prior status *before* the write so a transition can
-    // be logged. Only queried when the caller is actually changing status.
+    // MOM-102: capture the prior status *before* the write so a transition can be
+    // logged. Also needed (MOM-106) to know the resulting status when only a
+    // rejectionReason is being set. Queried whenever status or reason is in play.
     const previousStatus =
-      dto.status !== undefined
+      dto.status !== undefined || dto.rejectionReason !== undefined
         ? (await this.prisma.jobApplication.findFirst({ where: { id, userId }, select: { status: true } }))?.status
         : undefined;
+    // MOM-106: a rejection reason only belongs on a (resulting) rejected application.
+    if (dto.rejectionReason != null && (dto.status ?? previousStatus) !== 'rejected') {
+      throw new BadRequestException('rejectionReason can only be set when status is rejected');
+    }
     const result = await this.prisma.jobApplication.updateMany({
       where: { id, userId },
       data: this.updateData(dto),
@@ -263,6 +289,9 @@ export class JobsService {
           // detection (MOM-105); `title` stays for human-readable display.
           fromStatus: previousStatus,
           toStatus: dto.status,
+          // MOM-106: when this transition is the rejection, record the reason on the
+          // event too (the JobApplication column is the queryable source of truth).
+          notes: dto.status === 'rejected' && dto.rejectionReason ? `Rejection reason: ${dto.rejectionReason}` : null,
           eventAt: new Date(),
         },
       });
@@ -335,6 +364,13 @@ export class JobsService {
       ...(dto.h1bCountLastYear !== undefined && { h1bCountLastYear: dto.h1bCountLastYear }),
       ...(dto.compensationNotes !== undefined && { compensationNotes: this.cleanNullable(dto.compensationNotes) }),
       ...(dto.notes !== undefined && { notes: this.cleanNullable(dto.notes) }),
+      // MOM-106: an explicit reason wins; otherwise moving the app out of `rejected`
+      // clears any stale reason so loss analysis never counts a reopened app.
+      ...(dto.rejectionReason !== undefined
+        ? { rejectionReason: dto.rejectionReason }
+        : dto.status !== undefined && dto.status !== 'rejected'
+          ? { rejectionReason: null }
+          : {}),
     };
   }
 
@@ -433,6 +469,7 @@ export class JobsService {
       h1bCountLastYear: job.h1bCountLastYear,
       compensationNotes: job.compensationNotes,
       notes: job.notes,
+      rejectionReason: (job.rejectionReason as RejectionReason | null) ?? null,
       daysInStage,
       isStalled,
       createdAt: job.createdAt.toISOString(),
