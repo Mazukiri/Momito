@@ -129,16 +129,20 @@ page + `/offers` comparison table (single-currency v1, visa column); ADR-0015 AC
 resolved; live: normalized 275k, currency upper-cased, 400 guard, delete). **★ Wave 3 (contacts + offers)
 COMPLETE.**
 
-**Active PR-sized task — Wave 4 opens: MOM-132 + MOM-133 — ResumeVersion (DESIGN + implement, migration;
-SPIKE-014, ADR-0012 exists as a stub).** Model `ResumeVersion`: `id, userId, label String` ("Google-tailored
-v2"), `targetRoleTrackId String?`, `jobApplicationId String? @db.Uuid` FK (SetNull — records "this version was
-sent to this job"), `contentMd String` (canonical Markdown, derived initially from `Profile` JSON via a
-serializer), `baseProfileSnapshot Json?`, `aiSuggestions Json @default("[]")` (MOM-137 writes here), timestamps.
-`Profile` stays master (D-014); versions are derived artifacts. CRUD module `apps/api/src/resumes/`; web page
-`/profile/resumes` listing versions + "duplicate from profile" + link-to-job. Flesh out ADR-0012 to ACCEPTED,
-D-020. Then MOM-134-full (ATS coverage vs a ResumeVersion), MOM-139 (export md|pdf), MOM-136/137/138 (AI
-résumé analysis/bullet-rewrite/cover-letter, dormant-until-key like `grading.service.ts`), MOM-145 (conversion
-by résumé version). Full design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
+**Shipped since:** **MOM-132+133** (migration `resume_versions` — new `ResumeVersion` model, `jobApplicationId`
+FK SetNull, `contentMd` Markdown derived from `Profile` via `profileToMarkdown` on create when omitted,
+`baseProfileSnapshot` provenance, `aiSuggestions` default `[]`; `resumes` CRUD module `/resumes`; `/profile/resumes`
+editor page + "Résumé versions" button on the profile page; ADR-0012 ACCEPTED, D-020, SPIKE-014 resolved; 273 API
+tests; live: derive-from-profile "# Demo Candidate …" + CRUD round-trip verified). **★ Wave 4 opened — résumé
+artifacts are first-class, deterministic-first.**
+
+**Active PR-sized task — MOM-134-full: ATS coverage vs a ResumeVersion (no schema).** MOM-134-lite already ships
+`AtsCoverageResponse` + coverage vs base profile (`extractJdSkills` in `profile-scores.service.ts`). Full version:
+coverage computed against a **ResumeVersion's `contentMd`** (optional param `resumeVersionId`), listing missing
+keywords + an "add these to your résumé" gap list that can emit Tasks via the MOM-135 gap→task bridge. Then MOM-139
+(export md|pdf), MOM-136/137/138 (AI résumé analysis/bullet-rewrite/cover-letter, dormant-until-key like
+`grading.service.ts`), MOM-145 (conversion by résumé version). Full design in the approved handoff plan
+(`~/.claude/plans/…mossy-moore.md`).
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).

@@ -18,6 +18,7 @@ import { InterviewRoundsModule } from './interview-rounds/interview-rounds.modul
 import { ContactsModule } from './contacts/contacts.module';
 import { FollowUpModule } from './follow-up/follow-up.module';
 import { OffersModule } from './offers/offers.module';
+import { ResumesModule } from './resumes/resumes.module';
 import { TasksModule } from './tasks/tasks.module';
 import { LearningModule } from './learning/learning.module';
 import { MissionsModule } from './missions/missions.module';
@@ -61,6 +62,7 @@ import { RequestLoggingMiddleware } from './common/request-logging.middleware';
     ContactsModule,
     FollowUpModule,
     OffersModule,
+    ResumesModule,
     TasksModule,
     LearningModule,
     MissionsModule,

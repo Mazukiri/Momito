@@ -1,5 +1,28 @@
 # LOG
 
+## 2026-07-10 - MOM-132+133: ResumeVersion (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration** `resume_versions` (new
+table). Opens Wave 4 — the app can finally keep tailored résumés, not just one overwrite-on-upload profile.
+
+**Design (SPIKE-014 resolved → ADR-0012 ACCEPTED, D-020):** new `ResumeVersion` (many per user) decoupled from
+the master `Profile` (D-014). `label`, `targetRoleTrackId?`, `jobApplicationId?` FK **SetNull** (records which
+version was sent), **`contentMd String` (canonical Markdown)**, `baseProfileSnapshot Json?` (provenance),
+`aiSuggestions Json` (reserved for MOM-137). On create without explicit `contentMd`, the server derives it from
+the Profile via a `profileToMarkdown` serializer (name/contact → Skills → Experience → Projects → Education)
+and snapshots the source. Markdown chosen over per-section JSON so the artifact is editable/diffable/exportable
+without a bespoke schema.
+
+**API:** `resumes` CRUD module (`/resumes`). **Web:** `/profile/resumes` page — "Duplicate from profile"
+(derives from the Profile), a version list, and a Markdown editor (label + contentMd) with save/delete; a
+"Résumé versions" button added to the profile header.
+
+**Checks:** shared build; API + web lint/typecheck green; **273 API tests** (+6: `profileToMarkdown` section
+rendering, derive-from-profile + snapshot, verbatim contentMd (no snapshot), missing-profile 400, foreign-job
+NotFound, update/remove NotFound) + 26 web tests. **Live:** POST derived contentMd from the demo profile
+("# Demo Candidate …"), linked to Meta; list/update/delete round-trip clean. Rollback: drop the table
+(Profile untouched).
+
 ## 2026-07-10 - MOM-114+115: Offer model + comparison (CLAUDE, migration)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration** `offers` (new table).

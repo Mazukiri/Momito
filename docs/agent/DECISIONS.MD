@@ -265,3 +265,17 @@ FK so the UI never handles an offer id). `compensationNotes` kept (D-004).
 **Consequences:** Enables offer comparison (MOM-115) + the job-page offer card (MOM-114). Rollback = drop the
 table. Accepted v1 trade-offs: no FX, flat equity amortization (no cliffs), no tax/COL adjustment. The one
 emigration-specific column is `visaSponsored` — it can override a higher headline number.
+
+### D-020 — `ResumeVersion` as Markdown artifacts derived from the master Profile
+**Context:** `Profile.userId` is `@unique` and re-upload overwrites — no way to keep tailored résumés, record
+which was sent per application, or export. ADR-0012 / SPIKE-014. The owner will add an AI key later.
+**Decision:** New `ResumeVersion` (many per user) decoupled from the master `Profile` (which stays the single
+source, D-014). Canonical content is **`contentMd` (Markdown)**, not per-section JSON — editable, diffable,
+exportable, AI-tailorable without a bespoke schema. On create without explicit `contentMd`, the server derives
+it from the Profile via a `profileToMarkdown` serializer and snapshots the source in `baseProfileSnapshot`.
+`jobApplicationId` FK is **SetNull** (records which version was sent; survives job deletion). `aiSuggestions
+Json` reserved for the dormant-until-key AI (MOM-137). CRUD at `/resumes`.
+**Consequences:** Enables the résumé versions page (MOM-133), ATS-vs-version coverage (MOM-134-full), export
+(MOM-139), AI tailoring (MOM-136–138), and which-résumé-converts analytics (MOM-145). Rollback = drop the
+table. Trade-off: a version's `contentMd` is a point-in-time derivation — later Profile edits don't propagate
+(intentional; the version is a tailored artifact, not a live view).

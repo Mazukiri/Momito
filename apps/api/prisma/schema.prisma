@@ -52,6 +52,7 @@ model User {
   interviewRounds InterviewRound[]
   contacts       Contact[]
   offers         Offer[]
+  resumeVersions ResumeVersion[]
 
   @@map("users")
 }
@@ -430,6 +431,7 @@ model JobApplication {
   interviewRounds   InterviewRound[]
   contacts          Contact[]
   offer             Offer?
+  resumeVersions    ResumeVersion[]
 
   @@index([userId])
   @@index([status])
@@ -948,4 +950,28 @@ model Offer {
 
   @@index([userId])
   @@map("offers")
+}
+
+// MOM-132/133 (ADR-0012, D-020): a tailored résumé artifact derived from the
+// master Profile (D-014). Many per user; optionally linked to the job it was sent
+// to (SetNull). `contentMd` is the canonical editable content (Markdown);
+// `baseProfileSnapshot` records what it was derived from; `aiSuggestions` is where
+// MOM-137 writes accept/reject suggestions.
+model ResumeVersion {
+  id                  String          @id @default(uuid()) @db.Uuid
+  userId              String          @map("user_id") @db.Uuid
+  jobApplicationId    String?         @map("job_application_id") @db.Uuid
+  label               String
+  targetRoleTrackId   String?         @map("target_role_track_id")
+  contentMd           String          @map("content_md")
+  baseProfileSnapshot Json?           @map("base_profile_snapshot")
+  aiSuggestions       Json            @default("[]") @map("ai_suggestions")
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobApplication      JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([jobApplicationId])
+  @@map("resume_versions")
 }

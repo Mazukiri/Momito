@@ -181,6 +181,12 @@ export default function ProfilePage() {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={() => router.push('/profile/resumes')}
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Résumé versions
+          </button>
+          <button
             onClick={() => router.push('/profile/upload')}
             className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >

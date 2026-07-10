@@ -864,6 +864,38 @@ export interface ProfileResponse {
   updatedAt: string;
 }
 
+// MOM-132/133 (ADR-0012): a tailored résumé derived from the master Profile.
+// `contentMd` is the canonical editable Markdown; `aiSuggestions` is where the
+// (dormant-until-key) AI writes per-bullet suggestions (MOM-137).
+export interface ResumeVersionResponse {
+  id: string;
+  userId: string;
+  jobApplicationId: string | null;
+  /** The linked job's company, for display (null if standalone). */
+  company: string | null;
+  label: string;
+  targetRoleTrackId: CareerRoleTrackId | null;
+  contentMd: string;
+  aiSuggestions: unknown[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateResumeVersionRequest {
+  label: string;
+  targetRoleTrackId?: CareerRoleTrackId | null;
+  jobApplicationId?: string | null;
+  /** When omitted, the server derives contentMd from the current Profile. */
+  contentMd?: string;
+}
+
+export interface UpdateResumeVersionRequest {
+  label?: string;
+  targetRoleTrackId?: CareerRoleTrackId | null;
+  jobApplicationId?: string | null;
+  contentMd?: string;
+}
+
 export interface UpdateProfileRequest {
   name?: string | null;
   email?: string | null;

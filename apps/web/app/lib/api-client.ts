@@ -474,6 +474,9 @@ import type {
   JobStoryGapResponse,
   OfferResponse,
   UpsertOfferRequest,
+  ResumeVersionResponse,
+  CreateResumeVersionRequest,
+  UpdateResumeVersionRequest,
   PracticeRecommendationResponse,
   ReadwiseConnectionResponse,
   ReadwiseSyncRunResponse,
@@ -535,6 +538,23 @@ export const contactsApi = {
 
   remove: (id: string) =>
     request<void>(`/contacts/${id}`, { method: 'DELETE' }),
+};
+
+export const resumesApi = {
+  list: () =>
+    request<ResumeVersionResponse[]>('/resumes'),
+
+  get: (id: string) =>
+    request<ResumeVersionResponse>(`/resumes/${id}`),
+
+  create: (body: CreateResumeVersionRequest) =>
+    request<ResumeVersionResponse>('/resumes', { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (id: string, body: UpdateResumeVersionRequest) =>
+    request<ResumeVersionResponse>(`/resumes/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  remove: (id: string) =>
+    request<void>(`/resumes/${id}`, { method: 'DELETE' }),
 };
 
 export const offersApi = {
