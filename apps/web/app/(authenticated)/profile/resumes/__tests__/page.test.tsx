@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ResumesPage from '../page';
 import { jobsApi, profileScoresApi, resumesApi } from '../../../../lib/api-client';
 
@@ -8,6 +8,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => searchParams,
 }));
+
+// Reset the module-scoped searchParams before EVERY test, so no describe block can leak a
+// deep-link (?v=) into another block's expectations regardless of run order.
+beforeEach(() => { searchParams = new URLSearchParams(); });
 
 // The bullet carries the double spaces a PDF-extracted résumé really has — the exact case in
 // which "Accept" used to silently do nothing (MOM-153/154).
