@@ -20,6 +20,14 @@ export interface ResumeExport {
   body: Buffer;
 }
 
+// MOM-157: the stale-version shape the Today loop ranks on.
+export interface ResumeDriftSummary {
+  id: string;
+  label: string;
+  jobApplicationId: string | null;
+  missingCount: number;
+}
+
 type ResumeRow = Prisma.ResumeVersionGetPayload<{ include: { jobApplication: { select: { company: true } } } }>;
 const resumeInclude = { jobApplication: { select: { company: true } } } satisfies Prisma.ResumeVersionInclude;
 
@@ -148,6 +156,43 @@ export class ResumesService {
   private added<T>(current: T[], base: T[], key: (item: T) => string): T[] {
     const seen = new Set(base.map(key));
     return current.filter((item) => key(item) !== '' && !seen.has(key(item)));
+  }
+
+  // MOM-157: every stale version in one pass — one profile read, one versions read, diffed in
+  // memory. Calling drift() per version would be an N+1 on the Today page, which is the one page
+  // that must stay fast.
+  async driftSummary(userId: string): Promise<ResumeDriftSummary[]> {
+    const [profile, versions] = await Promise.all([
+      this.prisma.profile.findUnique({ where: { userId }, select: { skills: true, experience: true, projects: true } }),
+      this.prisma.resumeVersion.findMany({
+        where: { userId },
+        select: { id: true, label: true, jobApplicationId: true, baseProfileSnapshot: true },
+      }),
+    ]);
+    if (!profile) return [];
+
+    const summaries: ResumeDriftSummary[] = [];
+    for (const version of versions) {
+      const snapshot = version.baseProfileSnapshot;
+      if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) continue; // no provenance
+      const snap = snapshot as Record<string, Prisma.JsonValue>;
+      const missing =
+        this.added(this.asStringArray(profile.skills), this.asStringArray(snap.skills ?? []), (s) => s.toLowerCase()).length +
+        this.added(
+          this.asArray<ProfileProjectItem>(profile.projects),
+          this.asArray<ProfileProjectItem>(snap.projects ?? []),
+          (p) => (p.name ?? '').toLowerCase(),
+        ).length +
+        this.added(
+          this.asArray<ProfileExperienceItem>(profile.experience),
+          this.asArray<ProfileExperienceItem>(snap.experience ?? []),
+          (e) => `${e.company ?? ''}|${e.role ?? ''}`.toLowerCase(),
+        ).length;
+      if (missing > 0) {
+        summaries.push({ id: version.id, label: version.label, jobApplicationId: version.jobApplicationId, missingCount: missing });
+      }
+    }
+    return summaries.sort((left, right) => right.missingCount - left.missingCount);
   }
 
   // MOM-139: export a version as a downloadable file. Markdown = contentMd as-is;

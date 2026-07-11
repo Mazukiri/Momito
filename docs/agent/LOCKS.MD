@@ -19,6 +19,8 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-157 | CLAUDE | `apps/api/src/resumes/resumes.service.ts`, `apps/api/src/recommendations/**`, `apps/api/test/{resumes,recommendations}.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
+| MOM-156 | CLAUDE | `apps/web/app/(authenticated)/profile/resumes/**`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-155 | CLAUDE | `apps/api/src/resumes/**`, `packages/shared/src/index.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/(authenticated)/profile/resumes/page.tsx`, `apps/api/test/resumes.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-154 | CLAUDE | `apps/api/src/resumes/**`, `packages/shared/src/index.ts`, `apps/web/app/(authenticated)/profile/resumes/page.tsx`, `apps/api/test/resumes.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-153 | CLAUDE | `apps/api/src/ai/resume-ai.*`, `apps/api/src/ai/dto/resume-ai-jd.dto.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/(authenticated)/profile/resumes/page.tsx`, `apps/api/test/resume-ai.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |

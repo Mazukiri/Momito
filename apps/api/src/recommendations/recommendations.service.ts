@@ -3,6 +3,7 @@ import { INTERVIEW_ROUND_TYPE_LABELS, JOB_STAGE_STALL_THRESHOLDS, PracticeRecomm
 import { CareerService } from '../career/career.service';
 import { MissionsService } from '../missions/missions.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ResumesService } from '../resumes/resumes.service';
 import { WeaknessesService } from '../weaknesses/weaknesses.service';
 
 // MOM-033: standardized reason taxonomy (plan §6.2 wants every recommendation to
@@ -42,6 +43,12 @@ const RECOMMENDATION_REASONS = {
   // the nudge is to act (follow up) or close it out (mark no-response).
   stalledJob: (stage: string, days: number) =>
     `This application has sat in ${stage} for ${days} days without moving. Follow up or mark it no-response.`,
+  // MOM-157: the profile has gained things this résumé version predates. Urgent while the
+  // linked job is still a lead you can fix before sending; informational once already sent.
+  resumeDriftPreSend: (label: string, count: number, company: string) =>
+    `Your "${label}" résumé is missing ${count} thing${count === 1 ? '' : 's'} you have added since — and it is the résumé linked to ${company}, which you have not applied to yet. Refresh it before you send.`,
+  resumeDrift: (label: string, count: number) =>
+    `Your "${label}" résumé predates ${count} thing${count === 1 ? '' : 's'} now on your profile. Refresh it or cut a new version.`,
 };
 
 // MOM-141: how far ahead an interview round starts appearing on Today. Rounds
@@ -95,12 +102,13 @@ export class RecommendationsService {
     private readonly career: CareerService,
     private readonly missions: MissionsService,
     private readonly weaknesses: WeaknessesService,
+    private readonly resumes: ResumesService,
   ) {}
 
   async list(userId: string): Promise<PracticeRecommendationResponse[]> {
     const now = new Date();
     const countdownHorizon = new Date(now.getTime() + INTERVIEW_COUNTDOWN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-    const [readiness, activeMissions, overdueTasks, jobs, inboxCount, weaknessSummary, upcomingRounds] =
+    const [readiness, activeMissions, overdueTasks, jobs, inboxCount, weaknessSummary, upcomingRounds, driftSummaries, savedJobs] =
       await Promise.all([
         this.career.listActiveReadiness(userId),
         this.missions.list(userId),
@@ -130,6 +138,11 @@ export class RecommendationsService {
           take: 3,
           include: { jobApplication: { select: { id: true, company: true } } },
         }),
+        // MOM-157: résumé versions the profile has outgrown (one profile + one versions read).
+        this.resumes.driftSummary(userId),
+        // MOM-157: the still-a-lead jobs — a stale résumé linked to one of these is fixable
+        // before you send, which is exactly when the nudge is worth interrupting Today for.
+        this.prisma.jobApplication.findMany({ where: { userId, status: 'saved' }, select: { id: true, company: true } }),
       ]);
 
     const recommendations: PracticeRecommendationResponse[] = [];
@@ -307,6 +320,32 @@ export class RecommendationsService {
         priority: deadlineUrgent ? 90 : card.priority,
       });
     }
+    // MOM-157: drift belongs on Today because it only helps BEFORE you send the résumé — the
+    // one page a user won't think to open when they don't already suspect the résumé is behind.
+    // Only the most-drifted version surfaces (the rest would be noise), and it earns real urgency
+    // only when it is the résumé linked to a job still in `saved` (fixable before sending).
+    const savedJobById = new Map(savedJobs.map((job) => [job.id, job.company]));
+    const topDrift = driftSummaries[0];
+    if (topDrift) {
+      const preSendCompany = topDrift.jobApplicationId ? savedJobById.get(topDrift.jobApplicationId) : undefined;
+      recommendations.push({
+        id: `resume-drift:${topDrift.id}`,
+        type: 'profile',
+        title: preSendCompany
+          ? `Refresh your "${topDrift.label}" résumé before applying to ${preSendCompany}`
+          : `Your "${topDrift.label}" résumé is behind your profile`,
+        reason: preSendCompany
+          ? RECOMMENDATION_REASONS.resumeDriftPreSend(topDrift.label, topDrift.missingCount, preSendCompany)
+          : RECOMMENDATION_REASONS.resumeDrift(topDrift.label, topDrift.missingCount),
+        roleTrackId: null,
+        area: null,
+        targetHref: '/profile/resumes',
+        // pre-send sits between deadlines (90) and stalls (68) — act before you apply;
+        // informational drift ranks below routine study, a background reminder.
+        priority: preSendCompany ? 74 : 45,
+      });
+    }
+
     if (inboxCount > 0) {
       recommendations.push({
         id: 'readwise:inbox',

@@ -14,10 +14,17 @@ function buildService(
   },
   jobs: Array<Record<string, unknown>> = [],
   upcomingRounds: Array<Record<string, unknown>> = [],
+  extras: { driftSummaries?: Array<Record<string, unknown>>; savedJobs?: Array<Record<string, unknown>> } = {},
 ) {
   const prisma = {
     task: { findMany: vi.fn().mockResolvedValue([]) },
-    jobApplication: { findMany: vi.fn().mockResolvedValue(jobs) },
+    jobApplication: {
+      // MOM-157: the service issues two job queries — the pipeline scan and a `status:'saved'`
+      // scan for pre-send drift urgency. Route by the where clause so each gets the right rows.
+      findMany: vi.fn().mockImplementation((args: { where?: { status?: string } }) =>
+        Promise.resolve(args?.where?.status === 'saved' ? (extras.savedJobs ?? []) : jobs),
+      ),
+    },
     learningHighlight: { count: vi.fn().mockResolvedValue(0) },
     interviewRound: { findMany: vi.fn().mockResolvedValue(upcomingRounds) },
   };
@@ -34,7 +41,8 @@ function buildService(
       openSignals: weaknessSummary.openSignals ?? [],
     }),
   };
-  return new RecommendationsService(prisma as never, career as never, missions as never, weaknesses as never);
+  const resumes = { driftSummary: vi.fn().mockResolvedValue(extras.driftSummaries ?? []) };
+  return new RecommendationsService(prisma as never, career as never, missions as never, weaknesses as never, resumes as never);
 }
 
 function openSignal(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -248,5 +256,56 @@ describe('RecommendationsService — stall detection (MOM-105)', () => {
     const recs = await service.list('user-1');
     expect(recs.some((item) => item.id === 'job-stall:job-1')).toBe(false);
     expect(recs.some((item) => item.id === 'job:job-1')).toBe(true);
+  });
+});
+
+// MOM-157 — drift belongs on Today because it only helps BEFORE you send: the /profile/resumes
+// page is the one place a user won't open unless they already suspect the résumé is behind.
+describe('RecommendationsService — résumé drift (MOM-157)', () => {
+  const drift = (overrides: Record<string, unknown> = {}) => ({
+    id: 'rv-1', label: 'Big-tech v2', jobApplicationId: null, missingCount: 3, ...overrides,
+  });
+
+  it('nudges urgently when the stale résumé is linked to a job not yet applied to', async () => {
+    const service = buildService({}, [], [], {
+      driftSummaries: [drift({ jobApplicationId: 'job-9' })],
+      savedJobs: [{ id: 'job-9', company: 'NVIDIA' }],
+    });
+
+    const card = (await service.list('user-1')).find((item) => item.id === 'resume-drift:rv-1');
+    expect(card).toMatchObject({
+      type: 'profile',
+      title: 'Refresh your "Big-tech v2" résumé before applying to NVIDIA',
+      priority: 74, // between deadlines (90) and stalls (68) — act before you send
+      targetHref: '/profile/resumes',
+    });
+    expect(card?.reason).toContain('you have not applied to yet');
+  });
+
+  it('is a quiet background reminder when the drift is not tied to a pre-send job', async () => {
+    const service = buildService({}, [], [], {
+      driftSummaries: [drift({ jobApplicationId: 'job-sent' })],
+      savedJobs: [], // the linked job is not in `saved` — already sent, or none linked
+    });
+
+    const card = (await service.list('user-1')).find((item) => item.id === 'resume-drift:rv-1');
+    expect(card).toMatchObject({ title: 'Your "Big-tech v2" résumé is behind your profile', priority: 45 });
+    expect(card?.reason).toBe('Your "Big-tech v2" résumé predates 3 things now on your profile. Refresh it or cut a new version.');
+  });
+
+  it('surfaces only the most-drifted version, never a pile of them', async () => {
+    const service = buildService({}, [], [], {
+      driftSummaries: [drift({ id: 'rv-1' }), drift({ id: 'rv-2' }), drift({ id: 'rv-3' })],
+    });
+
+    const cards = (await service.list('user-1')).filter((item) => item.id.startsWith('resume-drift:'));
+    expect(cards).toHaveLength(1);
+    expect(cards[0].id).toBe('resume-drift:rv-1');
+  });
+
+  it('adds no card when nothing has drifted', async () => {
+    const service = buildService({}, [], [], { driftSummaries: [] });
+    const cards = (await service.list('user-1')).filter((item) => item.id.startsWith('resume-drift:'));
+    expect(cards).toHaveLength(0);
   });
 });

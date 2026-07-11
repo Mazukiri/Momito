@@ -1,5 +1,29 @@
 # LOG
 
+## 2026-07-12 - MOM-157: résumé drift enters the Today loop (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration.
+
+MOM-155 gave drift a face — but on `/profile/resumes`, the one page a user opens only when they *already suspect* the
+résumé is behind. Drift is a before-you-send signal; the app's whole thesis is that such signals surface on **Today**.
+So `recommendations.service` now carries a résumé-drift card, fed by a new `ResumesService.driftSummary` (every stale
+version in one pass — one profile read, one versions read, diffed in memory; calling `drift()` per version would N+1 the
+one page that must stay fast).
+
+The ranking is the design. A stale version **linked to a job still in `saved`** is fixable before you apply — the exact
+moment the nudge earns an interruption — so it lands at **priority 74**, between application deadlines (90) and stalls
+(68), with copy that names the company. Any other drift is a background reminder at **45**, below routine study. Only the
+single most-drifted version surfaces; the rest would be noise.
+
+**Verified:** 323 API tests (+6, four of them the new drift cases: pre-send urgency, informational fallback, only-one-
+surfaces, none-when-clean), lint + typecheck clean. Live against local Postgres: a version linked to the saved NVIDIA
+job, with CUDA/OpenGL and a GPU Ray Tracer project added to the profile *after* the version was cut, returned
+`missingCount:3` through the live drift path and resolved to the pre-send branch. The card is priority 74; the demo
+account is saturated with ≥95 cards (an interview in 3 days, three repair signals from the bombed Meta round), so a 74
+card correctly does not reach the top-8 there — which is the ranking working, not a failure. Card construction (title,
+priority, reason, href) is pinned exactly by the unit tests. The demo profile was mutated to force drift and restored to
+its exact prior state afterwards; the test version was deleted.
+
 ## 2026-07-12 - MOM-156: web tests for the résumé page — where the last two bugs actually lived (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Tests + one UI fix they caught.
