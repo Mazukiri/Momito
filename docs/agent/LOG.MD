@@ -1,5 +1,26 @@
 # LOG
 
+## 2026-07-12 - MOM-159: ATS coverage false-missed skills at sentence ends (CLAUDE, no schema, bug fix)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Found by careful reading of the ATS keyword matcher.
+
+**The bug.** `extractJdSkills` pulls capitalized tokens with `/[A-Z][A-Za-z+#.]{1,30}/` — the dot is in the class so
+"Node.js" survives intact. But that same dot **swallows the sentence-final period**: "…deep experience with
+Kubernetes." captures the token `Kubernetes.`, and the only normalization applied to JD keywords is
+`toLowerCase().trim()`, so it becomes `kubernetes.` — with the period. The résumé have-set (`resumeHaveSet`), meanwhile,
+strips trailing dots (`token.replace(/\.+$/, '')`), so it holds `kubernetes`. The two never match: a skill the résumé
+plainly lists gets reported **missing**, which deflates `coveragePct` and — via MOM-134's gap→task bridge — spawns a
+bogus "Add to résumé: Kubernetes." study task telling the user to add something they already have. This fires on the
+most ordinary JD phrasing there is: any skill at the end of a clause ("proficiency in Go.", "must have Kubernetes.").
+
+**The fix.** Strip trailing dots from JD tokens too, so both sides normalize identically. A bonus: it also stops a
+sentence-final stop-word like "We." (which kept its period and so slipped past the `{'We',…}` stop set) from being
+mistaken for a skill.
+
+**Verified.** A counterfactual unit test (constructed to fail on the old code, pass on the fix — confirmed by
+temporarily reverting the one-line change). 325 API tests, lint + typecheck clean. No live round-trip: the buggy path
+is pure string tokenization with no DB or network involved, so the counterfactual test is authoritative for it.
+
 ## 2026-07-12 - MOM-158: the "am I ready?" verdict could report a false 0/100 (CLAUDE, no schema, bug fix)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Found by careful reading of the flagship readiness

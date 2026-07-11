@@ -19,6 +19,7 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-159 | CLAUDE | `apps/api/src/profile-scores/profile-scores.service.ts`, `apps/api/test/profile-scores.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-158 | CLAUDE | `apps/api/src/career/career.service.ts`, `apps/api/test/career.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-157 | CLAUDE | `apps/api/src/resumes/resumes.service.ts`, `apps/api/src/recommendations/**`, `apps/api/test/{resumes,recommendations}.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-156 | CLAUDE | `apps/web/app/(authenticated)/profile/resumes/**`, `docs/agent/*.MD` | 2026-07-12 |

@@ -160,6 +160,25 @@ describe('ProfileScoresService.atsCoverage vs a ResumeVersion (MOM-134-full)', (
     expect(result.coveragePct).toBeCloseTo(0.75, 3);
   });
 
+  // MOM-159 — the JD capture class allows dots (so "Node.js" survives), which also swallowed the
+  // sentence-final period. "Kubernetes." kept its dot while the résumé have-set stripped it, so a
+  // covered skill at the end of a clause was false-flagged as missing.
+  it('matches a JD keyword at the end of a sentence despite the trailing period (MOM-159)', async () => {
+    const service = new ProfileScoresService({
+      resumeVersion: { findFirst: vi.fn().mockResolvedValue({ id: 'rv-1', contentMd: 'Shipped services in Go on Kubernetes.' }) },
+    } as never);
+
+    // both skills sit at a clause end in the JD → both would keep a trailing dot pre-fix
+    const result = await service.atsCoverage('We use Go. Must have Kubernetes.', 'user-1', 'rv-1');
+
+    // pre-fix these were reported missing ("go." / "kubernetes." never matched the have-set)
+    expect(result.covered).toEqual(expect.arrayContaining(['Go', 'Kubernetes']));
+    expect(result.missing).not.toContain('Go');
+    expect(result.missing).not.toContain('Kubernetes');
+    // and the stray period never appears in either list (so tasks read "Add … Kubernetes")
+    expect([...result.covered, ...result.missing].some((k) => k.endsWith('.'))).toBe(false);
+  });
+
   it('404s when the résumé version is not the caller\'s', async () => {
     const service = new ProfileScoresService({
       resumeVersion: { findFirst: vi.fn().mockResolvedValue(null) },

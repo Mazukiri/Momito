@@ -331,9 +331,14 @@ export class ProfileScoresService {
   }
 
   private extractJdSkills(jdText: string): string[] {
-    const tokens = jdText.match(/[A-Z][A-Za-z+#.]{1,30}/g) ?? [];
+    // The capture class allows a dot so "Node.js" survives — but that also swallows the
+    // sentence-final period in "…experience with Kubernetes." The résumé have-set strips
+    // trailing dots (resumeHaveSet), so a JD keyword that kept one ("kubernetes.") would never
+    // match ("kubernetes"), false-flagging a covered skill as missing. Strip trailing dots here
+    // too so both sides normalize identically — and so "We." can't slip past the stop list.
+    const tokens = (jdText.match(/[A-Z][A-Za-z+#.]{1,30}/g) ?? []).map((token) => token.replace(/\.+$/, ''));
     const stop = new Set(['The', 'We', 'You', 'Our', 'This', 'Must', 'Will', 'And', 'For', 'With']);
-    return this.uniqueByNormalized(tokens.filter((token) => !stop.has(token)));
+    return this.uniqueByNormalized(tokens.filter((token) => token.length > 1 && !stop.has(token)));
   }
 
   private generateSuggestions(gaps: {
