@@ -581,6 +581,13 @@ export const resumesApi = {
       body: JSON.stringify(jobApplicationId ? { jobApplicationId } : {}),
     }),
 
+  // MOM-151: the analysis's missing themes become study tasks (deduped server-side, no AI spend).
+  aiThemesToTasks: (id: string, themes: string[]) =>
+    request<{ created: number }>(`/resumes/${id}/ai/themes-to-tasks`, {
+      method: 'POST',
+      body: JSON.stringify({ themes }),
+    }),
+
   aiRewrite: (id: string, jdText: string) =>
     request<ResumeAiEnvelope<ResumeRewriteResult>>(`/resumes/${id}/ai/rewrite`, { method: 'POST', body: JSON.stringify({ jdText }) }),
 

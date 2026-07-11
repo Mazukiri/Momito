@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CAREER_ROLE_TRACKS, type AtsCoverageResponse, type CareerRoleTrackId, type CoverLetterDraftResult, type JobApplicationResponse, type ResumeAnalysisResult, type ResumeBulletRewrite, type ResumeVersionResponse } from '@momito/shared';
+import { CAREER_ROLE_TRACKS, type AtsCoverageResponse, type CareerRoleTrackId, type CoverLetterDraftResult, type JobApplicationResponse, type JobFunnelBreakdownRow, type ResumeAnalysisResult, type ResumeBulletRewrite, type ResumeVersionResponse } from '@momito/shared';
 import { jobsApi, profileScoresApi, resumesApi } from '../../../lib/api-client';
 import { Card, EmptyState, ErrorBanner, Spinner } from '../../../components/ui';
 
@@ -25,6 +25,10 @@ export default function ResumesPage() {
   // MOM-149: the application the critique is judged against (JD + company focus areas).
   const [jobs, setJobs] = useState<JobApplicationResponse[]>([]);
   const [targetJobId, setTargetJobId] = useState('');
+  const [themeMsg, setThemeMsg] = useState('');
+  // MOM-152: which résumé actually converts. MOM-145's funnel already computes this per
+  // version label — surfacing it here closes the loop: analyse → rewrite → send → measure.
+  const [performance, setPerformance] = useState<JobFunnelBreakdownRow[]>([]);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiReason, setAiReason] = useState('');
   const [analysis, setAnalysis] = useState<ResumeAnalysisResult | null>(null);
@@ -35,9 +39,10 @@ export default function ResumesPage() {
     setLoading(true);
     setError('');
     try {
-      const [list, jobList] = await Promise.all([resumesApi.list(), jobsApi.list()]);
+      const [list, jobList, funnel] = await Promise.all([resumesApi.list(), jobsApi.list(), jobsApi.funnel()]);
       setVersions(list);
       setJobs(jobList);
+      setPerformance(funnel.byResumeVersion);
       if (list.length > 0 && selectedId === null) {
         setSelectedId(list[0].id);
         setDraft(list[0].contentMd);
@@ -149,6 +154,21 @@ export default function ResumesPage() {
     }
   }
 
+  // MOM-151: turn the AI's missing themes into study tasks. No model call — the findings exist.
+  async function themesToTasks() {
+    if (!selectedId || !analysis) return;
+    setAiBusy(true);
+    setThemeMsg('');
+    try {
+      const { created } = await resumesApi.aiThemesToTasks(selectedId, analysis.missingThemes.slice(0, 8));
+      setThemeMsg(created > 0 ? `Added ${created} task${created === 1 ? '' : 's'}.` : 'Already tracked.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create tasks');
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   // Accepting a rewrite is deterministic and local: swap the original bullet for
   // the rewritten one in the draft, then Save persists it.
   function acceptRewrite(rewrite: ResumeBulletRewrite) {
@@ -216,6 +236,20 @@ export default function ResumesPage() {
                   {version.targetRoleTrackId && <span>{CAREER_ROLE_TRACKS[version.targetRoleTrackId as CareerRoleTrackId]?.label ?? version.targetRoleTrackId}</span>}
                   {version.company && <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 dark:bg-zinc-800">{version.company}</span>}
                 </div>
+                {/* MOM-152: the only feedback that isn't an opinion — did this résumé convert? */}
+                {(() => {
+                  const row = performance.find((p) => p.key === version.label);
+                  if (!row || row.total === 0) return null;
+                  return (
+                    <p className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+                      <span className="font-medium">{row.total} sent</span> · {row.interviewing} interviewing · {row.offers} offer{row.offers === 1 ? '' : 's'}
+                      {' · '}
+                      <span className={row.conversion > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-400'}>
+                        {Math.round(row.conversion * 100)}% conversion
+                      </span>
+                    </p>
+                  );
+                })()}
               </button>
             ))}
           </div>
@@ -298,7 +332,18 @@ export default function ResumesPage() {
                       </div>
                     ))}
                     {analysis.missingThemes.length > 0 && (
-                      <p className="text-zinc-500">Missing themes: {analysis.missingThemes.join(', ')}</p>
+                      // MOM-151: findings are no longer a dead end — they become study tasks.
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-zinc-500">Missing themes: {analysis.missingThemes.join(', ')}</p>
+                        <button
+                          onClick={themesToTasks}
+                          disabled={aiBusy}
+                          className="rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200"
+                        >
+                          Add {analysis.missingThemes.length} to study plan
+                        </button>
+                        {themeMsg && <span className="text-xs text-emerald-700 dark:text-emerald-400">{themeMsg}</span>}
+                      </div>
                     )}
                   </div>
                 )}

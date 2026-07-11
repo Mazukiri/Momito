@@ -3,6 +3,7 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { AuthenticatedUser } from '../common/jwt-auth.guard';
 import { ResumeAiAnalyzeDto } from './dto/resume-ai-analyze.dto';
 import { ResumeAiJdDto } from './dto/resume-ai-jd.dto';
+import { ResumeAiThemesDto } from './dto/resume-ai-themes.dto';
 import { ResumeAiOrchestrator } from './resume-ai.orchestrator';
 
 // MOM-136/137/138. Every route returns the {ok:true,result} | {ok:false,reason}
@@ -21,6 +22,16 @@ export class ResumeAiController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.orchestrator.analyze(id, user.id, dto.jobApplicationId);
+  }
+
+  // MOM-151: turn the analysis's missing themes into study tasks (deduped, no model call).
+  @Post('themes-to-tasks')
+  themesToTasks(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResumeAiThemesDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.orchestrator.themesToTasks(id, user.id, dto.themes);
   }
 
   // MOM-137: JD-tailored bullet rewrites; persisted to the version's aiSuggestions.

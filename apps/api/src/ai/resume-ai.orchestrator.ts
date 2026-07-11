@@ -84,6 +84,41 @@ export class ResumeAiOrchestrator {
     };
   }
 
+  // MOM-151 — the analysis used to be a dead end: you read it and hand-edited. This is the
+  // gap→task bridge (same shape as profile-scores.atsGenerateTasks): the themes the résumé is
+  // missing become study tasks, deduped by title so re-running an analysis can't spam the plan.
+  // No model call and no spend — the findings already exist.
+  async themesToTasks(versionId: string, userId: string, themes: string[]): Promise<{ created: number }> {
+    const version = await this.prisma.resumeVersion.findFirst({
+      where: { id: versionId, userId },
+      select: { label: true },
+    });
+    if (!version) throw new NotFoundException('Résumé version not found');
+
+    const titles = themes.slice(0, 8).map((theme) => `Résumé gap: ${theme}`.slice(0, 190));
+    if (titles.length === 0) return { created: 0 };
+
+    const existing = await this.prisma.task.findMany({
+      where: { userId, title: { in: titles } },
+      select: { title: true },
+    });
+    const seen = new Set(existing.map((task) => task.title));
+    const toCreate = titles.filter((title) => !seen.has(title));
+    if (toCreate.length === 0) return { created: 0 };
+
+    const result = await this.prisma.task.createMany({
+      data: toCreate.map((title) => ({
+        userId,
+        type: 'study',
+        status: 'todo',
+        priority: 'high',
+        title,
+        notes: `Theme the AI found missing from "${version.label}".`,
+      })),
+    });
+    return { created: result.count };
+  }
+
   async rewrite(versionId: string, userId: string, jdText: string): Promise<ResumeAiEnvelope<ResumeRewriteResult>> {
     const outcome = await this.withVersion(versionId, userId, (version) =>
       this.resumeAi.rewriteBullets(version.contentMd, jdText),

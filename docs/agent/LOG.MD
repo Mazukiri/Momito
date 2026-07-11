@@ -1,5 +1,37 @@
 # LOG
 
+## 2026-07-11 - MOM-151/152: résumé findings become actions, and get measured (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Completes the five improvements the owner asked for
+(148/149/150 shipped in the previous commit).
+
+**MOM-151 — the analysis was a dead end.** It produced `issue`/`suggestion`/`missingThemes` and then stopped; you read
+it and hand-edited. `POST /resumes/:id/ai/themes-to-tasks` now turns the themes into **study tasks**, reusing the
+existing gap→task bridge shape (`profile-scores.atsGenerateTasks`) rather than inventing a second pattern: capped at
+8, deduped by title so re-running an analysis cannot spam the plan, and **no model call** — the findings already
+exist, so the action costs nothing. Live: `{created:2}` then `{created:0}` on the repeat, with `ai/usage` unchanged
+at $0.2179 across both calls, proving the zero-spend claim rather than asserting it.
+
+*Noticed and kept:* the task titles share the `Résumé gap:` prefix with MOM-135's profile-score gap tasks. That is a
+feature, not a collision — an AI-found gap and a score-found gap for the same thing now **dedupe against each other**,
+and `notes` preserves which produced it.
+
+**MOM-152 — nothing measured whether the advice worked.** MOM-145 already computes conversion per résumé version
+(joined through `ResumeVersion.jobApplicationId`), but it only rendered on the dashboard funnel card. The `/profile/
+resumes` list now shows each version's real record — `N sent · N interviewing · N offers · N% conversion` — beside the
+version you are editing. That closes the loop the whole track exists for: **analyse → rewrite → send → measure**, and
+it is the only feedback in the feature that is not an opinion. Hidden when a version has no applications linked.
+
+**Verification:** 302 API tests (+1) · lint + typecheck clean (api + web) · live: themes→tasks created 2, deduped to
+0 on repeat, tasks landed on the study plan with the right type/status/priority, budget unmoved. All test rows deleted
+afterwards (one DELETE returned a curl `000`, so the cleanup was re-checked rather than assumed — one task had
+survived and was removed; the study plan is back to its 7-task demo baseline).
+
+**Why no model upgrade.** The owner asked whether to raise model capability. Everything in 147–152 says no: coverage
+was a contract bug, targeting was missing context, groundedness was missing data, and actionability and measurement
+were missing wiring. None of those are fixed by a smarter model, and Gemini 3.1 Pro now matches Opus 4.8 on this task
+at a third of the cost.
+
 ## 2026-07-11 - MOM-148/149/150: complete, targeted, evidence-grounded résumé analysis (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Owner asked "how do I make the AI feature better —

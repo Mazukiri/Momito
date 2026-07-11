@@ -283,6 +283,29 @@ describe('ResumeAiOrchestrator (MOM-136/137/138)', () => {
     expect(ctx.evidence.projects[0]).toContain('5,000 RPS');
   });
 
+  // MOM-151 — findings become study tasks. Deduped, because re-running an analysis must not
+  // spam the plan; and no model call, because the findings already exist.
+  it('turns missing themes into deduped study tasks without spending on the model (MOM-151)', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 1 });
+    const { orchestrator, budget, resumeAi } = build({
+      prisma: {
+        task: {
+          findMany: vi.fn().mockResolvedValue([{ title: 'Résumé gap: CUDA' }]), // already tracked
+          createMany,
+        },
+      },
+    });
+
+    const result = await orchestrator.themesToTasks('rv-1', 'user-1', ['CUDA', 'GPU Architecture']);
+
+    expect(result).toEqual({ created: 1 }); // CUDA skipped, GPU Architecture created
+    expect(createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ title: 'Résumé gap: GPU Architecture', type: 'study', status: 'todo', userId: 'user-1' })],
+    });
+    expect(resumeAi.analyze).not.toHaveBeenCalled();
+    expect(budget.checkAndReserve).not.toHaveBeenCalled(); // no AI spend for a bookkeeping action
+  });
+
   it('is dormant with no key: returns {ok:false} without touching the DB, the budget, or the model', async () => {
     const { orchestrator, prisma, budget, resumeAi } = build({ resumeAi: { isAvailable: () => false } });
 
