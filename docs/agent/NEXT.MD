@@ -236,6 +236,25 @@ exactly what answers *"what have I done since I cut this résumé?"* Nobody was 
 The write-only-column sweep is now **exhausted** for the résumé surface. If repeating the trick elsewhere: the shape
 to grep for is a column the API writes and serializes that no `apps/web` file ever names.
 
+### MOM-156 / MOM-157 (2026-07-12) — tests, then drift on Today
+
+**MOM-156:** both MOM-153/154 bugs lived in the web layer, and `/profile/resumes` (the densest page in the app) had
+**zero tests**. Added six; they immediately caught a flaw in MOM-154's own UI (the "Applied to the draft"
+confirmation was rendered inside the suggestion list, so it vanished exactly when the last suggestion was accepted).
+**MOM-157:** drift only helps *before you send*, and `/profile/resumes` is the one page you don't open unless you
+already suspect the résumé is behind — so drift now surfaces on **Today** via `recommendations.service`
+(`ResumesService.driftSummary`, one profile + one versions read). Priority 74 when the stale version is linked to a
+still-`saved` job (fixable before applying, copy names the company), 45 otherwise; the card deep-links `?v=<id>` to
+the exact version.
+
+**Session end state (2026-07-12):** 323 API + 34 web tests green, lint + typecheck clean on both apps. Commits this
+session on `feat/careeros-phase-0`: MOM-153 (`418f779`), MOM-154 (`bef1b3e`), MOM-155 (`0799144`), MOM-156
+(`eaa8d8d`), MOM-157 (`f7e45fd`) + deep-link follow-up (`0597a57`). Working tree holds only pre-existing dev
+scaffolding **plus** a one-line `CLAUDE.md` fix from a `/doctor` run (`LOCKS.md`→`LOCKS.MD`, `LOG.md`→`LOG.MD` — left
+uncommitted for the owner to review in `git diff`, per the doctor's rules). The résumé AI surface is now a complete,
+tested loop: analyse → rewrite (persisted, accept/reject) → cover letter → ATS coverage → conversion analytics →
+drift detection → drift on Today. No résumé work remains that is worth doing without a new owner signal.
+
 ## If resuming autonomously
 
 The plan is done and the AI gate is closed, so the next step needs a signal from the owner. In rough order of value:
