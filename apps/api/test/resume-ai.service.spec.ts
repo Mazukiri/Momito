@@ -294,6 +294,24 @@ describe('ResumeAiService (MOM-136/137/138, dormant-until-key)', () => {
     expect(unknown.mock.calls[0][0].messages[0].content).toContain('policy is unknown');
   });
 
+  // MOM-153 — seen live: the model puts the two characters `\` `n` in the string instead of a
+  // line break, so the "Markdown" draft renders as one wall of text with visible \n.
+  it('folds literal \\n escapes in a cover letter back into real line breaks (MOM-153)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    const parse = vi.fn().mockResolvedValue(
+      okResponse({
+        draftMarkdown: 'Dear Hiring Team,\\n\\nI am writing to apply.',
+        visaFramingParagraph: 'I will need sponsorship.\\nHappy to discuss.',
+        wordCount: 8,
+      }),
+    );
+
+    const outcome = await serviceWithFakeClient(parse).draftCoverLetter(CONTENT_MD, 'JD text', CTX);
+
+    expect(outcome.ok && outcome.result.draftMarkdown).toBe('Dear Hiring Team,\n\nI am writing to apply.');
+    expect(outcome.ok && outcome.result.visaFramingParagraph).toBe('I will need sponsorship.\nHappy to discuss.');
+  });
+
   it('returns a structured failure (never throws) on a schema miss or an API error', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
 

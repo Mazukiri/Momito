@@ -279,7 +279,24 @@ export class ResumeAiService {
     // and the honest framing differs sharply by case — so say which case this is.
     parts.push('', '## This employer’s sponsorship posture', this.sponsorshipGuidance(ctx.job?.sponsorship ?? null));
     parts.push('', '## Résumé (Markdown)', contentMd);
-    return this.run(COVER_LETTER_SYSTEM, parts.join('\n'), CoverLetterDraftSchema);
+
+    const outcome = await this.run<CoverLetterDraft>(COVER_LETTER_SYSTEM, parts.join('\n'), CoverLetterDraftSchema);
+    if (!outcome.ok) return outcome;
+    return {
+      ...outcome,
+      result: {
+        ...outcome.result,
+        draftMarkdown: ResumeAiService.unescapeNewlines(outcome.result.draftMarkdown),
+        visaFramingParagraph: ResumeAiService.unescapeNewlines(outcome.result.visaFramingParagraph),
+      },
+    };
+  }
+
+  // Observed live: a model may emit the two characters `\` `n` inside a structured-output string
+  // instead of a real line break, so a "Markdown" draft arrives as one wall of text with visible
+  // \n. No cover letter legitimately contains a literal backslash-n, so folding these back is safe.
+  private static unescapeNewlines(text: string): string {
+    return text.replace(/\\r\\n|\\n/g, '\n');
   }
 
   private sponsorshipGuidance(sponsorship: string | null): string {
