@@ -247,13 +247,24 @@ already suspect the résumé is behind — so drift now surfaces on **Today** vi
 still-`saved` job (fixable before applying, copy names the company), 45 otherwise; the card deep-links `?v=<id>` to
 the exact version.
 
-**Session end state (2026-07-12):** 323 API + 34 web tests green, lint + typecheck clean on both apps. Commits this
+### MOM-158 (2026-07-12) — flagship bug: "am I ready?" could report a false 0/100
+
+After the column sweep ran dry, careful reading of the readiness engine turned up a real bug in the headline
+"am I ready for <company>?" verdict. `companyWeightedPercentage` divided by the sum of focus weights that matched a
+role-track area — but a company's `focusAreas` is validated against `CAREER_ROLE_AREA_IDS`, not the chosen track's
+areas, so the two can be disjoint, and `weightSum:0` returned a hard **0** ("not ready") for a strong candidate. Now
+returns `null` → both callers (`getJobReadiness`, `getTargetShortlist`) fall back to the flat overall percentage.
+Latent for user-created catalog data only (every seed track + company share `dsa`). Counterfactual unit test + live
+proof (forced NVIDIA focus to a disjoint area → 34 not 0, restored to 50). If hunting more: the readiness/weakness/
+`job_prep`-selection paths were read end-to-end this session and are otherwise correct.
+
+**Session end state (2026-07-12):** 324 API + 34 web tests green, lint + typecheck clean on both apps. Commits this
 session on `feat/careeros-phase-0`: MOM-153 (`418f779`), MOM-154 (`bef1b3e`), MOM-155 (`0799144`), MOM-156
-(`eaa8d8d`), MOM-157 (`f7e45fd`) + deep-link follow-up (`0597a57`). Working tree holds only pre-existing dev
-scaffolding **plus** a one-line `CLAUDE.md` fix from a `/doctor` run (`LOCKS.md`→`LOCKS.MD`, `LOG.md`→`LOG.MD` — left
-uncommitted for the owner to review in `git diff`, per the doctor's rules). The résumé AI surface is now a complete,
-tested loop: analyse → rewrite (persisted, accept/reject) → cover letter → ATS coverage → conversion analytics →
-drift detection → drift on Today. No résumé work remains that is worth doing without a new owner signal.
+(`eaa8d8d`), MOM-157 (`f7e45fd`) + deep-link follow-up (`0597a57`), MOM-158 (`402b39f`), plus a docs handoff
+(`fca1788`). Working tree holds only pre-existing dev scaffolding **plus** a one-line `CLAUDE.md` fix from a
+`/doctor` run (`LOCKS.md`→`LOCKS.MD`, `LOG.md`→`LOG.MD` — left uncommitted for the owner to review in `git diff`, per
+the doctor's rules). The résumé AI surface is a complete tested loop (analyse → rewrite → cover letter → ATS → drift →
+Today), and the career readiness core has been read end-to-end and hardened. No further non-gated work is queued.
 
 ## If resuming autonomously
 
