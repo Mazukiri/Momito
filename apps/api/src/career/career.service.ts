@@ -185,8 +185,13 @@ export class CareerService {
     // MOM-122-followup: when the job is linked to a catalog company, weight the
     // headline by that company's focus areas (a weak area the company drills hard
     // hurts more than one it barely tests). Unlinked → the role-checklist mean.
+    // MOM-158: use the company-weighted headline only when the company's focus areas actually
+    // intersect this role track's measured areas; otherwise fall back to the flat mean rather
+    // than let a disjoint emphasis collapse the verdict to a false 0.
     const focusKeys = Object.keys(focusAreas);
-    const base = focusKeys.length > 0 ? this.companyWeightedPercentage(readiness.areas, focusAreas) : readiness.overallPercentage;
+    const weighted = focusKeys.length > 0 ? this.companyWeightedPercentage(readiness.areas, focusAreas) : null;
+    const base = weighted ?? readiness.overallPercentage;
+    const companyWeighted = weighted !== null;
 
     // Penalty from this job's open weakness signals, weighted by decayed severity.
     const rawPenalty = blockingSignals.reduce((sum, signal) => sum + signal.severity * SIGNAL_PENALTY_PER_SEVERITY, 0);
@@ -199,7 +204,7 @@ export class CareerService {
     // lowest grounded percentage first (weight breaks ties).
     const weakestAreas = [...readiness.areas]
       .sort((left, right) =>
-        focusKeys.length > 0
+        companyWeighted
           ? this.focusDrag(right, focusAreas) - this.focusDrag(left, focusAreas)
           : left.percentage - right.percentage || right.totalWeight - left.totalWeight,
       )
@@ -316,7 +321,9 @@ export class CareerService {
 
       const roleTrackId = this.firstRoleTrack(company.roleTrackIds) ?? DEFAULT_JOB_ROLE_TRACK;
       const readiness = await trackReadiness(roleTrackId);
-      const fitScore = this.companyWeightedPercentage(readiness.areas, focusAreas);
+      // MOM-158: a company whose focus areas don't intersect its role track ranks on flat
+      // readiness rather than a false 0 fit that would bury it at the bottom of the shortlist.
+      const fitScore = this.companyWeightedPercentage(readiness.areas, focusAreas) ?? readiness.overallPercentage;
 
       const sponsorship = (company.sponsorshipStatus as VisaTag | null) ?? 'unknown';
       const sponsorshipMultiplier = SPONSORSHIP_FIT_MULTIPLIER[sponsorship];
@@ -384,9 +391,15 @@ export class CareerService {
 
   // MOM-122-followup: the focus-weighted mean of area percentages (over the areas
   // the company actually emphasizes), so "ready for Meta?" reflects Meta's bar.
-  private companyWeightedPercentage(areas: RoleAreaReadiness[], focusAreas: Record<string, number>): number {
+  // MOM-158: returns null — NOT 0 — when none of the company's focus areas intersect the role
+  // track's measured areas. A company's focusAreas (MOM-121 seed) is validated against
+  // CAREER_ROLE_AREA_IDS, but NOT against the chosen role track's checklist areas, so the two can
+  // be disjoint (a user tags a job with a track that doesn't cover what the company drills). When
+  // that happens there is no basis to weight, and returning a hard 0 was a bug: it reported a
+  // strong candidate as "0/100, not ready". Callers fall back to the flat overall percentage.
+  private companyWeightedPercentage(areas: RoleAreaReadiness[], focusAreas: Record<string, number>): number | null {
     const weightSum = areas.reduce((sum, area) => sum + (focusAreas[area.area] ?? 0), 0);
-    if (weightSum <= 0) return 0;
+    if (weightSum <= 0) return null;
     return Math.round(areas.reduce((sum, area) => sum + area.percentage * (focusAreas[area.area] ?? 0), 0) / weightSum);
   }
 

@@ -1,5 +1,32 @@
 # LOG
 
+## 2026-07-12 - MOM-158: the "am I ready?" verdict could report a false 0/100 (CLAUDE, no schema, bug fix)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Found by careful reading of the flagship readiness
+computation after the write-only-column sweep ran dry.
+
+**The bug.** `getJobReadiness` (the "am I ready for <company>?" verdict) weights the headline by the linked company's
+focus areas via `companyWeightedPercentage(areas, focusAreas)`. That function summed `focusAreas[area.area]` over the
+role track's areas and divided by it — but a company's `focusAreas` (MOM-121 seed) is validated against
+`CAREER_ROLE_AREA_IDS`, **not** against the chosen role track's checklist areas, so the two sets can be disjoint. When
+they are, `weightSum` is 0, and the old `if (weightSum <= 0) return 0` reported a **0/100, not_ready** verdict for a
+candidate who might be excellent — the emphasis simply didn't line up with the measured areas. The same false 0 fed
+`getTargetShortlist`, sinking such a company to the bottom of "where to apply next".
+
+**The fix.** `companyWeightedPercentage` now returns `null` for "no applicable weights", and both callers fall back to
+the flat overall percentage — exactly what the no-focus-areas path already did. The `weakestAreas` ordering had the
+same latent flaw (a disjoint emphasis makes every `focusDrag` 0, leaving the list unsorted), so it now keys off a
+`companyWeighted` flag and falls back to lowest-percentage ordering.
+
+**Reachability.** Not triggerable on pristine seed: every role track's areas include `dsa`, and every seed company's
+focus includes `dsa`, so there is always an intersection. It is a latent bug for **user-created** catalog data — a
+company a user adds with, say, `{cs_fundamentals: 5}` against a `big-tech-swe` job (no `cs_fundamentals` area).
+
+**Verified.** A counterfactual unit test (constructed to fail on the old `return 0` and pass on the fix — confirmed by
+temporarily reverting). 324 API tests, lint + typecheck clean. Live: forced the NVIDIA company's focus to `{behavioral:
+5}` (disjoint from its `hpc-gpu-engineer` track) → the NVIDIA job verdict was 34 (the flat mean) with sensible
+weakest-area fallback, not 0; restored the company's focus and confirmed the verdict returned to its baseline 50.
+
 ## 2026-07-12 - MOM-157: résumé drift enters the Today loop (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration.

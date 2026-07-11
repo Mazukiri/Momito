@@ -127,6 +127,30 @@ describe('CareerService.getJobReadiness — "am I ready?" verdict (MOM-130)', ()
     // dsa drags hardest for this company (5*(100-45)=275 > behavioral 1*(100-10)=90).
     expect(verdict.weakestAreas[0].area).toBe('dsa');
   });
+
+  // MOM-158 — a company's focusAreas is validated against CAREER_ROLE_AREA_IDS but NOT against
+  // the chosen role track's areas, so the two can be disjoint. Weighting over an empty
+  // intersection used to return 0 — reporting a strong candidate as "0/100, not ready".
+  it('falls back to the flat mean when the company\'s focus areas miss the role track entirely (MOM-158)', async () => {
+    const mastery = new Map<string, unknown>([
+      ['dsa', { area: 'dsa', retrievability: 0.9, reviewedCount: 3, gradedAttempts: 5, positiveAttempts: 5, score: 0.9 }],
+      ['system_design', { area: 'system_design', retrievability: 0.9, reviewedCount: 3, gradedAttempts: 5, positiveAttempts: 5, score: 0.9 }],
+    ]);
+    // cs_fundamentals is a valid area but NOT in the big-tech-swe track → zero intersection.
+    const disjointJob = { ...job, roleTrackId: 'big-tech-swe', companyRef: { focusAreas: { cs_fundamentals: 5 }, roleTrackIds: ['big-tech-swe'] } };
+    const service = buildService(mastery, {
+      prisma: { jobApplication: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(disjointJob) } },
+    });
+
+    const verdict = await service.getJobReadiness('job-1', 'user-1');
+
+    // NOT 0: the verdict is the flat overall percentage, and a genuinely strong candidate reads as such.
+    const flat = await buildService(mastery).getReadiness('big-tech-swe', 'user-1');
+    expect(verdict.score).toBe(flat.overallPercentage);
+    expect(verdict.score).toBeGreaterThan(0);
+    // weakestAreas fall back to lowest-percentage ordering, not the all-zero focusDrag no-op.
+    expect(verdict.weakestAreas.length).toBeGreaterThan(0);
+  });
 });
 
 describe('CareerService.getTargetShortlist — targeting shortlist (MOM-125)', () => {
