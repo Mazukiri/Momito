@@ -216,6 +216,19 @@ bullet (which it does — that is the form we show it) and the résumé carried 
 rewrites with `contentMd.replace(original, rewritten)`. Rewrites are now snapped back to the verbatim source line.
 310 API tests.
 
+### MOM-154 (2026-07-12) — `aiSuggestions` was a write-only column
+
+Pulling that thread found a second one. MOM-137 wrote rewrites to `ResumeVersion.aiSuggestions` "so the UI can
+accept/reject them across sessions"; the API serialized them; **the web page never read them.** A reload threw your
+suggestions away while they sat invisible in the DB, and nothing pruned an accepted one. Same dead-end shape as the
+MOM-146 Readwise ledger — *persisting* something is not *closing the loop on it*, and a comment saying "so the UI
+can…" is a claim, not a wire. Outstanding rewrites now come back with the résumé; accept applies the text and retires
+the suggestion in one write; reject persists immediately. 314 API tests.
+
+**If you are looking for the next thing:** this pair suggests a cheap, high-yield sweep — grep for other columns that
+are *written and serialized but never read by any client* (they are dead loops by definition). `Profile.rawCvText`,
+`ResumeVersion.baseProfileSnapshot`, and `Company.compBand` are the obvious candidates to check.
+
 ## If resuming autonomously
 
 The plan is done and the AI gate is closed, so the next step needs a signal from the owner. In rough order of value:

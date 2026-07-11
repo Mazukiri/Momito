@@ -5,6 +5,7 @@ import {
   ProfileEducationItem,
   ProfileExperienceItem,
   ProfileProjectItem,
+  ResumeBulletRewrite,
   ResumeVersionResponse,
 } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -78,6 +79,11 @@ export class ResumesService {
         ...(dto.targetRoleTrackId !== undefined && { targetRoleTrackId: dto.targetRoleTrackId }),
         ...(dto.jobApplicationId !== undefined && { jobApplicationId: dto.jobApplicationId }),
         ...(dto.contentMd !== undefined && { contentMd: dto.contentMd }),
+        // MOM-154: the user accepting or dismissing a rewrite is what retires it. Persisted
+        // with contentMd in the same write, so an applied rewrite can never come back.
+        ...(dto.aiSuggestions !== undefined && {
+          aiSuggestions: dto.aiSuggestions as unknown as Prisma.InputJsonValue,
+        }),
       },
     });
     if (result.count === 0) throw new NotFoundException('Résumé version not found');
@@ -165,10 +171,22 @@ export class ResumesService {
       label: version.label,
       targetRoleTrackId: (version.targetRoleTrackId as CareerRoleTrackId | null) ?? null,
       contentMd: version.contentMd,
-      aiSuggestions: Array.isArray(version.aiSuggestions) ? (version.aiSuggestions as unknown[]) : [],
+      aiSuggestions: this.asRewrites(version.aiSuggestions),
       createdAt: version.createdAt.toISOString(),
       updatedAt: version.updatedAt.toISOString(),
     };
+  }
+
+  // MOM-154. The response type promises ResumeBulletRewrite[]; the column is Json, so the
+  // promise is only worth something if we check it. Rows written before this shape existed —
+  // or by a future writer — are filtered out rather than shipped to the UI as garbage.
+  private asRewrites(value: Prisma.JsonValue): ResumeBulletRewrite[] {
+    if (!Array.isArray(value)) return [];
+    return (value as unknown[]).filter((item): item is ResumeBulletRewrite => {
+      if (typeof item !== 'object' || item === null || Array.isArray(item)) return false;
+      const row = item as Record<string, unknown>;
+      return typeof row.original === 'string' && typeof row.rewritten === 'string' && typeof row.rationale === 'string';
+    });
   }
 
   private asStringArray(value: Prisma.JsonValue): string[] {

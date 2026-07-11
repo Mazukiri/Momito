@@ -77,6 +77,59 @@ describe('ResumesService (MOM-133)', () => {
     await expect(service.create({ label: 'x', jobApplicationId: 'job-x', contentMd: '#' } as never, 'user-1')).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  // MOM-154 — MOM-137 wrote rewrites to aiSuggestions "so the UI can accept/reject them across
+  // sessions", but nothing ever read them back and nothing ever pruned an accepted one. The
+  // column was write-only: a reload lost your suggestions, and an applied rewrite would have
+  // come back from the dead.
+  it('persists the pruned suggestion list alongside the applied text (MOM-154)', async () => {
+    const remaining = [{ original: 'B.', rewritten: 'Better B.', rationale: 'Metric.' }];
+    const { service, prisma } = makeService({
+      resumeVersion: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findFirst: vi.fn().mockResolvedValue(versionRow({ aiSuggestions: remaining })),
+      },
+      jobApplication: { findFirst: vi.fn() },
+    });
+
+    const result = await service.update('rv-1', { contentMd: '# Applied', aiSuggestions: remaining } as never, 'user-1');
+
+    // one write: the accepted rewrite's text AND its retirement from the list
+    expect(prisma.resumeVersion.updateMany.mock.calls[0][0].data).toMatchObject({
+      contentMd: '# Applied',
+      aiSuggestions: remaining,
+    });
+    // and it comes back out, so a reload restores what is still outstanding
+    expect(result.aiSuggestions).toEqual(remaining);
+  });
+
+  it('leaves the suggestion list untouched when the caller does not send one (MOM-154)', async () => {
+    const { service, prisma } = makeService({
+      resumeVersion: { updateMany: vi.fn().mockResolvedValue({ count: 1 }), findFirst: vi.fn().mockResolvedValue(versionRow()) },
+      jobApplication: { findFirst: vi.fn() },
+    });
+
+    await service.update('rv-1', { label: 'Renamed' } as never, 'user-1');
+
+    expect(prisma.resumeVersion.updateMany.mock.calls[0][0].data).not.toHaveProperty('aiSuggestions');
+  });
+
+  // The column is Json — the response type's promise of ResumeBulletRewrite[] is only worth
+  // something if we check it, or the UI renders `undefined` at the user.
+  it('filters malformed suggestion rows out of the response (MOM-154)', async () => {
+    const good = { original: 'A.', rewritten: 'Better A.', rationale: 'Verb.' };
+    const { service } = makeService({
+      resumeVersion: {
+        findFirst: vi.fn().mockResolvedValue(
+          versionRow({ aiSuggestions: [good, null, 'nope', { original: 'A.' }, { original: 1, rewritten: 2, rationale: 3 }] }),
+        ),
+      },
+    });
+
+    const result = await service.get('rv-1', 'user-1');
+
+    expect(result.aiSuggestions).toEqual([good]);
+  });
+
   it('throws NotFound updating/removing a version that is not the user\'s', async () => {
     const upd = makeService({ resumeVersion: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) }, jobApplication: { findFirst: vi.fn() } });
     await expect(upd.service.update('missing', { label: 'x' } as never, 'user-1')).rejects.toBeInstanceOf(NotFoundException);

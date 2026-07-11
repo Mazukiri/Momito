@@ -876,7 +876,8 @@ export interface ResumeVersionResponse {
   label: string;
   targetRoleTrackId: CareerRoleTrackId | null;
   contentMd: string;
-  aiSuggestions: unknown[];
+  /** MOM-137/154: the AI's outstanding bullet rewrites — what the user has not yet accepted or dismissed. */
+  aiSuggestions: ResumeBulletRewrite[];
   createdAt: string;
   updatedAt: string;
 }
@@ -894,6 +895,8 @@ export interface UpdateResumeVersionRequest {
   targetRoleTrackId?: CareerRoleTrackId | null;
   jobApplicationId?: string | null;
   contentMd?: string;
+  /** MOM-154: the rewrites still outstanding — sent when the user accepts or rejects one. */
+  aiSuggestions?: ResumeBulletRewrite[];
 }
 
 export interface UpdateProfileRequest {

@@ -1,5 +1,34 @@
 # LOG
 
+## 2026-07-12 - MOM-154: aiSuggestions was a write-only column (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Found while shipping MOM-153.
+
+**The bug.** MOM-137's own comment says rewrites are persisted to `ResumeVersion.aiSuggestions` "so the UI can
+accept/reject them across sessions". The orchestrator wrote them. The service serialized them. **The web page never
+read them.** So a page reload threw your suggestions away while they sat in the database, invisible — and nothing
+ever pruned an accepted one, so had anything loaded them, an applied rewrite would have come back from the dead.
+This is the same dead-end shape as the MOM-146 Readwise ledger: captured, stored, never resurfaced. The lesson keeps
+repeating — *persisting* something is not the same as *closing the loop on it*, and a comment saying "so the UI can…"
+is a claim, not a wire.
+
+**The fix.** Outstanding rewrites are restored with the résumé (on both the initial load and every version switch).
+Accepting one applies the text and prunes the list in a **single** `PATCH` — so the applied rewrite cannot resurface.
+Rejecting one persists immediately and sends *only* `aiSuggestions`, so an unsaved draft edit is left alone. The
+update DTO validates each rewrite (nested, max 50) instead of accepting an opaque Json blob, and the serializer
+filters malformed rows, because the response type promises `ResumeBulletRewrite[]` and the column is `Json` — a
+promise worth nothing unless something checks it.
+
+**Also closed the user-side half of MOM-153's silent-no-op.** MOM-153 fixed the *model-side* cause (a paraphrased
+`original` that `contentMd.replace()` could never match). The other cause is the user: accept a rewrite whose bullet
+you have since edited out of the draft, and the replace is still a no-op. It now says so and **keeps** the
+suggestion, rather than retiring a button press that changed nothing.
+
+**Verified:** 314 API tests (+4), 26 web tests, lint + typecheck clean. Live: a rewrite of a 2-bullet résumé returned
+2 suggestions, both survived a plain `GET` (both verbatim-applicable); accept → the rewritten text is in `contentMd`,
+the suggestion is gone and does not return on reload, the other is still waiting; reject → gone, `contentMd`
+untouched; a malformed rewrite row → 400 from the DTO. Test rows deleted afterwards.
+
 ## 2026-07-12 - MOM-153: the rewrite catches up with the critique, and "Accept" stops lying (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Self-selected: the plan's backlog is closed, and this

@@ -26,6 +26,7 @@ export default function ResumesPage() {
   const [jobs, setJobs] = useState<JobApplicationResponse[]>([]);
   const [targetJobId, setTargetJobId] = useState('');
   const [themeMsg, setThemeMsg] = useState('');
+  const [rewriteMsg, setRewriteMsg] = useState(''); // MOM-154: accept/reject feedback
   // MOM-152: which résumé actually converts. MOM-145's funnel already computes this per
   // version label — surfacing it here closes the loop: analyse → rewrite → send → measure.
   const [performance, setPerformance] = useState<JobFunnelBreakdownRow[]>([]);
@@ -51,6 +52,7 @@ export default function ResumesPage() {
         setSelectedId(list[0].id);
         setDraft(list[0].contentMd);
         setDraftLabel(list[0].label);
+        setRewrites(list[0].aiSuggestions.length > 0 ? list[0].aiSuggestions : null); // MOM-154
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load résumés');
@@ -71,9 +73,12 @@ export default function ResumesPage() {
     setAts(null);
     setAtsMsg('');
     setAnalysis(null);
-    setRewrites(null);
+    // MOM-154: the AI's rewrites are stored on the version (MOM-137 writes them there), so a
+    // reload no longer throws them away — outstanding suggestions come back with the résumé.
+    setRewrites(version.aiSuggestions.length > 0 ? version.aiSuggestions : null);
     setCoverLetter(null);
     setAiReason('');
+    setRewriteMsg('');
   }
 
   async function checkAts() {
@@ -123,7 +128,13 @@ export default function ResumesPage() {
     setSaving(true);
     setError('');
     try {
-      await resumesApi.update(selectedId, { label: draftLabel.trim(), contentMd: draft });
+      // MOM-154: the applied text and the shrunken suggestion list are one write — so an
+      // accepted rewrite can never resurface, and an unsaved one is not lost.
+      await resumesApi.update(selectedId, {
+        label: draftLabel.trim(),
+        contentMd: draft,
+        aiSuggestions: rewrites ?? [],
+      });
       await load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save résumé');
@@ -139,6 +150,7 @@ export default function ResumesPage() {
     if (kind !== 'analyze' && !hasTarget) return;
     setAiBusy(true);
     setAiReason('');
+    setRewriteMsg('');
     setError('');
     try {
       // MOM-153: a rewrite/cover letter takes the pasted JD if there is one, else the JD already
@@ -178,9 +190,31 @@ export default function ResumesPage() {
 
   // Accepting a rewrite is deterministic and local: swap the original bullet for
   // the rewritten one in the draft, then Save persists it.
+  // MOM-154: if the bullet is no longer in the draft (the user edited it since), the swap would
+  // be a no-op — so say so and KEEP the suggestion, instead of quietly retiring a button press
+  // that changed nothing. (MOM-153 fixed the model-side cause; this is the user-side one.)
   function acceptRewrite(rewrite: ResumeBulletRewrite) {
-    setDraft((current) => (current.includes(rewrite.original) ? current.replace(rewrite.original, rewrite.rewritten) : current));
+    if (!draft.includes(rewrite.original)) {
+      setRewriteMsg('That bullet is no longer in the draft — re-run the rewrite to refresh it.');
+      return;
+    }
+    setDraft(draft.replace(rewrite.original, rewrite.rewritten));
     setRewrites((current) => (current ?? []).filter((item) => item.original !== rewrite.original));
+    setRewriteMsg('Applied to the draft — press Save to keep it.');
+  }
+
+  // MOM-154: rejecting is a decision, not a UI toggle — persist it, or the suggestion returns
+  // on the next load. Only aiSuggestions is sent, so an unsaved draft edit is left alone.
+  async function rejectRewrite(rewrite: ResumeBulletRewrite) {
+    const next = (rewrites ?? []).filter((item) => item.original !== rewrite.original);
+    setRewrites(next.length > 0 ? next : null);
+    setRewriteMsg('');
+    if (!selectedId) return;
+    try {
+      await resumesApi.update(selectedId, { aiSuggestions: next });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to dismiss the suggestion');
+    }
   }
 
   async function download(id: string, format: 'md' | 'pdf') {
@@ -365,11 +399,12 @@ export default function ResumesPage() {
                         <p className="mt-0.5 text-zinc-500">{item.rationale}</p>
                         <div className="mt-1.5 flex gap-2">
                           <button onClick={() => acceptRewrite(item)} className="rounded-md bg-indigo-600 px-2 py-1 text-[11px] font-medium text-white">Accept</button>
-                          <button onClick={() => setRewrites((current) => (current ?? []).filter((r) => r.original !== item.original))} className="rounded-md border border-zinc-300 px-2 py-1 text-[11px] text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">Reject</button>
+                          <button onClick={() => rejectRewrite(item)} className="rounded-md border border-zinc-300 px-2 py-1 text-[11px] text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">Reject</button>
                         </div>
                       </div>
                     ))}
-                    <p className="text-zinc-400">Accepting patches the draft above — press Save to keep it.</p>
+                    {rewriteMsg && <p className="text-emerald-700 dark:text-emerald-400">{rewriteMsg}</p>}
+                    <p className="text-zinc-400">Accepting patches the draft above — press Save to keep it. Suggestions are stored with the résumé, so they survive a reload.</p>
                   </div>
                 )}
 
