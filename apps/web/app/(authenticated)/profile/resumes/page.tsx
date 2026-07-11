@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { CAREER_ROLE_TRACKS, type AtsCoverageResponse, type CareerRoleTrackId, type CoverLetterDraftResult, type JobApplicationResponse, type JobFunnelBreakdownRow, type ResumeAnalysisResult, type ResumeBulletRewrite, type ResumeDriftResponse, type ResumeVersionResponse } from '@momito/shared';
 import { jobsApi, profileScoresApi, resumesApi } from '../../../lib/api-client';
 import { Card, EmptyState, ErrorBanner, Spinner } from '../../../components/ui';
 
 export default function ResumesPage() {
+  const wantVersionId = useSearchParams().get('v') ?? undefined; // MOM-157: deep-link target
   const [versions, setVersions] = useState<ResumeVersionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -60,18 +62,21 @@ export default function ResumesPage() {
       setJobs(jobList);
       setPerformance(funnel.byResumeVersion);
       if (list.length > 0 && selectedId === null) {
-        setSelectedId(list[0].id);
-        setDraft(list[0].contentMd);
-        setDraftLabel(list[0].label);
-        setRewrites(list[0].aiSuggestions.length > 0 ? list[0].aiSuggestions : null); // MOM-154
-        void loadDrift(list[0].id); // MOM-155
+        // MOM-157: a Today drift card deep-links `?v=<id>` to land on the exact stale version;
+        // fall back to the first version when the param is absent or points at a deleted one.
+        const initial = list.find((v) => v.id === wantVersionId) ?? list[0];
+        setSelectedId(initial.id);
+        setDraft(initial.contentMd);
+        setDraftLabel(initial.label);
+        setRewrites(initial.aiSuggestions.length > 0 ? initial.aiSuggestions : null); // MOM-154
+        void loadDrift(initial.id); // MOM-155
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load résumés');
     } finally {
       setLoading(false);
     }
-  }, [selectedId, loadDrift]);
+  }, [selectedId, loadDrift, wantVersionId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard data load

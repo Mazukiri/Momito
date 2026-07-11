@@ -339,7 +339,8 @@ export class RecommendationsService {
           : RECOMMENDATION_REASONS.resumeDrift(topDrift.label, topDrift.missingCount),
         roleTrackId: null,
         area: null,
-        targetHref: '/profile/resumes',
+        // MOM-157: deep-link straight to the stale version, not the résumé list.
+        targetHref: `/profile/resumes?v=${topDrift.id}`,
         // pre-send sits between deadlines (90) and stalls (68) — act before you apply;
         // informational drift ranks below routine study, a background reminder.
         priority: preSendCompany ? 74 : 45,

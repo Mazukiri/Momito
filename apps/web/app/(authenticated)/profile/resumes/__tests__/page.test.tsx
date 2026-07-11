@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import ResumesPage from '../page';
 import { jobsApi, profileScoresApi, resumesApi } from '../../../../lib/api-client';
 
+let searchParams = new URLSearchParams();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => searchParams,
 }));
 
 // The bullet carries the double spaces a PDF-extracted résumé really has — the exact case in
@@ -97,6 +99,30 @@ describe('ResumesPage — AI suggestions (MOM-153/154)', () => {
 
     await waitFor(() => expect(update).toHaveBeenCalledWith('rv-1', { aiSuggestions: [] }));
     expect(screen.queryByText(REWRITE.rewritten)).not.toBeInTheDocument();
+  });
+});
+
+describe('ResumesPage — deep-link (MOM-157)', () => {
+  afterEach(() => { vi.restoreAllMocks(); searchParams = new URLSearchParams(); });
+
+  it('selects the version named by ?v= instead of the first one', async () => {
+    searchParams = new URLSearchParams('v=rv-2');
+    mockPage({ versions: [version({ id: 'rv-1', label: 'First' }), version({ id: 'rv-2', label: 'Deep-linked', contentMd: '# The linked one' })] });
+
+    render(<ResumesPage />);
+
+    // the editor loads the deep-linked version's content, not the first version's
+    await waitFor(() => expect(screen.getByDisplayValue('Deep-linked')).toBeInTheDocument());
+    expect(screen.getByDisplayValue(/The linked one/)).toBeInTheDocument();
+  });
+
+  it('falls back to the first version when ?v= points at a deleted one', async () => {
+    searchParams = new URLSearchParams('v=gone');
+    mockPage({ versions: [version({ id: 'rv-1', label: 'First' })] });
+
+    render(<ResumesPage />);
+
+    await waitFor(() => expect(screen.getByDisplayValue('First')).toBeInTheDocument());
   });
 });
 

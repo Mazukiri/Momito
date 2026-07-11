@@ -13,7 +13,8 @@ one page that must stay fast).
 The ranking is the design. A stale version **linked to a job still in `saved`** is fixable before you apply — the exact
 moment the nudge earns an interruption — so it lands at **priority 74**, between application deadlines (90) and stalls
 (68), with copy that names the company. Any other drift is a background reminder at **45**, below routine study. Only the
-single most-drifted version surfaces; the rest would be noise.
+single most-drifted version surfaces; the rest would be noise. The card deep-links `?v=<id>` so tapping it lands on the
+exact stale version (the page reads the param on load, falling back to the first version if it is absent or stale).
 
 **Verified:** 323 API tests (+6, four of them the new drift cases: pre-send urgency, informational fallback, only-one-
 surfaces, none-when-clean), lint + typecheck clean. Live against local Postgres: a version linked to the saved NVIDIA

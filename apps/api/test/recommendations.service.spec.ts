@@ -277,7 +277,7 @@ describe('RecommendationsService — résumé drift (MOM-157)', () => {
       type: 'profile',
       title: 'Refresh your "Big-tech v2" résumé before applying to NVIDIA',
       priority: 74, // between deadlines (90) and stalls (68) — act before you send
-      targetHref: '/profile/resumes',
+      targetHref: '/profile/resumes?v=rv-1', // deep-links to the stale version
     });
     expect(card?.reason).toContain('you have not applied to yet');
   });
