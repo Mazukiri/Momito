@@ -8,7 +8,19 @@ import type {
 } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { BudgetService } from './budget.service';
-import { AiOutcome, AnalyzeContext, ResumeAiService } from './resume-ai.service';
+import { AiOutcome, ResumeAiService, TailorContext } from './resume-ai.service';
+
+// MOM-153: what the rewrite/cover-letter routes accept — a pasted JD, a tracked application, or
+// neither (fall back to the job this version is linked to).
+export interface TailorRequest {
+  jdText?: string;
+  jobApplicationId?: string;
+}
+
+const NO_JD = {
+  ok: false as const,
+  reason: 'No job description to tailor against — paste one, or pick an application that already has a JD saved.',
+};
 
 // MOM-136/137/138: orchestration for résumé AI — mirrors AiService.gradeAttempt.
 // Availability first (dormant-until-key → {ok:false}, never a throw), then the
@@ -31,27 +43,34 @@ export class ResumeAiOrchestrator {
   // sent them"), so a targeted analysis is the default rather than something to opt into.
   async analyze(versionId: string, userId: string, jobApplicationId?: string): Promise<ResumeAiEnvelope<ResumeAnalysisResult>> {
     return this.withVersion(versionId, userId, async (version) => {
-      const jobId = jobApplicationId ?? version.jobApplicationId;
-      const [job, evidence] = await Promise.all([
-        jobId ? this.loadJob(jobId, userId) : Promise.resolve(null),
-        this.loadEvidence(userId),
-      ]);
-      return this.resumeAi.analyze(version.contentMd, {
-        targetRoleTrackId: version.targetRoleTrackId,
-        job,
-        evidence,
-      });
+      const context = await this.loadContext(userId, jobApplicationId ?? version.jobApplicationId, version);
+      return this.resumeAi.analyze(version.contentMd, context);
     });
   }
 
-  private async loadJob(jobApplicationId: string, userId: string): Promise<AnalyzeContext['job']> {
+  // MOM-153: one context loader for all three tools. A rewrite and a cover letter need the
+  // target and the evidence exactly as much as a critique does; before this, only analyze got them.
+  private async loadContext(
+    userId: string,
+    jobId: string | null | undefined,
+    version: { targetRoleTrackId: string | null },
+  ): Promise<TailorContext> {
+    const [job, evidence] = await Promise.all([
+      jobId ? this.loadJob(jobId, userId) : Promise.resolve(null),
+      this.loadEvidence(userId),
+    ]);
+    return { targetRoleTrackId: version.targetRoleTrackId, job, evidence };
+  }
+
+  private async loadJob(jobApplicationId: string, userId: string): Promise<TailorContext['job']> {
     const job = await this.prisma.jobApplication.findFirst({
       where: { id: jobApplicationId, userId },
       select: {
         company: true,
         roleTitle: true,
         jdText: true,
-        companyRef: { select: { name: true, focusAreas: true } },
+        visaTag: true,
+        companyRef: { select: { name: true, focusAreas: true, sponsorshipStatus: true } },
       },
     });
     if (!job) throw new NotFoundException('Job application not found');
@@ -61,12 +80,14 @@ export class ResumeAiOrchestrator {
       jdText: job.jdText,
       // company focus weights (MOM-121) tell the model what this employer actually cares about
       focusAreas: Object.keys((job.companyRef?.focusAreas ?? {}) as Record<string, number>),
+      // MOM-153: the catalog's researched posture wins; the application's own tag is the fallback.
+      sponsorship: job.companyRef?.sponsorshipStatus ?? job.visaTag ?? null,
     };
   }
 
   // The profile is the master record (D-014); the résumé is a derived artifact. Feeding the
   // profile back in is what lets a suggestion name a real number instead of a placeholder.
-  private async loadEvidence(userId: string): Promise<AnalyzeContext['evidence']> {
+  private async loadEvidence(userId: string): Promise<TailorContext['evidence']> {
     const profile = await this.prisma.profile.findUnique({
       where: { userId },
       select: { skills: true, projects: true, experience: true },
@@ -119,10 +140,12 @@ export class ResumeAiOrchestrator {
     return { created: result.count };
   }
 
-  async rewrite(versionId: string, userId: string, jdText: string): Promise<ResumeAiEnvelope<ResumeRewriteResult>> {
-    const outcome = await this.withVersion(versionId, userId, (version) =>
-      this.resumeAi.rewriteBullets(version.contentMd, jdText),
-    );
+  async rewrite(versionId: string, userId: string, dto: TailorRequest): Promise<ResumeAiEnvelope<ResumeRewriteResult>> {
+    const outcome = await this.withVersion(versionId, userId, async (version) => {
+      const { context, jdText } = await this.resolveTarget(userId, dto, version);
+      if (!jdText) return NO_JD;
+      return this.resumeAi.rewriteBullets(version.contentMd, jdText, context);
+    });
     // MOM-137: suggestions live on the version so the UI can accept/reject them
     // across sessions ("accept" = the client replaces original→rewritten in contentMd).
     if (outcome.ok) {
@@ -134,8 +157,24 @@ export class ResumeAiOrchestrator {
     return outcome;
   }
 
-  async coverLetter(versionId: string, userId: string, jdText: string): Promise<ResumeAiEnvelope<CoverLetterDraftResult>> {
-    return this.withVersion(versionId, userId, (version) => this.resumeAi.draftCoverLetter(version.contentMd, jdText));
+  async coverLetter(versionId: string, userId: string, dto: TailorRequest): Promise<ResumeAiEnvelope<CoverLetterDraftResult>> {
+    return this.withVersion(versionId, userId, async (version) => {
+      const { context, jdText } = await this.resolveTarget(userId, dto, version);
+      if (!jdText) return NO_JD;
+      return this.resumeAi.draftCoverLetter(version.contentMd, jdText, context);
+    });
+  }
+
+  // MOM-153. A pasted JD wins (it is what the user is looking at right now); otherwise reuse the
+  // JD already stored on the targeted — or linked — application, so a JD captured once in the
+  // pipeline never has to be pasted again.
+  private async resolveTarget(
+    userId: string,
+    dto: TailorRequest,
+    version: { targetRoleTrackId: string | null; jobApplicationId: string | null },
+  ): Promise<{ context: TailorContext; jdText: string | null }> {
+    const context = await this.loadContext(userId, dto.jobApplicationId ?? version.jobApplicationId, version);
+    return { context, jdText: dto.jdText?.trim() || context.job?.jdText || null };
   }
 
   // Availability → version → budget → call → record. The AI-unavailable path never

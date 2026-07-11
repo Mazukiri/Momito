@@ -1,5 +1,44 @@
 # LOG
 
+## 2026-07-12 - MOM-153: the rewrite catches up with the critique, and "Accept" stops lying (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Self-selected: the plan's backlog is closed, and this
+was the largest *inconsistency* left inside the feature the owner last asked me to improve.
+
+**The gap.** MOM-149/150 taught `analyze` to hold a target in mind (the application's JD + the company's focus areas)
+and to ground its suggestions in the user's profile. `rewrite` and `coverLetter` never got either. They took a
+hand-pasted `jdText` and nothing else — so the tool that *writes the words* was working from a strictly weaker brief
+than the tool that merely criticises them, on the very same bullets. Worse, the JD was usually already in the
+pipeline: the user had to re-paste, by hand, text the app was already storing on the application.
+
+All three now share one `TailorContext` and one `loadContext()`. `jdText` became optional: a pasted JD wins (it is what
+you are looking at right now), otherwise the JD stored on the targeted — or merely *linked* — application is used. With
+no JD anywhere the call returns `{ok:false}` **before the model call**, so the refusal is free (live: `ai/usage` sat at
+9 requests / $0.2318 across it). The `/profile/resumes` job select now drives all three tools instead of just the
+critique.
+
+**The bug this turned up.** The UI applies a rewrite with `contentMd.replace(original, rewritten)`. But we show the
+model *normalized* bullets (whitespace collapsed — a PDF-extracted résumé is full of double spaces), and a model
+returns what it was shown. So `original` was frequently **not a substring of the draft**, and `acceptRewrite`'s
+`includes(...) ? replace : current` quietly took the else branch: the suggestion vanished from the list and the résumé
+was unchanged. A button that reports success and does nothing. Rewrites are now snapped back to the verbatim source
+line by matching on the normalized form; a rewrite matching no bullet at all is **dropped** rather than offered as a
+dead Accept. Live proof on a deliberately double-spaced bullet: `original` came back with its irregular spacing intact
+and `in-source: True`, while the normalized form the model would otherwise have returned was `in-source: False`.
+
+**Sponsorship.** The cover letter's visa paragraph was being written blind, even though the pipeline knows the
+employer's posture (`Company.sponsorshipStatus`, falling back to the application's own `visaTag`). It now gets three
+distinct framings — and the `not_sponsoring` case is explicitly told not to paper over it, nor to claim work
+authorisation the résumé does not evidence. Also fixed a contradiction this exposed: the cover-letter system prompt
+said "ground every claim in the résumé" while we now feed it profile evidence the résumé omits; it says what it means
+now (résumé *or* supplied evidence, never outside both).
+
+**Verified:** 310 API tests (+8), 26 web tests, lint + typecheck clean on both apps. Live against local Postgres with
+a real key: `POST /resumes/:id/ai/rewrite` with a body of literally `{}` pulled the JD from the linked NVIDIA
+application and returned an applicable rewrite in 12s; the cover letter (21s) drew on profile evidence the 2-bullet
+test résumé never mentioned, and its visa paragraph was brief and matter-of-fact, as instructed for a known sponsor.
+All test rows deleted afterwards (résumé versions back to 0).
+
 ## 2026-07-11 - MOM-151/152: résumé findings become actions, and get measured (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Completes the five improvements the owner asked for

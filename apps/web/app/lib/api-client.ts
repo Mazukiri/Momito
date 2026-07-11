@@ -588,11 +588,14 @@ export const resumesApi = {
       body: JSON.stringify({ themes }),
     }),
 
-  aiRewrite: (id: string, jdText: string) =>
-    request<ResumeAiEnvelope<ResumeRewriteResult>>(`/resumes/${id}/ai/rewrite`, { method: 'POST', body: JSON.stringify({ jdText }) }),
+  // MOM-153: both take a pasted JD *or* a jobApplicationId whose stored JD (plus that company's
+  // focus areas and sponsorship posture) is used instead — so a JD captured once in the pipeline
+  // never has to be re-pasted. Neither → the API falls back to the job this version is linked to.
+  aiRewrite: (id: string, target: { jdText?: string; jobApplicationId?: string }) =>
+    request<ResumeAiEnvelope<ResumeRewriteResult>>(`/resumes/${id}/ai/rewrite`, { method: 'POST', body: JSON.stringify(target) }),
 
-  aiCoverLetter: (id: string, jdText: string) =>
-    request<ResumeAiEnvelope<CoverLetterDraftResult>>(`/resumes/${id}/ai/cover-letter`, { method: 'POST', body: JSON.stringify({ jdText }) }),
+  aiCoverLetter: (id: string, target: { jdText?: string; jobApplicationId?: string }) =>
+    request<ResumeAiEnvelope<CoverLetterDraftResult>>(`/resumes/${id}/ai/cover-letter`, { method: 'POST', body: JSON.stringify(target) }),
 
   // MOM-139: fetch the export with the auth header (a plain <a href> can't send
   // the Bearer token), then trigger a browser download of the returned blob.

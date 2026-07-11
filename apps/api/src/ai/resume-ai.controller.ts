@@ -35,14 +35,16 @@ export class ResumeAiController {
   }
 
   // MOM-137: JD-tailored bullet rewrites; persisted to the version's aiSuggestions.
+  // MOM-153: the JD may be pasted OR taken from the targeted/linked application.
   @Post('rewrite')
   rewrite(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ResumeAiJdDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.orchestrator.rewrite(id, user.id, dto.jdText);
+    return this.orchestrator.rewrite(id, user.id, dto);
   }
 
   // MOM-138: cover-letter draft grounded in this version, with a visa-framing paragraph.
+  // MOM-153: the visa paragraph is calibrated to the employer's known sponsorship posture.
   @Post('cover-letter')
   coverLetter(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ResumeAiJdDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.orchestrator.coverLetter(id, user.id, dto.jdText);
+    return this.orchestrator.coverLetter(id, user.id, dto);
   }
 }

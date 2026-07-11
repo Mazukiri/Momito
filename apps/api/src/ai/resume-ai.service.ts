@@ -15,12 +15,21 @@ export type AiOutcome<T> =
   | { ok: true; result: T; inputTokens: number; outputTokens: number; model: string }
   | { ok: false; reason: string };
 
-// MOM-149/150: what the analysis is aimed at, and what evidence it may ground suggestions in.
+// MOM-149/150/153: what the work is aimed at, and what evidence it may ground suggestions in.
 // Without a target the model can only give generic advice; without the profile it can only
 // say "add a metric" instead of naming a metric the candidate has already claimed elsewhere.
-export interface AnalyzeContext {
+// MOM-153 shares this across all three tools — a rewrite and a cover letter need the target
+// at least as badly as a critique does.
+export interface TailorContext {
   targetRoleTrackId: string | null;
-  job?: { company: string; role: string; jdText: string | null; focusAreas: string[] } | null;
+  job?: {
+    company: string;
+    role: string;
+    jdText: string | null;
+    focusAreas: string[];
+    // VISA_TAGS value from the linked company (or the application's own tag); null = unknown.
+    sponsorship: string | null;
+  } | null;
   evidence?: { skills: string[]; projects: string[]; experience: string[] } | null;
 }
 
@@ -41,11 +50,17 @@ Critique substance only. The résumé may carry spacing or punctuation artifacts
 
 const REWRITE_SYSTEM = `You rewrite résumé bullets to be stronger and tailored to a specific job description.
 Keep every claim truthful to the original — sharpen the verb, surface measurable impact the original implies, and
-match the seniority the role expects. Never fabricate metrics or responsibilities that are not in the original.`;
+match the seniority the role expects. Never fabricate metrics or responsibilities that are not in the original.
+
+The bullets are enumerated for you. Copy \`original\` VERBATIM from that list, character for character — the client
+matches it against the résumé text to apply your rewrite, so a paraphrased \`original\` is a rewrite that silently
+does nothing. Rewrite only the bullets that are genuinely worth improving; skip the ones that are already strong.`;
 
 const COVER_LETTER_SYSTEM = `You draft a concise, specific cover letter from a résumé and a job description.
-Ground every claim in the résumé. Keep it under ~300 words, professional and warm, no clichés. Provide a separate,
-optional paragraph that frames the candidate's visa/sponsorship situation positively.`;
+Ground every claim in the résumé, or in the candidate's profile evidence when it is supplied — a cover letter may
+draw on real experience the résumé had no room for, but it may never claim anything absent from both. Keep it under
+~300 words, professional and warm, no clichés. Provide a separate paragraph framing the candidate's visa situation,
+calibrated to the employer's sponsorship posture below.`;
 
 // MOM-136/137/138: résumé AI, dormant-until-key — mirrors GradingService exactly.
 // With no ANTHROPIC_API_KEY every method returns a structured {ok:false} instead
@@ -75,18 +90,32 @@ export class ResumeAiService {
   // Bullets are found here, in code — not left to the model to decide what counts as one.
   // Weaker/cheaper models silently critique only a handful of bullets when asked to "review
   // the résumé"; enumerating them and demanding one entry each makes coverage deterministic.
-  static extractBullets(contentMd: string): string[] {
-    const bullets: string[] = [];
+  //
+  // `raw` is the bullet exactly as it appears in contentMd (marker stripped, inner spacing
+  // untouched) — that is what a client can match+replace against. `norm` collapses whitespace,
+  // which is what we show the model and compare against: a PDF-extracted résumé is full of
+  // double spaces the model will not reproduce, and prompts are lossy anyway.
+  private static bulletEntries(contentMd: string): { raw: string; norm: string }[] {
+    const entries: { raw: string; norm: string }[] = [];
     for (const line of contentMd.split('\n')) {
-      const stripped = line.trim().replace(/^[-*•·●]\s+/, '');
-      if (stripped === line.trim()) continue; // not a bullet line
-      const text = stripped.replace(/\s+/g, ' ').trim();
-      if (text.length > 15) bullets.push(text);
+      const trimmed = line.trim();
+      const raw = trimmed.replace(/^[-*•·●]\s+/, '');
+      if (raw === trimmed) continue; // not a bullet line
+      const norm = ResumeAiService.normalize(raw);
+      if (norm.length > 15) entries.push({ raw, norm });
     }
-    return bullets;
+    return entries;
   }
 
-  async analyze(contentMd: string, context: AnalyzeContext): Promise<AiOutcome<ResumeAnalysis>> {
+  private static normalize(text: string): string {
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
+  static extractBullets(contentMd: string): string[] {
+    return ResumeAiService.bulletEntries(contentMd).map((entry) => entry.norm);
+  }
+
+  async analyze(contentMd: string, context: TailorContext): Promise<AiOutcome<ResumeAnalysis>> {
     const bullets = ResumeAiService.extractBullets(contentMd);
     if (bullets.length === 0) {
       return { ok: false, reason: 'This résumé version has no bullet points to analyse yet.' };
@@ -131,31 +160,43 @@ export class ResumeAiService {
     return Array.from({ length: total }, (_, i) => i).filter((i) => !seen.has(i));
   }
 
-  private analyzeUser(contentMd: string, bullets: string[], ctx: AnalyzeContext, repairOnly: number[] | null): string {
+  // MOM-149 → MOM-153: the target block. A critique, a rewrite and a cover letter are all only
+  // as good as the target the writer holds in mind, so all three get this — not just analyze.
+  private targetBlock(ctx: TailorContext, jdText: string | null): string[] {
     const parts: string[] = [];
-
     if (ctx.job) {
-      // MOM-149: a recruiter's critique is only as good as the target they hold in mind.
-      parts.push(`## The job this résumé is aimed at`, `${ctx.job.role} at ${ctx.job.company}`);
+      parts.push('## The job this résumé is aimed at', `${ctx.job.role} at ${ctx.job.company}`);
       if (ctx.job.focusAreas.length > 0) {
         parts.push(`This company weights these areas most: ${ctx.job.focusAreas.join(', ')}.`);
       }
-      if (ctx.job.jdText) parts.push('', '### Job description', ctx.job.jdText);
-      parts.push('', 'Judge every bullet against THIS job — relevance to it is part of the score.');
     } else {
       parts.push(
         '## Target role',
         ctx.targetRoleTrackId ?? '(no specific target given — judge for a strong generalist SWE role)',
       );
     }
+    if (jdText) parts.push('', '### Job description', jdText);
+    return parts;
+  }
 
-    if (ctx.evidence && (ctx.evidence.skills.length || ctx.evidence.projects.length || ctx.evidence.experience.length)) {
-      // MOM-150: without this the model can only say "add a metric" — it cannot know one. With it,
-      // it can point at a number the candidate has already claimed elsewhere in their profile.
-      parts.push('', '## What this candidate has actually done (from their profile — NOT on the résumé yet)');
-      if (ctx.evidence.skills.length) parts.push(`Skills: ${ctx.evidence.skills.join(', ')}`);
-      for (const e of ctx.evidence.experience) parts.push(`- Experience: ${e}`);
-      for (const p of ctx.evidence.projects) parts.push(`- Project: ${p}`);
+  // MOM-150 → MOM-153: without this the model can only say "add a metric" — it cannot know one.
+  // With it, it can point at a number the candidate has already claimed elsewhere in their profile.
+  private evidenceBlock(ctx: TailorContext): string[] {
+    const evidence = ctx.evidence;
+    if (!evidence || !(evidence.skills.length || evidence.projects.length || evidence.experience.length)) return [];
+    const parts = ['', '## What this candidate has actually done (from their profile — NOT on the résumé yet)'];
+    if (evidence.skills.length) parts.push(`Skills: ${evidence.skills.join(', ')}`);
+    for (const e of evidence.experience) parts.push(`- Experience: ${e}`);
+    for (const p of evidence.projects) parts.push(`- Project: ${p}`);
+    return parts;
+  }
+
+  private analyzeUser(contentMd: string, bullets: string[], ctx: TailorContext, repairOnly: number[] | null): string {
+    const parts = this.targetBlock(ctx, ctx.job?.jdText ?? null);
+    if (ctx.job) parts.push('', 'Judge every bullet against THIS job — relevance to it is part of the score.');
+
+    parts.push(...this.evidenceBlock(ctx));
+    if (ctx.evidence) {
       parts.push(
         '',
         'When a bullet lacks a metric or scope, prefer a suggestion grounded in the evidence above over a',
@@ -179,14 +220,76 @@ export class ResumeAiService {
     return parts.join('\n');
   }
 
-  async rewriteBullets(contentMd: string, jdText: string): Promise<AiOutcome<BulletRewrite>> {
-    const user = ['## Job description', jdText, '', '## Résumé (Markdown)', contentMd].join('\n');
-    return this.run(REWRITE_SYSTEM, user, BulletRewriteSchema);
+  async rewriteBullets(contentMd: string, jdText: string, ctx: TailorContext): Promise<AiOutcome<BulletRewrite>> {
+    const entries = ResumeAiService.bulletEntries(contentMd);
+    if (entries.length === 0) {
+      return { ok: false, reason: 'This résumé version has no bullet points to rewrite yet.' };
+    }
+
+    const parts = this.targetBlock(ctx, jdText);
+    parts.push(...this.evidenceBlock(ctx));
+    if (ctx.evidence) {
+      parts.push(
+        '',
+        'A rewrite may surface a metric or scope from the evidence above if it plainly describes the same work.',
+        'It may never introduce a number that appears in neither the bullet nor the evidence.',
+      );
+    }
+    parts.push(
+      '',
+      '## Résumé (Markdown)',
+      contentMd,
+      '',
+      '## The bullets you may rewrite — copy `original` verbatim from this list',
+      ...entries.map((e, i) => `${i}. ${e.norm}`),
+    );
+
+    const outcome = await this.run<BulletRewrite>(REWRITE_SYSTEM, parts.join('\n'), BulletRewriteSchema);
+    if (!outcome.ok) return outcome;
+    return { ...outcome, result: { rewrites: this.snapToSource(outcome.result.rewrites, entries) } };
   }
 
-  async draftCoverLetter(contentMd: string, jdText: string): Promise<AiOutcome<CoverLetterDraft>> {
-    const user = ['## Job description', jdText, '', '## Résumé (Markdown)', contentMd].join('\n');
-    return this.run(COVER_LETTER_SYSTEM, user, CoverLetterDraftSchema);
+  // MOM-153. The client applies a rewrite with `contentMd.replace(original, rewritten)`, so an
+  // `original` that is not a verbatim substring is an "Accept" button that silently does nothing.
+  // Models reliably return the *normalized* bullet (the form we showed them), which does not match
+  // a PDF-extracted résumé's double spaces. So match on the normalized form and hand the client
+  // back the raw source line. A rewrite matching no bullet at all is dropped — it is unusable.
+  private snapToSource(
+    rewrites: BulletRewrite['rewrites'],
+    entries: { raw: string; norm: string }[],
+  ): BulletRewrite['rewrites'] {
+    const snapped = rewrites.flatMap((rewrite) => {
+      const target = ResumeAiService.normalize(rewrite.original);
+      const hit =
+        entries.find((e) => e.norm === target) ??
+        entries.find((e) => target.length >= 20 && (e.norm.includes(target) || target.includes(e.norm)));
+      return hit ? [{ ...rewrite, original: hit.raw }] : [];
+    });
+    const dropped = rewrites.length - snapped.length;
+    if (dropped > 0) this.logger.warn(`Dropped ${dropped} rewrite(s) whose original matched no résumé bullet.`);
+    return snapped;
+  }
+
+  async draftCoverLetter(contentMd: string, jdText: string, ctx: TailorContext): Promise<AiOutcome<CoverLetterDraft>> {
+    const parts = this.targetBlock(ctx, jdText);
+    parts.push(...this.evidenceBlock(ctx));
+
+    // MOM-153: the visa paragraph was being written blind. The pipeline already knows this
+    // employer's sponsorship posture (Company.sponsorshipStatus / the application's visaTag),
+    // and the honest framing differs sharply by case — so say which case this is.
+    parts.push('', '## This employer’s sponsorship posture', this.sponsorshipGuidance(ctx.job?.sponsorship ?? null));
+    parts.push('', '## Résumé (Markdown)', contentMd);
+    return this.run(COVER_LETTER_SYSTEM, parts.join('\n'), CoverLetterDraftSchema);
+  }
+
+  private sponsorshipGuidance(sponsorship: string | null): string {
+    if (sponsorship === 'sponsored') {
+      return 'This employer is known to sponsor visas. The visa paragraph should be brief and matter-of-fact — state the need plainly and move on; do not over-explain or apologise for it.';
+    }
+    if (sponsorship === 'not_sponsoring') {
+      return 'This employer is believed NOT to sponsor visas. Do not paper over it. Write the visa paragraph honestly: state the candidate’s status, and any work authorisation that would not require sponsorship, if the résumé supports it. Never claim authorisation the résumé does not evidence.';
+    }
+    return 'This employer’s sponsorship policy is unknown. Keep the visa paragraph short and neutral — state the situation without assuming a policy either way.';
   }
 
   private async run<T>(system: string, userContent: string, schema: Parameters<typeof zodOutputFormat>[0]): Promise<AiOutcome<T>> {

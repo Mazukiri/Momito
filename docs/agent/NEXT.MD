@@ -202,6 +202,20 @@ That key was pasted in chat and is compromised — if AI calls start 401ing, it 
 **Still genuinely unverified:** a native `sk-ant-` call against `api.anthropic.com` (identical wire format, but
 technically un-run), and the **budget-exceeded** path (would need ~$1 of real spend; guard is unit-tested only).
 
+### Post-plan follow-on (2026-07-12): MOM-153 — parity for the rewrite and the cover letter
+
+With the backlog closed, the largest remaining *inconsistency* was inside the résumé AI itself: MOM-149/150 gave the
+**critique** a target (the application's JD + the company's focus areas) and profile evidence, while the **rewrite**
+and the **cover letter** — the tools that actually write the words — still saw only a hand-pasted JD. All three now
+share one `TailorContext`; the JD falls back to the one already stored on the linked application, so it is never
+pasted twice, and a call with no JD anywhere refuses for free (no model call, nothing billed). The cover letter's visa
+paragraph is calibrated to the employer's known sponsorship posture.
+
+This also caught a live bug: **"Accept" on a rewrite silently did nothing** whenever the model returned the normalized
+bullet (which it does — that is the form we show it) and the résumé carried PDF double spaces, because the UI applies
+rewrites with `contentMd.replace(original, rewritten)`. Rewrites are now snapped back to the verbatim source line.
+310 API tests.
+
 ## If resuming autonomously
 
 The plan is done and the AI gate is closed, so the next step needs a signal from the owner. In rough order of value:

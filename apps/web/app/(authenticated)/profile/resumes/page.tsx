@@ -35,6 +35,10 @@ export default function ResumesPage() {
   const [rewrites, setRewrites] = useState<ResumeBulletRewrite[] | null>(null);
   const [coverLetter, setCoverLetter] = useState<CoverLetterDraftResult | null>(null);
 
+  // MOM-153: tailoring needs *a* job description — pasted, or already stored on a picked
+  // application. (If the picked application has no JD saved, the API says so in its banner.)
+  const hasTarget = Boolean(jdText.trim() || targetJobId);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -132,19 +136,22 @@ export default function ResumesPage() {
   // renders as a banner (setAiReason), not as an error.
   async function runAi(kind: 'analyze' | 'rewrite' | 'cover-letter') {
     if (!selectedId) return;
-    if (kind !== 'analyze' && !jdText.trim()) return;
+    if (kind !== 'analyze' && !hasTarget) return;
     setAiBusy(true);
     setAiReason('');
     setError('');
     try {
+      // MOM-153: a rewrite/cover letter takes the pasted JD if there is one, else the JD already
+      // stored on the picked application — which also carries its company's focus areas.
+      const target = { jdText: jdText.trim() || undefined, jobApplicationId: targetJobId || undefined };
       if (kind === 'analyze') {
         const res = await resumesApi.aiAnalyze(selectedId, targetJobId || undefined);
         if (res.ok) setAnalysis(res.result); else setAiReason(res.reason);
       } else if (kind === 'rewrite') {
-        const res = await resumesApi.aiRewrite(selectedId, jdText.trim());
+        const res = await resumesApi.aiRewrite(selectedId, target);
         if (res.ok) setRewrites(res.result.rewrites); else setAiReason(res.reason);
       } else {
-        const res = await resumesApi.aiCoverLetter(selectedId, jdText.trim());
+        const res = await resumesApi.aiCoverLetter(selectedId, target);
         if (res.ok) setCoverLetter(res.result); else setAiReason(res.reason);
       }
     } catch (err: unknown) {
@@ -296,9 +303,10 @@ export default function ResumesPage() {
 
               <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
                 <p className="text-xs font-medium text-zinc-500">AI tailoring</p>
-                {/* MOM-149: a critique is only as good as the target it's held against. */}
+                {/* MOM-149/153: a critique, a rewrite and a cover letter are each only as good as
+                    the target they're held against — this select now drives all three. */}
                 <label className="mt-2 block text-xs text-zinc-500 dark:text-zinc-400">
-                  Judge against a specific application
+                  Tailor against a specific application
                   <select
                     value={targetJobId}
                     onChange={(e) => setTargetJobId(e.target.value)}
@@ -312,8 +320,8 @@ export default function ResumesPage() {
                 </label>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button onClick={() => runAi('analyze')} disabled={aiBusy} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">Analyze bullets</button>
-                  <button onClick={() => runAi('rewrite')} disabled={aiBusy || !jdText.trim()} title={jdText.trim() ? undefined : 'Paste a JD above first'} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">Rewrite for this JD</button>
-                  <button onClick={() => runAi('cover-letter')} disabled={aiBusy || !jdText.trim()} title={jdText.trim() ? undefined : 'Paste a JD above first'} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">Draft cover letter</button>
+                  <button onClick={() => runAi('rewrite')} disabled={aiBusy || !hasTarget} title={hasTarget ? undefined : 'Paste a JD above, or pick an application'} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">Rewrite bullets</button>
+                  <button onClick={() => runAi('cover-letter')} disabled={aiBusy || !hasTarget} title={hasTarget ? undefined : 'Paste a JD above, or pick an application'} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">Draft cover letter</button>
                   {aiBusy && <Spinner className="h-4 w-4" />}
                 </div>
 

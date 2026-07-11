@@ -50,8 +50,8 @@ describe('ResumeAiService (MOM-136/137/138, dormant-until-key)', () => {
 
     expect(service.isAvailable()).toBe(false);
     await expect(service.analyze(CONTENT_MD, CTX)).resolves.toEqual({ ok: false, reason: expect.stringContaining('not configured') });
-    await expect(service.rewriteBullets(CONTENT_MD, 'JD')).resolves.toEqual({ ok: false, reason: expect.stringContaining('not configured') });
-    await expect(service.draftCoverLetter(CONTENT_MD, 'JD')).resolves.toEqual({ ok: false, reason: expect.stringContaining('not configured') });
+    await expect(service.rewriteBullets(CONTENT_MD, 'JD', CTX)).resolves.toEqual({ ok: false, reason: expect.stringContaining('not configured') });
+    await expect(service.draftCoverLetter(CONTENT_MD, 'JD', CTX)).resolves.toEqual({ ok: false, reason: expect.stringContaining('not configured') });
   });
 
   it('parses a successful analysis (MOM-136)', async () => {
@@ -156,7 +156,7 @@ describe('ResumeAiService (MOM-136/137/138, dormant-until-key)', () => {
 
     await serviceWithFakeClient(parse).analyze(CONTENT_MD, {
       targetRoleTrackId: null,
-      job: { company: 'Meta', role: 'Backend Engineer', jdText: 'Go, low-latency payments.', focusAreas: ['system_design', 'dsa'] },
+      job: { company: 'Meta', role: 'Backend Engineer', jdText: 'Go, low-latency payments.', focusAreas: ['system_design', 'dsa'], sponsorship: null },
     });
 
     const content = parse.mock.calls[0][0].messages[0].content;
@@ -187,19 +187,111 @@ describe('ResumeAiService (MOM-136/137/138, dormant-until-key)', () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
     const parse = vi.fn().mockResolvedValue(okResponse(REWRITES));
 
-    const outcome = await serviceWithFakeClient(parse).rewriteBullets(CONTENT_MD, 'We need payments experience.');
+    const outcome = await serviceWithFakeClient(parse).rewriteBullets(CONTENT_MD, 'We need payments experience.', CTX);
 
     expect(outcome.ok && outcome.result).toEqual(REWRITES);
     expect(parse.mock.calls[0][0].messages[0].content).toContain('We need payments experience.');
+  });
+
+  // MOM-153 — the rewrite used to see only the JD text: not the company, not its focus areas,
+  // not the profile. It got a strictly weaker brief than the critique of the very same bullets.
+  it('gives the rewrite the same target + evidence the analysis gets (MOM-153)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    const parse = vi.fn().mockResolvedValue(okResponse(REWRITES));
+
+    await serviceWithFakeClient(parse).rewriteBullets(CONTENT_MD, 'JD text', {
+      targetRoleTrackId: null,
+      job: { company: 'NVIDIA', role: 'GPU SWE', jdText: 'CUDA.', focusAreas: ['cs_fundamentals'], sponsorship: 'sponsored' },
+      evidence: { skills: ['C++'], projects: ['Ledger — 5,000 RPS sustained'], experience: [] },
+    });
+
+    const content = parse.mock.calls[0][0].messages[0].content;
+    expect(content).toContain('GPU SWE at NVIDIA');
+    expect(content).toContain('cs_fundamentals');
+    expect(content).toContain('5,000 RPS sustained');
+    expect(content).toContain('may never introduce a number');
+    // the bullets are enumerated so `original` can come back verbatim
+    expect(content).toContain('0. Worked on the backend.');
+  });
+
+  // MOM-153 — the client applies a rewrite with contentMd.replace(original, rewritten). A model
+  // returns the *normalized* bullet we showed it, which does not match a PDF-extracted résumé's
+  // double spaces — so "Accept" silently did nothing. Snap it back to the real source line.
+  it('snaps a rewrite original back to the verbatim source line (MOM-153)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    const messy = '- Worked  on   the backend.\n- Cut p99 latency 40% on the payments path.';
+    const parse = vi.fn().mockResolvedValue(
+      okResponse({ rewrites: [{ original: 'Worked on the backend.', rewritten: 'Built payments.', rationale: 'Scope.' }] }),
+    );
+
+    const outcome = await serviceWithFakeClient(parse).rewriteBullets(messy, 'JD', CTX);
+
+    // returned verbatim from the source, spacing intact — so replace() actually hits
+    expect(outcome.ok && outcome.result.rewrites[0].original).toBe('Worked  on   the backend.');
+    expect(messy.includes(outcome.ok ? outcome.result.rewrites[0].original : '')).toBe(true);
+  });
+
+  it('drops a rewrite whose original matches no bullet rather than offering a dead Accept (MOM-153)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    const parse = vi.fn().mockResolvedValue(
+      okResponse({
+        rewrites: [
+          { original: 'Worked on the backend.', rewritten: 'Built payments.', rationale: 'Scope.' },
+          { original: 'Led a team of engineers I never mentioned.', rewritten: 'Led 5 engineers.', rationale: 'Invented.' },
+        ],
+      }),
+    );
+
+    const outcome = await serviceWithFakeClient(parse).rewriteBullets(CONTENT_MD, 'JD', CTX);
+
+    expect(outcome.ok && outcome.result.rewrites).toHaveLength(1);
+    expect(outcome.ok && outcome.result.rewrites[0].original).toBe('Worked on the backend.');
+  });
+
+  it('refuses to rewrite a résumé with no bullets, without calling the model (MOM-153)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    const parse = vi.fn();
+
+    const outcome = await serviceWithFakeClient(parse).rewriteBullets('# Ada\n\nJust prose.', 'JD', CTX);
+
+    expect(outcome).toEqual({ ok: false, reason: expect.stringContaining('no bullet points') });
+    expect(parse).not.toHaveBeenCalled();
   });
 
   it('parses a cover-letter draft (MOM-138)', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
     const parse = vi.fn().mockResolvedValue(okResponse(COVER_LETTER));
 
-    const outcome = await serviceWithFakeClient(parse).draftCoverLetter(CONTENT_MD, 'JD text');
+    const outcome = await serviceWithFakeClient(parse).draftCoverLetter(CONTENT_MD, 'JD text', CTX);
 
     expect(outcome.ok && outcome.result).toEqual(COVER_LETTER);
+  });
+
+  // MOM-153 — the visa paragraph was written blind. The pipeline already knows whether this
+  // employer sponsors; the honest framing differs sharply between the three cases.
+  it('calibrates the cover letter’s visa paragraph to the employer’s sponsorship posture (MOM-153)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    const job = { company: 'Acme', role: 'SWE', jdText: null, focusAreas: [] };
+
+    const sponsoring = vi.fn().mockResolvedValue(okResponse(COVER_LETTER));
+    await serviceWithFakeClient(sponsoring).draftCoverLetter(CONTENT_MD, 'JD', {
+      targetRoleTrackId: null,
+      job: { ...job, sponsorship: 'sponsored' },
+    });
+    expect(sponsoring.mock.calls[0][0].messages[0].content).toContain('known to sponsor');
+
+    const refusing = vi.fn().mockResolvedValue(okResponse(COVER_LETTER));
+    await serviceWithFakeClient(refusing).draftCoverLetter(CONTENT_MD, 'JD', {
+      targetRoleTrackId: null,
+      job: { ...job, sponsorship: 'not_sponsoring' },
+    });
+    const content = refusing.mock.calls[0][0].messages[0].content;
+    expect(content).toContain('NOT to sponsor');
+    expect(content).toContain('Do not paper over it');
+
+    const unknown = vi.fn().mockResolvedValue(okResponse(COVER_LETTER));
+    await serviceWithFakeClient(unknown).draftCoverLetter(CONTENT_MD, 'JD', CTX);
+    expect(unknown.mock.calls[0][0].messages[0].content).toContain('policy is unknown');
   });
 
   it('returns a structured failure (never throws) on a schema miss or an API error', async () => {
@@ -234,7 +326,8 @@ describe('ResumeAiOrchestrator (MOM-136/137/138)', () => {
           company: 'Meta (free text)',
           roleTitle: 'Backend Engineer',
           jdText: 'Go, Kubernetes, low-latency payments.',
-          companyRef: { name: 'Meta', focusAreas: { system_design: 5, dsa: 4 } },
+          visaTag: 'unknown',
+          companyRef: { name: 'Meta', focusAreas: { system_design: 5, dsa: 4 }, sponsorshipStatus: 'sponsored' },
         }),
       },
       profile: {
@@ -329,7 +422,7 @@ describe('ResumeAiOrchestrator (MOM-136/137/138)', () => {
   it('persists rewrites to the version aiSuggestions (MOM-137)', async () => {
     const { orchestrator, updateMany } = build();
 
-    const result = await orchestrator.rewrite('rv-1', 'user-1', 'JD');
+    const result = await orchestrator.rewrite('rv-1', 'user-1', { jdText: 'JD' });
 
     expect(result).toEqual({ ok: true, result: REWRITES });
     expect(updateMany.mock.calls[0][0]).toMatchObject({
@@ -343,9 +436,48 @@ describe('ResumeAiOrchestrator (MOM-136/137/138)', () => {
       resumeAi: { rewriteBullets: vi.fn().mockResolvedValue({ ok: false, reason: 'rate-limited' }) as never },
     });
 
-    const result = await orchestrator.rewrite('rv-1', 'user-1', 'JD');
+    const result = await orchestrator.rewrite('rv-1', 'user-1', { jdText: 'JD' });
 
     expect(result).toEqual({ ok: false, reason: 'rate-limited' });
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  // MOM-153 — the JD is already in the pipeline. Making the user re-paste it to get a rewrite was
+  // busywork, and it meant the rewrite never saw the company behind the JD.
+  it('reuses the targeted application’s stored JD and company context for a rewrite (MOM-153)', async () => {
+    const { orchestrator, prisma, resumeAi } = build();
+
+    const result = await orchestrator.rewrite('rv-1', 'user-1', { jobApplicationId: 'job-7' }); // no jdText
+
+    expect(result.ok).toBe(true);
+    expect((prisma.jobApplication as { findFirst: ReturnType<typeof vi.fn> }).findFirst)
+      .toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'job-7', userId: 'user-1' } }));
+    const [, jdText, context] = (resumeAi.rewriteBullets as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(jdText).toBe('Go, Kubernetes, low-latency payments.');
+    expect(context.job).toMatchObject({ company: 'Meta', role: 'Backend Engineer' });
+    // the researched catalog posture wins over the application's own tag
+    expect(context.job.sponsorship).toBe('sponsored');
+    expect(context.job.focusAreas).toEqual(['system_design', 'dsa']);
+    expect(context.evidence.skills).toEqual(['Go', 'PostgreSQL']);
+  });
+
+  it('a pasted JD wins over the linked application’s stored one (MOM-153)', async () => {
+    const { orchestrator, resumeAi } = build();
+
+    await orchestrator.coverLetter('rv-1', 'user-1', { jdText: '  Freshly pasted JD.  ', jobApplicationId: 'job-7' });
+
+    const [, jdText] = (resumeAi.draftCoverLetter as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(jdText).toBe('Freshly pasted JD.');
+  });
+
+  it('refuses to tailor with no JD anywhere — no model call, nothing billed (MOM-153)', async () => {
+    const { orchestrator, resumeAi, budget, updateMany } = build(); // version links no job, no jdText passed
+
+    const result = await orchestrator.rewrite('rv-1', 'user-1', {});
+
+    expect(result).toEqual({ ok: false, reason: expect.stringContaining('No job description') });
+    expect(resumeAi.rewriteBullets).not.toHaveBeenCalled();
+    expect(budget.record).not.toHaveBeenCalled();
     expect(updateMany).not.toHaveBeenCalled();
   });
 
