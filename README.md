@@ -2,6 +2,8 @@
 
 A serious interview preparation tool for Software Engineer, Backend Engineer, and AI Engineer candidates. Supports structured practice across DSA, backend, system design, behavioral, and more — with mock interview sessions, progress tracking, and a personal study plan.
 
+Beyond practice, Momito runs the **job search itself** as a closed loop (“CareerOS”): a job pipeline with per-round tracking, interview debriefs that record what you actually bombed, and a Today queue that reshapes tomorrow's prep around those gaps. Companies carry structured intelligence (focus-area weights, interview process, sponsorship), applications carry contacts and offers, and résumés are versioned artifacts you can tailor to a JD and export ATS-safe.
+
 ---
 
 ## Tech Stack
@@ -128,11 +130,16 @@ All frontend pages are under `apps/web/app/`.
 | `/dashboard` | Progress overview, topic progress, weak areas, recent sessions |
 | `/missions` | Mission list (goal-driven weekly planning) |
 | `/missions/[id]` | Mission detail: competency states, weekly plan, check-ins |
-| `/career` | Role tracks, active career goals, readiness gaps |
-| `/jobs` | Job application pipeline |
-| `/jobs/[id]` | Job detail, prep generation, profile scoring, timeline |
+| `/career` | Role tracks, active career goals, readiness gaps, target shortlist |
+| `/jobs` | Job pipeline — list view (funnel + filter pills) or drag-and-drop kanban board |
+| `/jobs/[id]` | Job detail: interview rounds, debriefs, readiness verdict, story gaps, prep queue, contacts, offer, timeline |
+| `/companies` | Company catalog with sponsorship filter |
+| `/companies/[id]` | Company detail: interview process, focus-area weights, sponsorship, comp band, linked questions/stories/applications |
+| `/contacts` | Referral network grouped by relationship, with linked jobs |
+| `/offers` | Offer comparison (normalized annual total, visa flag) |
 | `/profile` | Editable profile parsed from a CV |
 | `/profile/upload` | Upload and parse a PDF CV |
+| `/profile/resumes` | Résumé versions: Markdown editor, ATS coverage vs a JD, AI tailoring, export |
 | `/profile/scores` | Create and review role-template / JD profile scores |
 | `/profile/scores/[id]` | Profile score detail with category gaps and suggestions |
 | `/learning` | Career learning ledger and Readwise connection |
@@ -168,8 +175,10 @@ Momito/
 │   └── web/                    # Next.js frontend (client of record)
 │       └── app/
 │           ├── (auth)/         # Login, Register pages
-│           ├── (authenticated)/# Today, Dashboard, Missions, Career, Jobs, Questions,
-│           │                   # Practice, Attempts, Study Plan, Learning, Calendar
+│           ├── (authenticated)/# Today, Dashboard, Missions, Career, Jobs, Companies,
+│           │                   # Contacts, Offers, Questions, Practice, Attempts,
+│           │                   # Study Plan, Stories, Profile (+ résumé versions),
+│           │                   # Learning, Calendar, Settings
 │           ├── components/     # Shared UI components (design system, nav, session UI)
 │           └── lib/            # API client, auth context, theme context, hooks
 ├── packages/
@@ -291,7 +300,7 @@ All endpoints are under `http://localhost:3001/api/v1`. Protected routes require
 
 ### Topics & Companies
 - `GET /topics`, `POST /topics`, `PATCH /topics/:id`, `DELETE /topics/:id`
-- `GET /companies`, `POST /companies`, `PATCH /companies/:id`, `DELETE /companies/:id`
+- `GET /companies`, `GET /companies/:id`, `POST /companies`, `PATCH /companies/:id`, `DELETE /companies/:id` — the catalog carries structured intelligence: focus-area weights, role tracks, interview process, sponsorship status, comp band
 
 ### Sessions
 - `POST /sessions` — Create (with type, topic, difficulty, question count)
@@ -322,14 +331,36 @@ All endpoints are under `http://localhost:3001/api/v1`. Protected routes require
 - `GET /career/role-tracks` — Available long-term role tracks
 - `GET /career/goals`, `POST /career/goals`, `PATCH /career/goals/:id` — Active career goals
 - `GET /career/readiness`, `GET /career/role-tracks/:id/readiness` — Deterministic readiness by checklist area
-- `GET /jobs`, `POST /jobs`, `GET /jobs/:id`, `PATCH /jobs/:id` — Job pipeline
+- `GET /career/jobs/:jobId/readiness` — "Am I ready for Meta?" go/no-go, company-weighted and penalized by open weakness signals
+- `GET /career/jobs/:jobId/story-gaps` — Behavioral competencies this company expects that you have no story for
+- `GET /career/target-shortlist` — Companies ranked by fit × sponsorship × region
+- `GET /practice/recommendations` — Next best actions
+
+### Job Pipeline
+- `GET /jobs`, `POST /jobs`, `GET /jobs/:id`, `PATCH /jobs/:id` — Job pipeline (status changes emit a transition event)
+- `GET /jobs/funnel` — Funnel counts, conversion, median days in stage, and breakdowns by source, rejection reason, and résumé version
+- `POST /jobs/:id/events` — Append a timeline event
 - `POST /jobs/:id/generate-prep` — Create prep tasks for a job
 - `POST /jobs/:id/score-profile` — Score profile against a saved JD
+- `GET|POST /jobs/:jobId/rounds`, `PATCH|DELETE /jobs/:jobId/rounds/:roundId` — Interview rounds (scheduled date, outcome, debrief)
+- `POST /jobs/:jobId/rounds/:roundId/prep` — Auto-assemble a prep queue for a round
+- `GET /weaknesses` — Open weakness signals emitted by debriefs
+- `POST /weaknesses/signals/:id/resolve`, `POST /weaknesses/signals/:id/dismiss`
+- `GET|POST /contacts`, `PATCH|DELETE /contacts/:id`, `GET|POST /jobs/:jobId/contacts` — Referral network
+- `GET /offers`, `GET|PUT|DELETE /jobs/:jobId/offer` — Offers and comparison
+
+### Résumé Versions
+- `GET|POST /resumes`, `GET|PATCH|DELETE /resumes/:id` — Versioned résumé artifacts (Markdown)
+- `GET /resumes/:id/export?format=md|pdf` — Download; PDF is single-column ATS-safe (standard Helvetica, no embedded fonts)
+- `POST /resumes/:id/ai/analyze`, `/ai/rewrite`, `/ai/cover-letter` — AI tailoring (**dormant without `ANTHROPIC_API_KEY`** — returns `{ok:false, reason}`, never throws)
+- `POST /profile-scores/ats-coverage` — Keyword coverage of a JD against a résumé version (or the base profile)
+- `POST /profile-scores/ats-coverage/generate-tasks` — Turn missing keywords into study tasks
+
+### Tasks, Reminders & Learning
 - `GET /tasks`, `POST /tasks`, `PATCH /tasks/:id`, `POST /tasks/:id/complete`, `POST /tasks/:id/snooze` — Scheduled tasks
 - `GET /reminders`, `POST /reminders/:id/dismiss` — In-app reminders
 - `GET /learning/ledger`, `POST /learning/evidence`, `GET /learning/inbox`, `PATCH /learning/highlights/:id` — Learning ledger
 - `POST /integrations/readwise/connect`, `POST /integrations/readwise/sync` — Readwise highlight sync
-- `GET /practice/recommendations` — Next best actions
 
 ### Profile & CV Scoring
 - `POST /profile/upload` — Upload a PDF CV and create/update the structured profile
@@ -398,12 +429,28 @@ can be added to a phone home screen; there is intentionally **no service worker 
 - Suggested next topics to practice
 
 ### Career OS
+The point of CareerOS is that the job search and the study plan are **one loop**, not two tools:
+you bomb a system-design round at Meta → the debrief stores that as a weakness signal →
+tomorrow's Today queue leads with system design → the "am I ready for Meta?" verdict moves
+only when the underlying FSRS retrievability moves.
+
 - 10 role tracks covering backend (Big Tech SWE, Google L4 SWE), quant/HPC (Quant SWE, HPC/GPU Engineer), AI/ML, infra/platform, mobile, fullstack, data engineering, and security
-- Deterministic readiness by DSA, system design, LLD/OOP, CS fundamentals, language/runtime, projects, behavioral, and profile evidence
-- Job pipeline with JD text, deadline reminders, prep-task generation, and profile scoring
+- Deterministic readiness by DSA, system design, LLD/OOP, CS fundamentals, language/runtime, projects, behavioral, and profile evidence — **grounded in FSRS retrievability**, not self-report
+- Job pipeline (list or drag-and-drop kanban) with JD text, deadline reminders, prep-task generation, profile scoring, stall detection, and a funnel with conversion, median days-in-stage, and breakdowns by source / rejection reason / résumé version
+- **Interview rounds** with scheduled dates, outcomes, and structured debriefs; a debrief emits **weakness signals** that penalize readiness and outrank routine study on Today until resolved
+- **Company intelligence**: focus-area weights and role tracks weight the readiness verdict; interview process, sponsorship status, and comp band inform targeting; a fit-ranked target shortlist
+- **Behavioral story gaps**: the competencies a company expects that you have no STAR story for
+- **Contacts** (recruiter / referrer / hiring manager) with a follow-up and thank-you cadence
+- **Offers** with a normalized annual total (base + bonus + equity/years), single-currency v1
 - Learning ledger for long-term career evidence, including manual notes and reviewed Readwise highlights
 - Calendar-style scheduled tasks with in-app reminders, snooze, and completion evidence
-- Practice recommendations based on role gaps, overdue tasks, active jobs, and unmapped reading evidence
+- Practice recommendations ranked across weakness signals, upcoming rounds, deadlines, stalled applications, role gaps, and unmapped reading evidence
+
+### Résumé Studio
+- **Versioned résumés** (`ResumeVersion`) as Markdown artifacts derived from the master profile — "Google-tailored v2" — each linkable to the job it was sent to, which is what makes the funnel's per-version conversion breakdown possible
+- **ATS coverage**: paste a JD, see which keywords your résumé actually contains, and turn the missing ones into study tasks in one click
+- **Export**: `.md`, or an ATS-safe `.pdf` — single-column, plain text, standard non-embedded Helvetica, written by a dependency-free renderer (an ATS reads the content stream with a standard font's glyph widths, so this is the *most* parseable output, not a compromise)
+- **AI tailoring** (bullet impact/seniority analysis, JD-specific rewrites with accept/reject, cover-letter drafting with visa framing) — **dormant until `ANTHROPIC_API_KEY` is set**; without a key the endpoints return a structured `{ok:false, reason}` and the app stays fully usable
 
 ### Profile & CV Scoring
 - PDF CV upload with text extraction and editable structured profile fields
@@ -442,7 +489,7 @@ can be added to a phone home screen; there is intentionally **no service worker 
 | `CORS_ORIGIN` | Open in development; disabled in production | Production deployments | Comma-separated browser origin allowlist, for example `https://momito.example`. |
 | `ALLOW_MULTI_USER_REGISTRATION` | `false` (registration locked after the first account) | No | Set to `true` to allow open registration beyond a single account. |
 | `SEED_USER_EMAIL` / `SEED_USER_PASSWORD` | `demo@momito.local` / `MomitoDemo123!` | No (set both before seeding a real deployment) | Overrides the seeded demo account's credentials. `pnpm db:seed` never logs the password. |
-| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` / `AI_DAILY_BUDGET_USD` | Unset / `claude-opus-4-8` / `1.00` | No | Enables AI grading (Workstream C) when a key is set; the app is fully usable on self-rating alone without one. |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` / `AI_DAILY_BUDGET_USD` | Unset / `claude-opus-4-8` / `1.00` | No | Enables AI grading and AI résumé tailoring (analysis, JD rewrites, cover letters) when a key is set; both share one daily budget pool. The app is fully usable on self-rating and deterministic scoring alone without one — the AI endpoints simply report themselves unavailable. |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Unset / Unset / `mailto:admin@example.com` | No | Enables Web Push notifications (ADR-0008) when both keys are set; generate a keypair with `npx web-push generate-vapid-keys` (no third-party account needed). Without them, the notification settings UI is hidden and the reminder-push scheduler no-ops. |
 | `NODE_ENV` | Node default | No | Set to `production` to enable production config checks. |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:3001/api/v1` | Yes | Backend base URL for frontend API client |
@@ -473,6 +520,15 @@ decision log at `docs/agent/DECISIONS.MD` and formal ADRs under `docs/adr/`:
 - **ADR-0004**: No copyrighted third-party problem statements in seed content — metadata, links, and original notes only
 - **ADR-0005**: Story Bank schema (STAR-format, user-authored, reviewable via the same polymorphic `ReviewState`)
 - **ADR-0006**: Weekly encrypted database backup workflow (dormant until `BACKUP_DATABASE_URL`/`BACKUP_GPG_PASSPHRASE` secrets are set)
+- **ADR-0007**: AI grading scaffold — dormant until `ANTHROPIC_API_KEY` is set; structured refusal, never a throw
+- **ADR-0008**: Web Push notifications (VAPID, no third-party account)
+- **ADR-0009**: CareerOS pipeline stage machine — status transitions as structured `fromStatus`/`toStatus` on the existing `JobEvent`, not a parallel table
+- **ADR-0010**: `Company` as an FK with structured intelligence (focus-area weights as Json, name-match backfill with free-text fallback)
+- **ADR-0011**: `WeaknessSignal` — event-sourced debrief output that grounds targeted readiness
+- **ADR-0012**: `ResumeVersion` decoupled from the singleton `Profile`; profile stays master, versions are derived artifacts
+- **ADR-0013**: Interview rounds and debriefs — the round owns no rows; back-ref FKs avoid the PlanItem/Task dual-write anti-pattern
+- **ADR-0014**: Contacts and follow-up cadence (create-only backfill from `referralName`)
+- **ADR-0015**: Offer model — minimal by design; normalized annual total at read time, single-currency v1 (no FX)
 
 ---
 
@@ -485,6 +541,12 @@ All integration review findings are recorded in `.swarm/QA.md`. Key non-blocking
 - No debounce on question search input (acceptable for MVP)
 - Dashboard summary loads all attempts in memory — could optimize with DB-side aggregates later
 - Backend API test coverage is comprehensive, but frontend e2e tests are not yet implemented
+
+**Verification-blocked, and not claimed to work:**
+
+- **The live AI path has never been executed.** AI grading and AI résumé tailoring are built, unit-tested (fully mocked, zero network), and verified *dormant* — with no `ANTHROPIC_API_KEY` they return a structured `{ok:false, reason}`, write nothing, and spend nothing. The path where a real model actually responds is untested until someone sets a key. Treat it as scaffolding, not a working feature.
+- **Lighthouse and the deployed-URL checks** need a real browser against a real deployment; a manual accessibility pass (labeled controls, keyboard-reachable cards, dark-mode contrast) was done instead.
+- **`pg_dump`/`pg_restore` in the backup workflow** have not been run against a real Postgres instance.
 
 ---
 

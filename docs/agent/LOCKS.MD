@@ -19,6 +19,7 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-089 | CLAUDE | `README.md`, `docs/agent/*.MD` | 2026-07-11 |
 | MOM-145 | CLAUDE | `apps/api/src/jobs/jobs.service.ts`, `packages/shared/src/index.ts`, `apps/web/app/components/JobFunnelCard.tsx`, `apps/api/test/jobs.service.spec.ts`, `docs/agent/*.MD` | 2026-07-10 |
 | MOM-136+137+138 | CLAUDE | `apps/api/src/ai/resume-ai.*`, `apps/api/src/ai/dto/resume-ai*`, `apps/api/src/ai/ai.module.ts`, `packages/shared/src/index.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/(authenticated)/profile/resumes/page.tsx`, `apps/api/test/resume-ai.service.spec.ts`, `docs/agent/*.MD` | 2026-07-10 |
 | MOM-139 | CLAUDE | `apps/api/src/resumes/**`, `apps/web/app/lib/api-client.ts`, `apps/web/app/(authenticated)/profile/resumes/page.tsx`, `apps/api/test/resumes.service.spec.ts`, `docs/agent/*.MD` | 2026-07-10 |

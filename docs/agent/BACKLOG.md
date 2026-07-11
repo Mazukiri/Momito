@@ -637,7 +637,13 @@ and those three are checked once.
   a real browser + deployed URL). A manual accessibility pass (not Lighthouse) was done as
   part of MOM-096 below — labeled form controls, keyboard-reachable clickable cards, dark:
   contrast on badges/pagination — but a full Lighthouse audit is still credential/deploy-gated.
-- **MOM-089** README rewrite — folded into MOM-004; final polish here.
+- **MOM-089** README rewrite — **DONE** 2026-07-11 (docs only). The README had drifted ~20 PRs behind: it described a
+  practice app with a job list and never mentioned interview rounds, debriefs, weakness signals, company intelligence,
+  contacts, offers, or résumé versions. Rewrote the intro around the CareerOS loop; added the 5 missing routes
+  (`/companies`, `/companies/[id]`, `/contacts`, `/offers`, `/profile/resumes`); replaced the single thin "Career OS"
+  API block with four sections whose every endpoint was read out of the controllers; added a **Résumé Studio** feature
+  section; extended the ADR list from 0006 → 0015; and added an explicit **"Verification-blocked, and not claimed to
+  work"** note (live AI path never executed, Lighthouse needs a deploy, `pg_dump` never run for real).
 - **MOM-090** Final full-product golden-path verification — BLOCKED on all gates (Gate 4
   live-key verification and Gate 1/6 real deploy are the remaining blockers).
 

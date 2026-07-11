@@ -180,6 +180,13 @@ tests green and a live round-trip against local Postgres:
 
 **293 API tests + 26 web tests green.**
 
+**Post-plan follow-on (2026-07-11): MOM-089 — README final polish (docs only).** With the plan closed, MOM-089 was the
+only backlog row left that was neither credential-gated nor awaiting an owner decision. The README still described a
+practice app with a job list — nothing about rounds, debriefs, weakness signals, company intelligence, contacts,
+offers, or résumé versions — so it was rewritten around the CareerOS loop, with the missing routes and endpoints read
+straight out of the source, the ADR list extended 0006 → 0015, and an explicit "verification-blocked, and not claimed
+to work" note added so a new reader learns what is scaffolding without digging through this backlog.
+
 ### The one thing that is NOT verified
 
 **MOM-136/137/138 (résumé AI) are `DONE (scaffold) — VERIFICATION-BLOCKED on a live ANTHROPIC_API_KEY`**, exactly like

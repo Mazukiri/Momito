@@ -1,5 +1,36 @@
 # LOG
 
+## 2026-07-11 - MOM-089: README final polish (CLAUDE, docs only)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No schema, no code — `README.md` only.
+
+**Why now:** the handoff plan is complete, and every other open backlog row is credential-gated (MOM-021 deploy,
+MOM-088 Lighthouse, MOM-070–074 / MOM-136–138 live AI key) or needs an explicit owner go-ahead (MOM-049 LeetCode
+import). MOM-089 was the one genuinely unblocked item left. The README had drifted roughly twenty PRs behind the
+product: it described a practice app with a job list, and said nothing about interview rounds, debriefs, weakness
+signals, company intelligence, contacts, offers, or résumé versions — i.e. the entire reason CareerOS exists.
+
+**What:**
+- **Intro** now states the actual thesis: the job search and the study plan are one closed loop.
+- **Screens & Routes** — added `/companies`, `/companies/[id]`, `/contacts`, `/offers`, `/profile/resumes`; corrected
+  `/jobs` (list *or* kanban) and `/jobs/[id]` (rounds, debriefs, readiness, story gaps, prep queue, contacts, offer).
+- **API Overview** — the one thin "Career OS" block became four accurate sections (Career OS / Job Pipeline / Résumé
+  Versions / Tasks, Reminders & Learning). Every route was **read out of the controllers**, not recalled: funnel,
+  events, rounds + round prep, weaknesses, contacts, offers, resumes + export + the three AI routes, ats-coverage +
+  generate-tasks, target-shortlist, job readiness, story-gaps, and `GET /companies/:id`.
+- **Features** — Career OS rewritten around the loop; new **Résumé Studio** section (versions, ATS coverage, export,
+  dormant AI).
+- **Architecture Decisions** — the list stopped at ADR-0006; ADR-0007…0015 added (all nine exist on disk).
+- **QA & Known Notes** — new **"Verification-blocked, and not claimed to work"** block stating plainly that the live
+  AI path has never been executed, that Lighthouse needs a real deployment, and that `pg_dump`/`pg_restore` were
+  never run against a real Postgres. A reader should not have to dig through the backlog to learn what is scaffolding.
+- **Config reference** — `ANTHROPIC_API_KEY` now says it also gates résumé tailoring, sharing one daily budget pool.
+
+**Verification:** docs-only; no code changed since `85f3faf` (293 API + 26 web tests green there), so no suite was
+re-run and nothing new is claimed about them. Route/ADR accuracy was checked against the source: `find` over
+`apps/web/app/(authenticated)` for pages, the `@Controller`/`@Get`/`@Post` decorators for endpoints, `ls docs/adr/`
+for the ADR list. **Rollback:** revert the commit.
+
 ## 2026-07-10 - MOM-145: conversion by résumé version (CLAUDE, no schema) — FINAL ITEM OF THE HANDOFF PLAN
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No migration. Closes the approved handoff plan
