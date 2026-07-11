@@ -1,5 +1,55 @@
 # LOG
 
+## 2026-07-11 - LIVE AI VERIFICATION: MOM-068–074 + MOM-136/137/138 unblocked (CLAUDE, no code change)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No schema, **no application code changed** — this was a
+verification pass, plus the doc fixes it forced.
+
+**Trigger:** the owner supplied an API key. It was an **OpenRouter** key (`sk-or-v1-…`), not an Anthropic
+`sk-ant-…` key, so it could not simply be dropped into `ANTHROPIC_API_KEY` — our code calls `api.anthropic.com`
+through the Anthropic SDK. Rather than assume it was unusable, I probed it: **OpenRouter serves the Anthropic
+`/v1/messages` shape *and* `output_config` structured outputs**, which is exactly what `messages.parse` +
+`zodOutputFormat` needs. So the live path was reachable with **zero code change** — only env:
+
+```
+ANTHROPIC_API_KEY="sk-or-v1-…"           # in apps/api/.env (gitignored)
+ANTHROPIC_BASE_URL="https://openrouter.ai/api"
+ANTHROPIC_MODEL="anthropic/claude-opus-4.8"
+```
+
+**The one real trap** (cost a failed first run): the SDK appends `/v1/messages` to `ANTHROPIC_BASE_URL`, so
+`https://openrouter.ai/api/v1` becomes `/api/v1/v1/messages` → OpenRouter's **HTML 404 page**, which surfaced as
+the deliberately-vague `{ok:false,"reason":"AI service returned an error."}`. The base URL must stop at `/api`.
+Now documented in `.env.example` and the README config table so nobody re-loses that hour.
+
+**Verified live (6 requests, $0.1237 of real spend, budget debited correctly to $0.876 remaining):**
+- `POST /attempts/:id/grade` — a real `messages.parse` succeeded (12.2s), returning a structured rubric that
+  **correctly caught a nonsense answer**: "two-pointer sweep" for binary-tree max-path-sum → `aiScore` 0.02,
+  suggested rating `again`. This is the MOM-068–074 gate that had been open since 2026-07-06.
+- `POST /resumes/:id/ai/analyze` — every filler bullet ("Worked on the API.") scored impactScore 0 / junior,
+  with 8 `missingThemes`.
+- `POST /resumes/:id/ai/rewrite` — 3 JD-targeted rewrites that **did not fabricate metrics**, and the rewrites
+  **persisted into `ResumeVersion.aiSuggestions`** (confirmed by re-fetching the version).
+- `POST /resumes/:id/ai/cover-letter` — a 218-word draft plus a standalone visa-framing paragraph that picked up
+  "sponsorship available" from the JD.
+
+**A false alarm, recorded because it nearly became a false bug report:** the analyze output looked like mojibake
+(`rÃ©sumÃ©`). Hexdumping the raw response showed `r\xc3\xa9sum\xc3\xa9` — **correct UTF-8**. The corruption was
+Windows Python decoding piped stdin as cp1252. Always check raw bytes before blaming the encoding.
+
+**Honest limits — what is still NOT verified:** (a) a native `sk-ant-` call against `api.anthropic.com` (the wire
+format and structured-output handling are identical, but it is technically un-run); (b) the **budget-exceeded**
+path, which would need ~$1 of real spend to trigger — the guard remains unit-tested only.
+
+**Docs corrected:** the "the live AI path has never been executed" note I had written into the README *earlier the
+same day* (MOM-089) was now false and was rewritten; MOM-068–074's status note and the MOM-136/137/138 rows were
+flipped from VERIFICATION-BLOCKED to LIVE-VERIFIED with the evidence above; `ANTHROPIC_BASE_URL` (previously
+undocumented anywhere) added to `.env.example` and the README config table.
+
+**Security:** the key was pasted into a chat transcript, so it is compromised and the owner has been told to
+rotate it. It lives only in `apps/api/.env`, which `apps/api/.gitignore` covers — confirmed via `git check-ignore`
+and a clean `git status` before committing. **No key value is committed.**
+
 ## 2026-07-11 - MOM-089: README final polish (CLAUDE, docs only)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No schema, no code — `README.md` only.

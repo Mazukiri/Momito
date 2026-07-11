@@ -490,6 +490,7 @@ only when the underlying FSRS retrievability moves.
 | `ALLOW_MULTI_USER_REGISTRATION` | `false` (registration locked after the first account) | No | Set to `true` to allow open registration beyond a single account. |
 | `SEED_USER_EMAIL` / `SEED_USER_PASSWORD` | `demo@momito.local` / `MomitoDemo123!` | No (set both before seeding a real deployment) | Overrides the seeded demo account's credentials. `pnpm db:seed` never logs the password. |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` / `AI_DAILY_BUDGET_USD` | Unset / `claude-opus-4-8` / `1.00` | No | Enables AI grading and AI résumé tailoring (analysis, JD rewrites, cover letters) when a key is set; both share one daily budget pool. The app is fully usable on self-rating and deterministic scoring alone without one — the AI endpoints simply report themselves unavailable. |
+| `ANTHROPIC_BASE_URL` | Unset (`https://api.anthropic.com`) | No | Route the Anthropic SDK at a compatible gateway such as OpenRouter. The SDK appends `/v1/messages`, so the value must stop at `/api` (`https://openrouter.ai/api`) — `/api/v1` yields `/api/v1/v1/messages` and a gateway HTML 404. Pair it with a gateway model slug (`ANTHROPIC_MODEL="anthropic/claude-opus-4.8"`). Unknown slugs fall back to Opus pricing in the budget guard, which over-estimates rather than under-charges. |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Unset / Unset / `mailto:admin@example.com` | No | Enables Web Push notifications (ADR-0008) when both keys are set; generate a keypair with `npx web-push generate-vapid-keys` (no third-party account needed). Without them, the notification settings UI is hidden and the reminder-push scheduler no-ops. |
 | `NODE_ENV` | Node default | No | Set to `production` to enable production config checks. |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:3001/api/v1` | Yes | Backend base URL for frontend API client |
@@ -542,9 +543,10 @@ All integration review findings are recorded in `.swarm/QA.md`. Key non-blocking
 - Dashboard summary loads all attempts in memory — could optimize with DB-side aggregates later
 - Backend API test coverage is comprehensive, but frontend e2e tests are not yet implemented
 
-**Verification-blocked, and not claimed to work:**
+**Verification status of the AI features:** the live path is **verified working** as of 2026-07-11 — AI grading and all three résumé endpoints (analyze / rewrite / cover-letter) were exercised against a real model, returning valid structured output, persisting rewrites into `ResumeVersion.aiSuggestions`, and correctly debiting the daily budget ($0.12 across 6 requests). It was verified through an **OpenRouter** key against their Anthropic-compatible endpoint rather than against `api.anthropic.com` directly; the wire format and structured-output handling are identical, but a first call with a native `sk-ant-` key is still technically un-run. Without any key the features remain fully dormant — a structured `{ok:false, reason}`, nothing written, nothing spent.
 
-- **The live AI path has never been executed.** AI grading and AI résumé tailoring are built, unit-tested (fully mocked, zero network), and verified *dormant* — with no `ANTHROPIC_API_KEY` they return a structured `{ok:false, reason}`, write nothing, and spend nothing. The path where a real model actually responds is untested until someone sets a key. Treat it as scaffolding, not a working feature.
+**Still verification-blocked, and not claimed to work:**
+
 - **Lighthouse and the deployed-URL checks** need a real browser against a real deployment; a manual accessibility pass (labeled controls, keyboard-reachable cards, dark-mode contrast) was done instead.
 - **`pg_dump`/`pg_restore` in the backup workflow** have not been run against a real Postgres instance.
 

@@ -187,22 +187,29 @@ offers, or résumé versions — so it was rewritten around the CareerOS loop, w
 straight out of the source, the ADR list extended 0006 → 0015, and an explicit "verification-blocked, and not claimed
 to work" note added so a new reader learns what is scaffolding without digging through this backlog.
 
-### The one thing that is NOT verified
+### AI: LIVE-VERIFIED 2026-07-11 (this was the last open gate)
 
-**MOM-136/137/138 (résumé AI) are `DONE (scaffold) — VERIFICATION-BLOCKED on a live ANTHROPIC_API_KEY`**, exactly like
-MOM-068–074. The dormant path is fully verified (all three endpoints return `{ok:false}`, nothing written, nothing
-billed); **the live model path has never been executed and must not be claimed to work.** Adding a real key and
-exercising analyze / rewrite / cover-letter is the first thing to do when one is available.
+The owner supplied a key and **the live AI path now works** — MOM-068–074 (grading) and MOM-136/137/138 (résumé AI)
+are all live-verified: real `messages.parse` calls, valid structured output, rewrites persisted to `aiSuggestions`,
+budget debited ($0.1237 across 6 requests). Grading correctly failed a nonsense answer (2/100). See today's LOG entry.
+
+The key is an **OpenRouter** key, which works with **no code change** via:
+`ANTHROPIC_BASE_URL="https://openrouter.ai/api"` (must stop at `/api` — the SDK appends `/v1/messages`) +
+`ANTHROPIC_MODEL="anthropic/claude-opus-4.8"`. It lives in `apps/api/.env` (gitignored; **never commit it**).
+That key was pasted in chat and is compromised — if AI calls start 401ing, it was rotated: put the new value in
+`apps/api/.env`.
+
+**Still genuinely unverified:** a native `sk-ant-` call against `api.anthropic.com` (identical wire format, but
+technically un-run), and the **budget-exceeded** path (would need ~$1 of real spend; guard is unit-tested only).
 
 ## If resuming autonomously
 
-The plan is done, so the next step needs a signal from the owner. In rough order of value:
+The plan is done and the AI gate is closed, so the next step needs a signal from the owner. In rough order of value:
 
-1. **Add an `ANTHROPIC_API_KEY`** → verify the MOM-136/137/138 live paths (and MOM-068–074's), then flip those rows
-   from VERIFICATION-BLOCKED to DONE.
-2. **Deploy** (`render.yaml`/`vercel.json` are ready) → unblocks MOM-021, MOM-088's Lighthouse pass, and the real iOS
-   push-notification path (MOM-092).
-3. **Ask for a new feature**, or point at something these sessions' tests and live round-trips did not catch.
+1. **Deploy** (`render.yaml`/`vercel.json` are ready) → unblocks MOM-021, MOM-088's Lighthouse pass, and the real iOS
+   push-notification path (MOM-092). This is now the only remaining *infrastructure* blocker.
+2. **Ask for a new feature**, or point at something these sessions' tests and live round-trips did not catch.
+3. **MOM-049** (LeetCode import) — still needs an explicit go-ahead (third-party GraphQL API).
 
 Still deliberately not attempted (a judgment call, not a hard block): **MOM-049** (LeetCode import) — calling a
 third-party GraphQL API without an explicit go-ahead is a different risk class than writing original seed content.

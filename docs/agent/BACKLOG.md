@@ -500,15 +500,17 @@ Global verification / forbidden-file defaults:
   orphan-cleanup removed the `ReviewState` row too (0 remaining).
 
 ### Track I — AI Feedback Engine · Gate 4
-**Status note (2026-07-07):** this entire track is **DONE (scaffold) — VERIFICATION-BLOCKED
-on a live `ANTHROPIC_API_KEY`**. Reconciles a contradiction the doc-audit found: this section
-marked MOM-068–074 flatly "DONE" while `NEXT.MD` simultaneously listed the same range as
-blocked/unverified pending a real key. Both were true in different senses — the code is
-complete, tested (14 mocked/zero-network tests), and live-verified against the *no-key*
-path (`available:false`, clean `503`). What remains genuinely unverified: a real
-`messages.parse` call succeeding, the budget-exceeded path, and a real graded
-score/feedback actually rendering on the frontend. Gate 4 stays open until a key is added
-and those three are checked once.
+**Status note — SUPERSEDED 2026-07-11: this track is now `DONE` and LIVE-VERIFIED.** The owner supplied a
+key, and `POST /attempts/:id/grade` was executed against a real model: a genuine `messages.parse` call
+succeeded (12.2s), returning a structured rubric (correctness / complexity / edge cases / communication) that
+correctly caught a nonsense answer — "two-pointer sweep" for a binary-tree max-path-sum problem → `aiScore`
+0.02, suggested rating `again`. Budget accounting debited correctly. Verified through an **OpenRouter** key
+against their Anthropic-compatible `/v1/messages` endpoint, not `api.anthropic.com` directly — same wire
+format and structured-output handling, but a native `sk-ant-` call is still technically un-run. The
+budget-*exceeded* path remains unexercised (it would need ~$1 of real spend to trigger; the guard is unit-tested).
+
+*Original blocked note (2026-07-07, kept for history):* the code was complete, tested (14 mocked/zero-network
+tests), and live-verified only against the *no-key* path (`available:false`, clean `503`).
 - **MOM-068** AI SDK spike — **DONE** 2026-07-06 (SPIKE-005 resolved). Consulted the
   bundled `claude-api` skill, then verified directly against the *installed*
   `@anthropic-ai/sdk` package types (the skill's docs describe a newer GA shape than
@@ -808,9 +810,9 @@ task is a DESIGN-doc PR then a separate human-approved implementer PR (D-004), t
 - **MOM-133** Implement `ResumeVersion` CRUD + link to `JobApplication` · **DONE** 2026-07-10 (migration `resume_versions`: new table, `jobApplicationId` FK SetNull, `contentMd` Markdown derived from Profile on create; `resumes` CRUD module; `/profile/resumes` editor page. 273 API tests; live: derive-from-profile + CRUD round-trip verified.) · *migration*
 - **MOM-134** ATS keyword coverage vs a JD (deterministic; extend `extractJdSkills`) · **DONE (lite)** Phase 0 (`a5d6476`; `AtsCoverageResponse` + coverage vs base profile). **DONE (full)** 2026-07-10 — coverage now measures a specific `ResumeVersion.contentMd` when `resumeVersionId` is supplied (`source`/`resumeVersionId` on the response), plus a `POST /profile-scores/ats-coverage/generate-tasks` gap→task bridge (MOM-135 pattern) turning missing JD keywords into idempotent study tasks; `/profile/resumes` gains an ATS panel. 278 API tests; live: résumé 0.25 vs profile 0.125 coverage, 6 tasks created then 0 (idempotent), 404 on bogus version.
 - **MOM-135** Gap → Task bridge from `score-profile`/ATS (reuse `generatePrep` pattern) · **DONE** Phase 0 (`b79cde5`; résumé-score gaps become executable Tasks).
-- **MOM-136** AI résumé/bullet analysis service (dormant-until-key; reuse `grading.service`) · **DONE (scaffold) — VERIFICATION-BLOCKED on live key** 2026-07-10 (`ai/resume-ai.service.ts` mirrors `grading.service.ts`: `isAvailable()`, `messages.parse` + `zodOutputFormat`, structured `{ok:false,reason}` never a throw; `ResumeAnalysisSchema` = per-bullet impact 0–5 / seniority signal / issue / suggestion + missing themes; `POST /resumes/:id/ai/analyze`. Live: returns `{ok:false}` with no key, no DB write, no spend.) · *AI-dormant*
-- **MOM-137** AI bullet rewriting per JD · **DONE (scaffold) — VERIFICATION-BLOCKED on live key** 2026-07-10 (`BulletRewriteSchema` original→rewritten+rationale; `POST /resumes/:id/ai/rewrite` persists the rewrites into `ResumeVersion.aiSuggestions` on success only; web accept/reject — accept swaps original→rewritten in the draft `contentMd`.) · *AI-dormant*
-- **MOM-138** AI cover-letter drafting per job (visa-context framing) · **DONE (scaffold) — VERIFICATION-BLOCKED on live key** 2026-07-10 (`CoverLetterDraftSchema` = `draftMarkdown` + a standalone `visaFramingParagraph` + word count; `POST /resumes/:id/ai/cover-letter`.) · *AI-dormant*
+- **MOM-136** AI résumé/bullet analysis service (dormant-until-key; reuse `grading.service`) · **DONE — LIVE-VERIFIED 2026-07-11** (was scaffold-only 2026-07-10) (`ai/resume-ai.service.ts` mirrors `grading.service.ts`: `isAvailable()`, `messages.parse` + `zodOutputFormat`, structured `{ok:false,reason}` never a throw; `ResumeAnalysisSchema` = per-bullet impact 0–5 / seniority signal / issue / suggestion + missing themes; `POST /resumes/:id/ai/analyze`. Live: returns `{ok:false}` with no key, no DB write, no spend.) · **Live 2026-07-11:** analyze returned a real structured verdict on a deliberately weak resume — all three filler bullets ("Worked on the API.") scored impactScore 0 / junior with concrete rewrites, plus 8 missingThemes. 13.2s.
+- **MOM-137** AI bullet rewriting per JD · **DONE — LIVE-VERIFIED 2026-07-11** (was scaffold-only 2026-07-10) (`BulletRewriteSchema` original→rewritten+rationale; `POST /resumes/:id/ai/rewrite` persists the rewrites into `ResumeVersion.aiSuggestions` on success only; web accept/reject — accept swaps original→rewritten in the draft `contentMd`.) · **Live 2026-07-11:** rewrite produced 3 JD-targeted rewrites that notably did NOT fabricate metrics, and **persisted them into `ResumeVersion.aiSuggestions`** (verified by re-fetching the version: 3 objects with original/rewritten/rationale).
+- **MOM-138** AI cover-letter drafting per job (visa-context framing) · **DONE — LIVE-VERIFIED 2026-07-11** (was scaffold-only 2026-07-10) (`CoverLetterDraftSchema` = `draftMarkdown` + a standalone `visaFramingParagraph` + word count; `POST /resumes/:id/ai/cover-letter`.) · **Live 2026-07-11:** cover-letter returned a 218-word draft plus a standalone visa-framing paragraph that correctly picked up "sponsorship available" from the JD.
 - **MOM-139** Résumé export — Markdown then ATS-safe PDF · **DONE** 2026-07-10 — `GET /resumes/:id/export?format=md|pdf`. MD = `contentMd` attachment; PDF = ATS-safe single-column render via a **dependency-free** hand-rolled writer (`resume-pdf.util.ts`, standard Helvetica, no font embedding, no binary dep — chosen over pdfkit/puppeteer because the safest ATS output is exactly plain text + a standard font, and that needs no library). Web: `/profile/resumes` "Export .md/.pdf" buttons (auth-header fetch → blob download). 281 API tests; live: MD round-trip, PDF deterministic (1545B, identical across runs) and **verified parseable by pypdf** — clean text extraction of every section; 400 on unknown format, 404 on foreign version. Rollback: revert code (no schema, no dep).
 
 ### Track S — Career Today, Automation & Loop Closure · CareerOS Gate 1/5
