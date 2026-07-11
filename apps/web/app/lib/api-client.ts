@@ -487,6 +487,10 @@ import type {
   ResumeVersionResponse,
   CreateResumeVersionRequest,
   UpdateResumeVersionRequest,
+  ResumeAiEnvelope,
+  ResumeAnalysisResult,
+  ResumeRewriteResult,
+  CoverLetterDraftResult,
   PracticeRecommendationResponse,
   ReadwiseConnectionResponse,
   ReadwiseSyncRunResponse,
@@ -565,6 +569,18 @@ export const resumesApi = {
 
   remove: (id: string) =>
     request<void>(`/resumes/${id}`, { method: 'DELETE' }),
+
+  // MOM-136/137/138: résumé AI, dormant-until-key. These resolve to
+  // {ok:false, reason} (HTTP 200) when the instance has no ANTHROPIC_API_KEY,
+  // so callers render a banner rather than handling an error.
+  aiAnalyze: (id: string) =>
+    request<ResumeAiEnvelope<ResumeAnalysisResult>>(`/resumes/${id}/ai/analyze`, { method: 'POST' }),
+
+  aiRewrite: (id: string, jdText: string) =>
+    request<ResumeAiEnvelope<ResumeRewriteResult>>(`/resumes/${id}/ai/rewrite`, { method: 'POST', body: JSON.stringify({ jdText }) }),
+
+  aiCoverLetter: (id: string, jdText: string) =>
+    request<ResumeAiEnvelope<CoverLetterDraftResult>>(`/resumes/${id}/ai/cover-letter`, { method: 'POST', body: JSON.stringify({ jdText }) }),
 
   // MOM-139: fetch the export with the auth header (a plain <a href> can't send
   // the Bearer token), then trigger a browser download of the returned blob.

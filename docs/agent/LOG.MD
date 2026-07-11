@@ -1,5 +1,41 @@
 # LOG
 
+## 2026-07-10 - MOM-136/137/138: AI résumé analysis / bullet-rewrite / cover-letter (CLAUDE, dormant-until-key)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No migration. **VERIFICATION-BLOCKED on a live
+`ANTHROPIC_API_KEY`** — the same honest status as MOM-068–074. The no-key path is fully verified; **the live model
+path is not, and this entry does not claim it works.**
+
+**What:** `apps/api/src/ai/resume-ai.service.ts` mirrors `grading.service.ts` exactly — `isAvailable()` =
+`Boolean(getAnthropicApiKey())`, `client.messages.parse` + `zodOutputFormat`, adaptive thinking, and a structured
+`{ok:false,reason}` for *every* failure (no key, schema miss, rate limit, auth, connection) so the feature is
+**dormant, never broken**. `ResumeAiOrchestrator` mirrors `AiService.gradeAttempt`: availability → version lookup
+(404) → **the same shared daily `BudgetService` pool** (`checkAndReserve` / `record` with real token counts) → call
+→ record.
+
+- **MOM-136** `ResumeAnalysisSchema` — per-bullet `impactScore` 0–5, `senioritySignal`, the issue, a concrete fix,
+  plus `missingThemes`. `POST /resumes/:id/ai/analyze`.
+- **MOM-137** `BulletRewriteSchema` — `original → rewritten + rationale`, JD-tailored. `POST /resumes/:id/ai/rewrite`
+  persists the rewrites into `ResumeVersion.aiSuggestions` **on success only**. Web shows accept/reject; **accept is
+  deterministic** — it swaps `original`→`rewritten` in the draft `contentMd`, then Save persists.
+- **MOM-138** `CoverLetterDraftSchema` — `draftMarkdown` + a standalone `visaFramingParagraph` the candidate can slot
+  in or drop. `POST /resumes/:id/ai/cover-letter`.
+
+**Design note (deviation from the plan's letter, not its intent):** the plan said "zod schemas in shared". They live
+in `ai/dto/resume-ai.schema.ts` instead — exactly where `grade-result.schema.ts` lives — because `zodOutputFormat()`
+needs zod's **v4** API surface, which only the API depends on. The web consumes plain response interfaces
+(`ResumeAnalysisResult`, `ResumeBulletRewrite`, `CoverLetterDraftResult`, `ResumeAiEnvelope<T>`) from `@momito/shared`.
+
+**Checks:** shared build; API + web lint/typecheck green; **291 API tests** (+10, **all fully mocked, zero-network**:
+no-key dormancy across all three methods, successful parse of each schema, JD passthrough, schema-miss/rate-limit/auth
+→ structured failure, orchestrator dormancy touching neither DB nor budget nor model, budget `record` with real token
+counts, suggestions persisted only on success, 404 foreign version, 400 budget exhausted) + 26 web. **Live-verified
+(no-key path only)**: all three endpoints return `{"ok":false,"reason":"…no ANTHROPIC_API_KEY…"}`; `aiSuggestions`
+stayed `[]`; `ai/usage` still `available:false, requests:0, costUsd:0` — nothing written, nothing billed; DTO
+validation 400s on a missing `jdText`. Demo version deleted afterwards.
+
+**Rollback:** revert code — no schema, no dependency, no data.
+
 ## 2026-07-10 - MOM-139: résumé export md|pdf (CLAUDE, no schema, no new dep)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No migration. Depends on ResumeVersion (MOM-133).

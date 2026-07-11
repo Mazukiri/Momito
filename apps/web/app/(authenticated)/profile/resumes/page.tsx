@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CAREER_ROLE_TRACKS, type AtsCoverageResponse, type CareerRoleTrackId, type ResumeVersionResponse } from '@momito/shared';
+import { CAREER_ROLE_TRACKS, type AtsCoverageResponse, type CareerRoleTrackId, type CoverLetterDraftResult, type ResumeAnalysisResult, type ResumeBulletRewrite, type ResumeVersionResponse } from '@momito/shared';
 import { profileScoresApi, resumesApi } from '../../../lib/api-client';
 import { Card, EmptyState, ErrorBanner, Spinner } from '../../../components/ui';
 
@@ -20,6 +20,13 @@ export default function ResumesPage() {
   const [ats, setAts] = useState<AtsCoverageResponse | null>(null);
   const [atsBusy, setAtsBusy] = useState(false);
   const [atsMsg, setAtsMsg] = useState('');
+  // MOM-136/137/138: résumé AI. `aiReason` holds the dormant-until-key banner
+  // ("not configured on this instance") — an expected state, not an error.
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiReason, setAiReason] = useState('');
+  const [analysis, setAnalysis] = useState<ResumeAnalysisResult | null>(null);
+  const [rewrites, setRewrites] = useState<ResumeBulletRewrite[] | null>(null);
+  const [coverLetter, setCoverLetter] = useState<CoverLetterDraftResult | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,6 +57,10 @@ export default function ResumesPage() {
     setDraftLabel(version.label);
     setAts(null);
     setAtsMsg('');
+    setAnalysis(null);
+    setRewrites(null);
+    setCoverLetter(null);
+    setAiReason('');
   }
 
   async function checkAts() {
@@ -106,6 +117,39 @@ export default function ResumesPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // MOM-136/137/138. The envelope's ok:false is the dormant-until-key path, so it
+  // renders as a banner (setAiReason), not as an error.
+  async function runAi(kind: 'analyze' | 'rewrite' | 'cover-letter') {
+    if (!selectedId) return;
+    if (kind !== 'analyze' && !jdText.trim()) return;
+    setAiBusy(true);
+    setAiReason('');
+    setError('');
+    try {
+      if (kind === 'analyze') {
+        const res = await resumesApi.aiAnalyze(selectedId);
+        if (res.ok) setAnalysis(res.result); else setAiReason(res.reason);
+      } else if (kind === 'rewrite') {
+        const res = await resumesApi.aiRewrite(selectedId, jdText.trim());
+        if (res.ok) setRewrites(res.result.rewrites); else setAiReason(res.reason);
+      } else {
+        const res = await resumesApi.aiCoverLetter(selectedId, jdText.trim());
+        if (res.ok) setCoverLetter(res.result); else setAiReason(res.reason);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'AI request failed');
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  // Accepting a rewrite is deterministic and local: swap the original bullet for
+  // the rewritten one in the draft, then Save persists it.
+  function acceptRewrite(rewrite: ResumeBulletRewrite) {
+    setDraft((current) => (current.includes(rewrite.original) ? current.replace(rewrite.original, rewrite.rewritten) : current));
+    setRewrites((current) => (current ?? []).filter((item) => item.original !== rewrite.original));
   }
 
   async function download(id: string, format: 'md' | 'pdf') {
@@ -208,6 +252,60 @@ export default function ResumesPage() {
                         {ats.covered.map((kw) => <span key={kw} className="mr-1 mb-1 inline-block rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">{kw}</span>)}
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+                <p className="text-xs font-medium text-zinc-500">AI tailoring</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button onClick={() => runAi('analyze')} disabled={aiBusy} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">Analyze bullets</button>
+                  <button onClick={() => runAi('rewrite')} disabled={aiBusy || !jdText.trim()} title={jdText.trim() ? undefined : 'Paste a JD above first'} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">Rewrite for this JD</button>
+                  <button onClick={() => runAi('cover-letter')} disabled={aiBusy || !jdText.trim()} title={jdText.trim() ? undefined : 'Paste a JD above first'} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">Draft cover letter</button>
+                  {aiBusy && <Spinner className="h-4 w-4" />}
+                </div>
+
+                {aiReason && (
+                  <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">{aiReason}</p>
+                )}
+
+                {analysis && (
+                  <div className="mt-3 space-y-2 text-xs">
+                    <p className="text-zinc-700 dark:text-zinc-200">{analysis.overallImpression}</p>
+                    {analysis.bulletFeedback.map((item) => (
+                      <div key={item.original} className="rounded-lg border border-zinc-200 p-2 dark:border-zinc-700">
+                        <p className="font-mono text-[11px] text-zinc-500">{item.original}</p>
+                        <p className="mt-1 text-zinc-700 dark:text-zinc-200">Impact {item.impactScore}/5 · reads as {item.senioritySignal} — {item.issue}</p>
+                        <p className="mt-0.5 text-emerald-700 dark:text-emerald-400">{item.suggestion}</p>
+                      </div>
+                    ))}
+                    {analysis.missingThemes.length > 0 && (
+                      <p className="text-zinc-500">Missing themes: {analysis.missingThemes.join(', ')}</p>
+                    )}
+                  </div>
+                )}
+
+                {rewrites && rewrites.length > 0 && (
+                  <div className="mt-3 space-y-2 text-xs">
+                    {rewrites.map((item) => (
+                      <div key={item.original} className="rounded-lg border border-indigo-200 p-2 dark:border-indigo-800">
+                        <p className="font-mono text-[11px] text-zinc-500 line-through">{item.original}</p>
+                        <p className="mt-1 text-zinc-800 dark:text-zinc-100">{item.rewritten}</p>
+                        <p className="mt-0.5 text-zinc-500">{item.rationale}</p>
+                        <div className="mt-1.5 flex gap-2">
+                          <button onClick={() => acceptRewrite(item)} className="rounded-md bg-indigo-600 px-2 py-1 text-[11px] font-medium text-white">Accept</button>
+                          <button onClick={() => setRewrites((current) => (current ?? []).filter((r) => r.original !== item.original))} className="rounded-md border border-zinc-300 px-2 py-1 text-[11px] text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">Reject</button>
+                        </div>
+                      </div>
+                    ))}
+                    <p className="text-zinc-400">Accepting patches the draft above — press Save to keep it.</p>
+                  </div>
+                )}
+
+                {coverLetter && (
+                  <div className="mt-3 space-y-2 text-xs">
+                    <pre className="whitespace-pre-wrap rounded-lg border border-zinc-200 p-2 font-mono text-[11px] text-zinc-700 dark:border-zinc-700 dark:text-zinc-200">{coverLetter.draftMarkdown}</pre>
+                    <p className="text-zinc-500">Visa framing (optional): {coverLetter.visaFramingParagraph}</p>
                   </div>
                 )}
               </div>

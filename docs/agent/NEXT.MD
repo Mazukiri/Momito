@@ -149,15 +149,19 @@ needs no library, and this avoids touching the not-ours `pnpm-lock.yaml`); `/pro
 an auth-header blob download; 281 API tests; live: PDF byte-deterministic + **verified parseable by pypdf**).
 **★ Résumé artifacts are now editable, ATS-scored against a JD, and exportable.**
 
-**Active PR-sized task — MOM-136/137/138: AI résumé analysis / bullet-rewrite / cover-letter (dormant-until-key).**
-Mirror `apps/api/src/ai/grading.service.ts` exactly: new `apps/api/src/ai/resume-ai.service.ts` with `isAvailable()`
-= `Boolean(getAnthropicApiKey())`, `client.messages.parse` + `zodOutputFormat`, budget via `budget.checkAndReserve/
-record`. Zod schemas in shared: `ResumeAnalysis` (per-bullet impact/seniority), `BulletRewrite` (original→rewritten
-per JD), `CoverLetterDraft` (visa-context paragraph). MOM-137 writes suggestions into `ResumeVersion.aiSuggestions`;
-UI shows accept/reject (accept = patch `contentMd`). **All tests fully mocked, zero-network**; mark the backlog rows
-"DONE (scaffold) — VERIFICATION-BLOCKED on live key" exactly like MOM-068–074. Never claim the live path works.
-Then MOM-145 (conversion by source + résumé version — extend `jobs.service.funnel()` with `byResumeVersion`). Full
-design in the approved handoff plan (`~/.claude/plans/…mossy-moore.md`).
+**Shipped since:** **MOM-136/137/138** (résumé AI, **dormant-until-key**, mirroring `grading.service.ts`:
+`resume-ai.service.ts` + `ResumeAiOrchestrator` reusing the same daily `BudgetService` pool; `POST /resumes/:id/ai/
+{analyze,rewrite,cover-letter}`; MOM-137 persists rewrites to `ResumeVersion.aiSuggestions` on success only and the
+UI's "accept" deterministically swaps original→rewritten in the draft; 291 API tests, **all mocked, zero-network**;
+live no-key path: all three return `{ok:false}`, nothing written, nothing billed). **Backlog rows are marked
+"DONE (scaffold) — VERIFICATION-BLOCKED on live key" — the live model path is NOT verified and must not be claimed.**
+
+**Active PR-sized task — MOM-145: conversion analytics by source and résumé version (no schema).** Extend
+`jobs.service.funnel()` breakdowns with `byResumeVersion` (join through `ResumeVersion.jobApplicationId` — which
+version was sent to each job, and how far those applications got), alongside the existing `bySource`/`byVisaTag`/
+`byRejectionReason` and the MOM-104 `medianDaysInStage`. Grow the dashboard funnel card with the extra rows. This is
+the **last item in the approved handoff plan** (`~/.claude/plans/…mossy-moore.md`) — Waves 1–3 and the rest of Wave 4
+are complete.
 
 **Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
 first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).

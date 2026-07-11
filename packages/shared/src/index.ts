@@ -1017,6 +1017,53 @@ export interface AtsCoverageResponse {
   resumeVersionId: string | null; // MOM-134-full — set when source==='resume'
 }
 
+// MOM-136/137/138 (CareerOS Track Q): résumé AI, dormant-until-key. Every AI
+// endpoint returns this envelope — `ok:false` with a reason when no
+// ANTHROPIC_API_KEY is configured (the feature is dormant, not broken), so the
+// UI shows a banner rather than an error. Mirrors `grading.service`'s outcome
+// shape. The zod schemas that constrain the model live in the API
+// (`ai/dto/resume-ai.schema.ts`); these are the plain shapes the web renders.
+export type ResumeAiEnvelope<T> = { ok: true; result: T } | { ok: false; reason: string };
+
+export const RESUME_SENIORITY_SIGNALS = ['junior', 'mid', 'senior', 'staff'] as const;
+export type ResumeSenioritySignal = (typeof RESUME_SENIORITY_SIGNALS)[number];
+
+// MOM-136 — per-bullet impact/seniority analysis.
+export interface ResumeBulletFeedback {
+  original: string;
+  impactScore: number; // 0-5
+  senioritySignal: ResumeSenioritySignal;
+  issue: string;
+  suggestion: string;
+}
+export interface ResumeAnalysisResult {
+  overallImpression: string;
+  bulletFeedback: ResumeBulletFeedback[];
+  missingThemes: string[];
+}
+
+// MOM-137 — JD-tailored bullet rewrites. Persisted to `ResumeVersion.aiSuggestions`;
+// "accept" = replace `original` with `rewritten` in the version's contentMd.
+export interface ResumeBulletRewrite {
+  original: string;
+  rewritten: string;
+  rationale: string;
+}
+export interface ResumeRewriteResult {
+  rewrites: ResumeBulletRewrite[];
+}
+
+// MOM-138 — cover-letter draft with an optional visa-framing paragraph.
+export interface CoverLetterDraftResult {
+  draftMarkdown: string;
+  visaFramingParagraph: string;
+  wordCount: number;
+}
+
+export interface ResumeAiJdRequest {
+  jdText: string;
+}
+
 // MOM-134-full: request shape for ATS coverage (optional résumé version) and the
 // gap→task bridge (MOM-135 pattern) that turns missing keywords into study tasks.
 export interface AtsCoverageRequest {
