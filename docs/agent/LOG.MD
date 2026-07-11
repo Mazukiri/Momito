@@ -1,5 +1,30 @@
 # LOG
 
+## 2026-07-12 - MOM-155: résumé drift — the snapshot nobody read (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration.
+
+**How it was found.** MOM-154 ended with a hypothesis: a column that is *written and serialized but read by no
+client* is a dead loop by definition, so grep for more. Six candidates (`rawCvText`, `baseProfileSnapshot`,
+`compBand`, `interviewProcess`, `roleTrackIds`, `visaFramingParagraph`); five were read by the web. One was not.
+
+**`ResumeVersion.baseProfileSnapshot`** has recorded, since MOM-132, exactly what the `Profile` looked like when a
+version was cut. Nothing ever read it — it was not even on the response type. But that snapshot is precisely what is
+needed to answer a question a job seeker genuinely has and this app could not: *what have I done since I cut this
+résumé?* Without it, a version rots in silence. You ship a project, add a skill, land an internship — and the résumé
+you keep attaching to applications still predates all of it, with no signal anywhere in the product.
+
+`GET /resumes/:id/drift` diffs the current profile against the snapshot **by identity** — skill string, project name,
+company+role, case-insensitively — not by deep equality. That distinction is the whole design: an edited description
+is not something to nag about; a *missing project* is. A version whose `contentMd` was supplied by hand has no
+provenance to diff against, so it answers `hasSnapshot: false` rather than guessing or silently reporting "not
+stale", which would be a lie of omission. `/profile/resumes` renders an amber panel naming exactly what is missing.
+
+**Verified:** 319 API tests (+5), 26 web tests, lint + typecheck clean. Live: a version cut from the profile reported
+clean; adding CUDA, a "GPU Ray Tracer" project and an NVIDIA role to the profile flipped it to `isStale: true` naming
+all three; a hand-written version reported `hasSnapshot: false`. The demo profile was mutated to run this and was
+**restored to its exact prior state** afterwards (verified by re-reading it); the test versions were deleted.
+
 ## 2026-07-12 - MOM-154: aiSuggestions was a write-only column (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Found while shipping MOM-153.

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CAREER_ROLE_TRACKS, type AtsCoverageResponse, type CareerRoleTrackId, type CoverLetterDraftResult, type JobApplicationResponse, type JobFunnelBreakdownRow, type ResumeAnalysisResult, type ResumeBulletRewrite, type ResumeVersionResponse } from '@momito/shared';
+import { CAREER_ROLE_TRACKS, type AtsCoverageResponse, type CareerRoleTrackId, type CoverLetterDraftResult, type JobApplicationResponse, type JobFunnelBreakdownRow, type ResumeAnalysisResult, type ResumeBulletRewrite, type ResumeDriftResponse, type ResumeVersionResponse } from '@momito/shared';
 import { jobsApi, profileScoresApi, resumesApi } from '../../../lib/api-client';
 import { Card, EmptyState, ErrorBanner, Spinner } from '../../../components/ui';
 
@@ -27,6 +27,8 @@ export default function ResumesPage() {
   const [targetJobId, setTargetJobId] = useState('');
   const [themeMsg, setThemeMsg] = useState('');
   const [rewriteMsg, setRewriteMsg] = useState(''); // MOM-154: accept/reject feedback
+  // MOM-155: what the profile has gained since this version was cut from it.
+  const [drift, setDrift] = useState<ResumeDriftResponse | null>(null);
   // MOM-152: which résumé actually converts. MOM-145's funnel already computes this per
   // version label — surfacing it here closes the loop: analyse → rewrite → send → measure.
   const [performance, setPerformance] = useState<JobFunnelBreakdownRow[]>([]);
@@ -39,6 +41,15 @@ export default function ResumesPage() {
   // MOM-153: tailoring needs *a* job description — pasted, or already stored on a picked
   // application. (If the picked application has no JD saved, the API says so in its banner.)
   const hasTarget = Boolean(jdText.trim() || targetJobId);
+
+  // MOM-155: silent if it fails — drift is a nice-to-know, never a reason to break the editor.
+  const loadDrift = useCallback(async (versionId: string) => {
+    try {
+      setDrift(await resumesApi.drift(versionId));
+    } catch {
+      setDrift(null);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,13 +64,14 @@ export default function ResumesPage() {
         setDraft(list[0].contentMd);
         setDraftLabel(list[0].label);
         setRewrites(list[0].aiSuggestions.length > 0 ? list[0].aiSuggestions : null); // MOM-154
+        void loadDrift(list[0].id); // MOM-155
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load résumés');
     } finally {
       setLoading(false);
     }
-  }, [selectedId]);
+  }, [selectedId, loadDrift]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard data load
@@ -79,6 +91,8 @@ export default function ResumesPage() {
     setCoverLetter(null);
     setAiReason('');
     setRewriteMsg('');
+    setDrift(null);
+    void loadDrift(version.id);
   }
 
   async function checkAts() {
@@ -305,6 +319,24 @@ export default function ResumesPage() {
                 <button onClick={() => download(selected.id, 'pdf')} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-200">Export .pdf</button>
                 <span className="text-xs text-zinc-400">Markdown · {draft.length} chars</span>
               </div>
+
+              {/* MOM-155: a résumé rots quietly — you ship a project and keep sending the version
+                  that predates it. baseProfileSnapshot has always known; nothing ever asked. */}
+              {drift?.isStale && (
+                <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs dark:border-amber-700 dark:bg-amber-950/30">
+                  <p className="font-medium text-amber-900 dark:text-amber-200">Your profile has moved on since this version was cut.</p>
+                  {drift.newExperience.length > 0 && (
+                    <p className="mt-1 text-amber-800 dark:text-amber-300"><span className="font-medium">New experience:</span> {drift.newExperience.join(' · ')}</p>
+                  )}
+                  {drift.newProjects.length > 0 && (
+                    <p className="mt-1 text-amber-800 dark:text-amber-300"><span className="font-medium">New projects:</span> {drift.newProjects.join(' · ')}</p>
+                  )}
+                  {drift.newSkills.length > 0 && (
+                    <p className="mt-1 text-amber-800 dark:text-amber-300"><span className="font-medium">New skills:</span> {drift.newSkills.join(', ')}</p>
+                  )}
+                  <p className="mt-1.5 text-amber-700 dark:text-amber-400">Not on this résumé yet — add what matters for the target, or cut a fresh version from your profile.</p>
+                </div>
+              )}
 
               <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
                 <label className="block text-xs font-medium text-zinc-500">ATS keyword coverage — paste a job description</label>

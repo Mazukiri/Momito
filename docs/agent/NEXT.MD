@@ -225,9 +225,16 @@ MOM-146 Readwise ledger — *persisting* something is not *closing the loop on i
 can…" is a claim, not a wire. Outstanding rewrites now come back with the résumé; accept applies the text and retires
 the suggestion in one write; reject persists immediately. 314 API tests.
 
-**If you are looking for the next thing:** this pair suggests a cheap, high-yield sweep — grep for other columns that
-are *written and serialized but never read by any client* (they are dead loops by definition). `Profile.rawCvText`,
-`ResumeVersion.baseProfileSnapshot`, and `Company.compBand` are the obvious candidates to check.
+### MOM-155 (2026-07-12) — the sweep paid off once: résumé drift
+
+Ran that sweep. Six candidates; five were read by the web. The one that was not — **`baseProfileSnapshot`** — turned
+out to be a feature waiting to happen: it records what the `Profile` looked like when a version was cut, which is
+exactly what answers *"what have I done since I cut this résumé?"* Nobody was asking, so versions rotted in silence.
+`GET /resumes/:id/drift` now diffs by identity (skill / project name / company+role), and `/profile/resumes` shows
+"Your profile has moved on since this version was cut", naming what is missing. 319 API tests.
+
+The write-only-column sweep is now **exhausted** for the résumé surface. If repeating the trick elsewhere: the shape
+to grep for is a column the API writes and serializes that no `apps/web` file ever names.
 
 ## If resuming autonomously
 

@@ -139,6 +139,84 @@ describe('ResumesService (MOM-133)', () => {
   });
 });
 
+// MOM-155 — baseProfileSnapshot has recorded, since MOM-132, exactly what the Profile looked like
+// when a version was cut. Nothing ever read it, so a résumé rotted silently: you ship a project and
+// keep sending the version that predates it, with no signal anywhere.
+describe('ResumesService.drift (MOM-155)', () => {
+  // the snapshot is one project and one role behind the profile fixture, and misses a skill
+  const staleSnapshot = {
+    skills: ['TypeScript'],
+    experience: [],
+    projects: [],
+  };
+
+  it('reports what the profile has gained since the version was cut', async () => {
+    const { service } = makeService({
+      resumeVersion: { findFirst: vi.fn().mockResolvedValue(versionRow({ baseProfileSnapshot: staleSnapshot })) },
+    });
+
+    const result = await service.drift('rv-1', 'user-1');
+
+    expect(result.hasSnapshot).toBe(true);
+    expect(result.isStale).toBe(true);
+    expect(result.newSkills).toEqual(['Rust']); // TypeScript was already there
+    expect(result.newProjects).toEqual(['Momito']);
+    expect(result.newExperience).toEqual(['SWE — Meta']);
+  });
+
+  it('is not stale when the profile still matches the snapshot', async () => {
+    const { service } = makeService({
+      resumeVersion: {
+        findFirst: vi.fn().mockResolvedValue(
+          versionRow({ baseProfileSnapshot: { skills: profile.skills, experience: profile.experience, projects: profile.projects } }),
+        ),
+      },
+    });
+
+    const result = await service.drift('rv-1', 'user-1');
+
+    expect(result).toMatchObject({ isStale: false, newSkills: [], newProjects: [], newExperience: [] });
+  });
+
+  // Identity, not deep equality: an edited description is not worth nagging about; a missing
+  // project is. Case-insensitive, so a re-typed skill is not reported as new.
+  it('diffs by identity and ignores case, not by deep equality', async () => {
+    const { service } = makeService({
+      resumeVersion: {
+        findFirst: vi.fn().mockResolvedValue(
+          versionRow({
+            baseProfileSnapshot: {
+              skills: ['typescript', 'RUST'],
+              experience: [{ company: 'meta', role: 'swe', years: 1, tier: 'big', description: 'totally different text' }],
+              projects: [{ name: 'momito', url: null, description: 'edited since', type: 'web', githubStars: 0 }],
+            },
+          }),
+        ),
+      },
+    });
+
+    const result = await service.drift('rv-1', 'user-1');
+
+    expect(result.isStale).toBe(false);
+  });
+
+  it('says so, rather than guessing, when the version has no provenance to diff against', async () => {
+    const { service, prisma } = makeService({
+      resumeVersion: { findFirst: vi.fn().mockResolvedValue(versionRow({ baseProfileSnapshot: null })) },
+    });
+
+    const result = await service.drift('rv-1', 'user-1');
+
+    expect(result).toMatchObject({ hasSnapshot: false, isStale: false });
+    expect(prisma.profile.findUnique).not.toHaveBeenCalled(); // nothing to compare — don't load one
+  });
+
+  it('404s on a foreign version', async () => {
+    const { service } = makeService({ resumeVersion: { findFirst: vi.fn().mockResolvedValue(null) } });
+    await expect(service.drift('rv-1', 'user-2')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
 describe('ResumesService.export (MOM-139)', () => {
   const contentMd = '# Ada Lovelace\nada@x.com · https://github.com/ada\n\n## Skills\nTypeScript, Rust\n\n## Experience\n### SWE — Meta (3y)\nBuilt distributed systems serving millions.';
 

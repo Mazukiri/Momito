@@ -890,6 +890,22 @@ export interface CreateResumeVersionRequest {
   contentMd?: string;
 }
 
+// MOM-155 — résumé drift. `ResumeVersion.baseProfileSnapshot` records the Profile the version was
+// derived from (MOM-132), which is exactly what is needed to answer "what have I done since I cut
+// this résumé?" — a question nobody was asking, so versions rotted silently as the profile grew.
+// `hasSnapshot: false` = the version's content was supplied by hand, so there is no provenance to
+// diff against; that is stated, not guessed at.
+export interface ResumeDriftResponse {
+  resumeVersionId: string;
+  hasSnapshot: boolean;
+  /** In the profile now, absent from the snapshot this version was cut from. */
+  newSkills: string[];
+  newProjects: string[];
+  newExperience: string[];
+  /** True when the profile has moved on at all — the résumé is behind. */
+  isStale: boolean;
+}
+
 export interface UpdateResumeVersionRequest {
   label?: string;
   targetRoleTrackId?: CareerRoleTrackId | null;

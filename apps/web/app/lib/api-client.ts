@@ -485,6 +485,7 @@ import type {
   OfferResponse,
   UpsertOfferRequest,
   ResumeVersionResponse,
+  ResumeDriftResponse,
   CreateResumeVersionRequest,
   UpdateResumeVersionRequest,
   ResumeAiEnvelope,
@@ -580,6 +581,9 @@ export const resumesApi = {
       method: 'POST',
       body: JSON.stringify(jobApplicationId ? { jobApplicationId } : {}),
     }),
+
+  // MOM-155: what the profile has gained since this version was derived from it.
+  drift: (id: string) => request<ResumeDriftResponse>(`/resumes/${id}/drift`),
 
   // MOM-151: the analysis's missing themes become study tasks (deduped server-side, no AI spend).
   aiThemesToTasks: (id: string, themes: string[]) =>

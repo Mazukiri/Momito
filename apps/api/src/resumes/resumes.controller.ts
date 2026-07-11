@@ -37,6 +37,13 @@ export class ResumesController {
     return new StreamableFile(file.body);
   }
 
+  // MOM-155: what the profile has gained since this version was cut. Static suffix, so it is
+  // declared before the plain `:id` GET for the same reason `:id/export` is.
+  @Get(':id/drift')
+  drift(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.resumes.drift(id, user.id);
+  }
+
   @Get(':id')
   get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.resumes.get(id, user.id);

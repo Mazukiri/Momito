@@ -6,6 +6,7 @@ import {
   ProfileExperienceItem,
   ProfileProjectItem,
   ResumeBulletRewrite,
+  ResumeDriftResponse,
   ResumeVersionResponse,
 } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -93,6 +94,60 @@ export class ResumesService {
   async remove(id: string, userId: string): Promise<void> {
     const result = await this.prisma.resumeVersion.deleteMany({ where: { id, userId } });
     if (result.count === 0) throw new NotFoundException('Résumé version not found');
+  }
+
+  // MOM-155 — résumé drift. `baseProfileSnapshot` has recorded, since MOM-132, exactly what the
+  // Profile looked like when a version was cut. Nothing ever read it. So a version quietly rotted:
+  // you ship a new project, and the résumé you keep sending still predates it, with no signal.
+  // The diff is by identity (skill string / project name / company+role), not by deep equality —
+  // an edited description is not something you need to be nagged about; a *missing project* is.
+  async drift(id: string, userId: string): Promise<ResumeDriftResponse> {
+    const version = await this.prisma.resumeVersion.findFirst({
+      where: { id, userId },
+      select: { id: true, baseProfileSnapshot: true },
+    });
+    if (!version) throw new NotFoundException('Résumé version not found');
+
+    const empty = { resumeVersionId: version.id, newSkills: [], newProjects: [], newExperience: [], isStale: false };
+    const snapshot = version.baseProfileSnapshot;
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+      // Hand-written content: there is no provenance to diff against. Say so, don't guess.
+      return { ...empty, hasSnapshot: false };
+    }
+
+    const profile = await this.prisma.profile.findUnique({ where: { userId } });
+    if (!profile) return { ...empty, hasSnapshot: true };
+
+    const snap = snapshot as Record<string, Prisma.JsonValue>;
+    const newSkills = this.added(
+      this.asStringArray(profile.skills),
+      this.asStringArray(snap.skills ?? []),
+      (skill) => skill.toLowerCase(),
+    );
+    const newProjects = this.added(
+      this.asArray<ProfileProjectItem>(profile.projects),
+      this.asArray<ProfileProjectItem>(snap.projects ?? []),
+      (project) => (project.name ?? '').toLowerCase(),
+    ).map((project) => project.name ?? 'Untitled project');
+    const newExperience = this.added(
+      this.asArray<ProfileExperienceItem>(profile.experience),
+      this.asArray<ProfileExperienceItem>(snap.experience ?? []),
+      (role) => `${role.company ?? ''}|${role.role ?? ''}`.toLowerCase(),
+    ).map((role) => `${role.role ?? 'Role'} — ${role.company ?? 'Company'}`);
+
+    return {
+      resumeVersionId: version.id,
+      hasSnapshot: true,
+      newSkills,
+      newProjects,
+      newExperience,
+      isStale: newSkills.length + newProjects.length + newExperience.length > 0,
+    };
+  }
+
+  private added<T>(current: T[], base: T[], key: (item: T) => string): T[] {
+    const seen = new Set(base.map(key));
+    return current.filter((item) => key(item) !== '' && !seen.has(key(item)));
   }
 
   // MOM-139: export a version as a downloadable file. Markdown = contentMd as-is;
