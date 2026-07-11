@@ -258,13 +258,33 @@ Latent for user-created catalog data only (every seed track + company share `dsa
 proof (forced NVIDIA focus to a disjoint area → 34 not 0, restored to 50). If hunting more: the readiness/weakness/
 `job_prep`-selection paths were read end-to-end this session and are otherwise correct.
 
-**Session end state (2026-07-12):** 324 API + 34 web tests green, lint + typecheck clean on both apps. Commits this
-session on `feat/careeros-phase-0`: MOM-153 (`418f779`), MOM-154 (`bef1b3e`), MOM-155 (`0799144`), MOM-156
-(`eaa8d8d`), MOM-157 (`f7e45fd`) + deep-link follow-up (`0597a57`), MOM-158 (`402b39f`), plus a docs handoff
-(`fca1788`). Working tree holds only pre-existing dev scaffolding **plus** a one-line `CLAUDE.md` fix from a
-`/doctor` run (`LOCKS.md`→`LOCKS.MD`, `LOG.md`→`LOG.MD` — left uncommitted for the owner to review in `git diff`, per
-the doctor's rules). The résumé AI surface is a complete tested loop (analyse → rewrite → cover letter → ATS → drift →
-Today), and the career readiness core has been read end-to-end and hardened. No further non-gated work is queued.
+### MOM-159 (2026-07-12) — ATS coverage false-missed skills at sentence ends
+
+The JD tokenizer's capture class allows a dot (so "Node.js" survives) — which also swallowed the sentence-final
+period, so "…experience with Kubernetes." kept its dot (`kubernetes.`) while the résumé have-set stripped it
+(`kubernetes`), and a covered skill was reported missing (deflating `coveragePct`, spawning a bogus "Add to résumé"
+task). Fires on the most ordinary JD phrasing. Fixed by stripping trailing dots from JD tokens; counterfactual test.
+
+### Computation-core sweep (2026-07-12) — what was read and found correct
+
+Careful reading covered the computation-heavy core end-to-end: `career.service` (found MOM-158),
+`profile-scores` ATS matcher (found MOM-159), `jobs.service` funnel timing + median (correct), weakness severity
+decay (correct), `sessions` `job_prep` selection (correct), readiness FSRS grounding (correct), dashboard streak
+(correct — pure calendar math, DST-free tz), `reviews` listDue (correct), offer normalization (guards ÷0). One
+**non-bug lead** for the owner: `jobs.service.funnel()`'s `reached`/`responseRate`/`conversionFromPrev` count only
+*currently-active* apps (rejected/withdrawn excluded), so heavy rejection inflates the conversion rates — it is the
+documented live-pipeline-snapshot design, and MOM-103/104's transition history now makes a true "ever-reached"
+funnel computable if the owner wants conversion to reflect history rather than the current snapshot. Not changed
+(redefining an owner-designed metric needs a signal).
+
+**Session end state (2026-07-12):** 325 API + 34 web tests green, lint + typecheck clean on both apps. Commits this
+session on `feat/careeros-phase-0` (`418f779` → `5eec0a6`): the résumé AI loop MOM-153–157 (+ deep-link follow-up),
+two flagship bug fixes MOM-158 (`402b39f`) + MOM-159 (`eabe412`), plus docs/test-hardening. Working tree holds only
+pre-existing dev scaffolding **plus** a one-line `CLAUDE.md` fix from a `/doctor` run (`LOCKS.md`→`LOCKS.MD`,
+`LOG.md`→`LOG.MD` — left uncommitted for the owner to review in `git diff`, per the doctor's rules). The résumé AI
+surface is a complete tested loop (analyse → rewrite → cover letter → ATS → drift → Today), and the career/readiness
+computation core has been read end-to-end and hardened. No further non-gated work is queued; the next productive step
+needs an owner signal (deploy, a new feature, or a pointer at a specific area) or the metric-semantics decision above.
 
 ## If resuming autonomously
 
