@@ -156,24 +156,53 @@ UI's "accept" deterministically swaps original→rewritten in the draft; 291 API
 live no-key path: all three return `{ok:false}`, nothing written, nothing billed). **Backlog rows are marked
 "DONE (scaffold) — VERIFICATION-BLOCKED on live key" — the live model path is NOT verified and must not be claimed.**
 
-**Active PR-sized task — MOM-145: conversion analytics by source and résumé version (no schema).** Extend
-`jobs.service.funnel()` breakdowns with `byResumeVersion` (join through `ResumeVersion.jobApplicationId` — which
-version was sent to each job, and how far those applications got), alongside the existing `bySource`/`byVisaTag`/
-`byRejectionReason` and the MOM-104 `medianDaysInStage`. Grow the dashboard funnel card with the extra rows. This is
-the **last item in the approved handoff plan** (`~/.claude/plans/…mossy-moore.md`) — Waves 1–3 and the rest of Wave 4
-are complete.
+**Shipped since:** **MOM-145** (`funnel().byResumeVersion` — conversion per résumé, joined through
+`ResumeVersion.jobApplicationId`; apps with no version linked are excluded rather than diluting the comparison;
+funnel card renders sent/interviewing/offers/conversion per version; live: tailored résumé 50% conversion vs base 0%).
 
-**Then Phase 1D — company-FK migration (MOM-120→121→122), LAST** (highest-risk; SPIKE-012 + DESIGN PR
-first; keep free-text `company` fallback; name-match backfill; retro-enriches MOM-125/130/131/128).
+---
 
-**Then Phase 1D — company-FK migration (MOM-120→121→122), LAST:** the highest-risk migration (busiest
-table + seed). Do SPIKE-012 + the DESIGN-doc PR before the implementer PR; keep the free-text `company`
-column as fallback; name-match backfill. This also retro-enriches MOM-125/130/131 (real company focus
-weights) and MOM-128 (company FK instead of name match).
+## ★ The CareerOS handoff plan is COMPLETE (2026-07-10)
 
-**Gate 1:** bombing a round demonstrably reshapes tomorrow's prep; an "am I ready for Meta?" verdict
-exists. Each schema task = SPIKE + DESIGN-doc PR **then** human-approved implementer PR (D-004),
-tested on fresh + existing DB. Registries in play: SPIKE-009…015, ADR-0009…0012, D-011…D-015.
+Every item in the approved plan (`~/.claude/plans/…mossy-moore.md`) has shipped, each as its own committed PR with
+tests green and a live round-trip against local Postgres:
+
+- **Wave 1 — company context (MOM-120→125):** structured `Company` intelligence + seed enrichment, the
+  `JobApplication.companyId` FK with name-match backfill, company-weighted readiness, catalog + detail pages,
+  sponsorship filters, and the ranked targeting shortlist.
+- **Wave 2 — pipeline truth (MOM-103/104/105/106/107):** structured transition history + per-stage median timing,
+  stall detection, rejection-reason loss analysis, and the Kanban board.
+- **Wave 3 — contacts & offers (MOM-114→119):** the `Contact` model + referralName backfill, the follow-up/thank-you
+  cadence scheduler, the referral network view, and the `Offer` model + normalized comparison table.
+- **Wave 4 — résumé artifacts (MOM-132→139, 145):** `ResumeVersion` decoupled from the master `Profile`, ATS coverage
+  against a version's `contentMd` + the gap→task bridge, dependency-free ATS-safe md/pdf export, the AI tailoring
+  suite, and which-résumé-converts analytics.
+
+**293 API tests + 26 web tests green.**
+
+### The one thing that is NOT verified
+
+**MOM-136/137/138 (résumé AI) are `DONE (scaffold) — VERIFICATION-BLOCKED on a live ANTHROPIC_API_KEY`**, exactly like
+MOM-068–074. The dormant path is fully verified (all three endpoints return `{ok:false}`, nothing written, nothing
+billed); **the live model path has never been executed and must not be claimed to work.** Adding a real key and
+exercising analyze / rewrite / cover-letter is the first thing to do when one is available.
+
+## If resuming autonomously
+
+The plan is done, so the next step needs a signal from the owner. In rough order of value:
+
+1. **Add an `ANTHROPIC_API_KEY`** → verify the MOM-136/137/138 live paths (and MOM-068–074's), then flip those rows
+   from VERIFICATION-BLOCKED to DONE.
+2. **Deploy** (`render.yaml`/`vercel.json` are ready) → unblocks MOM-021, MOM-088's Lighthouse pass, and the real iOS
+   push-notification path (MOM-092).
+3. **Ask for a new feature**, or point at something these sessions' tests and live round-trips did not catch.
+
+Still deliberately not attempted (a judgment call, not a hard block): **MOM-049** (LeetCode import) — calling a
+third-party GraphQL API without an explicit go-ahead is a different risk class than writing original seed content.
+
+**Gate 1 — MET.** Bombing a round demonstrably reshapes tomorrow's prep, and an FSRS-grounded "am I ready for Meta?"
+verdict exists. Every schema task went SPIKE → DESIGN-doc → implementer PR (D-004, under the standing approval below),
+each tested against the existing DB. Registries closed this initiative: SPIKE-009…015, ADR-0009…0015, D-016…D-020.
 
 ---
 

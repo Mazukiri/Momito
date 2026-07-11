@@ -84,6 +84,24 @@ export function JobFunnelCard({ funnel }: { funnel: JobFunnelResponse }) {
           </div>
         </div>
       )}
+
+      {/* MOM-145: which résumé actually converts. Only apps with a version linked
+          count, so this stays hidden until versions are attached to jobs. */}
+      {funnel.byResumeVersion.length > 0 && (
+        <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">By résumé version</p>
+          <div className="space-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+            {funnel.byResumeVersion.map((row) => (
+              <div key={row.key} className="flex items-baseline justify-between gap-3">
+                <span className="truncate">{row.key}</span>
+                <span className="shrink-0 text-zinc-400">
+                  {row.total} sent · {row.interviewing} interviewing · {row.offers} offer{row.offers === 1 ? '' : 's'} ({pct(row.conversion)})
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

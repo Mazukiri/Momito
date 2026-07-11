@@ -1,5 +1,28 @@
 # LOG
 
+## 2026-07-10 - MOM-145: conversion by résumé version (CLAUDE, no schema) — FINAL ITEM OF THE HANDOFF PLAN
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No migration. Closes the approved handoff plan
+(`~/.claude/plans/…mossy-moore.md`): Waves 1–4 are now complete.
+
+**What:** `jobs.service.funnel()` gains **`byResumeVersion`** — conversion per résumé, joined through
+`ResumeVersion.jobApplicationId` (the record of "this is the résumé I sent them"), keyed by the version's label and
+reusing the existing `breakdown()` shape (total / interviewing / offers / conversion). This finally answers *which
+résumé actually converts*, which is the whole point of having versions at all.
+
+**Design call:** `breakdown()` is now generic and a `null` key **drops** the job. Applications with no version linked
+carry zero signal about résumé performance, so including them as an "unlinked" bucket would only dilute the
+comparison — they are excluded, and the funnel-card row stays hidden until versions are actually linked to jobs.
+
+**Checks:** shared build; API + web lint/typecheck green; **293 API tests** (+2: the join/exclusion maths, and the
+empty case) + 26 web. **Live-verified**: linked "Big-tech tailored v2" to the Databricks (offer) + Meta (interview)
+apps and "Base résumé" to the rejected Airbnb app → tailored = 2 sent / 2 interviewing / 1 offer / **50% conversion**,
+base = 1 sent / 0 / 0 / **0%**, and the other 5 applications correctly uncounted; `bySource`, `byRejectionReason` and
+the MOM-104 `medianDaysInStage` all still intact. Demo state restored (versions deleted; the 8 jobs survived, which
+also re-confirms the `SetNull` FK).
+
+**Rollback:** revert code — no schema, no data.
+
 ## 2026-07-10 - MOM-136/137/138: AI résumé analysis / bullet-rewrite / cover-letter (CLAUDE, dormant-until-key)
 
 **Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No migration. **VERIFICATION-BLOCKED on a live

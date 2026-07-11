@@ -298,10 +298,13 @@ describe('JobsService.funnel', () => {
   function serviceWith(
     jobs: Array<{ status: string; source: string | null; visaTag: string | null }>,
     transitions: Array<{ jobApplicationId: string; fromStatus: string | null; toStatus: string | null; eventAt: Date }> = [],
+    // MOM-145: résumé versions carrying a jobApplicationId — "this is what I sent them".
+    resumeVersions: Array<{ label: string; jobApplicationId: string }> = [],
   ) {
     const prisma = {
       jobApplication: { findMany: vi.fn().mockResolvedValue(jobs) },
       jobEvent: { findMany: vi.fn().mockResolvedValue(transitions) },
+      resumeVersion: { findMany: vi.fn().mockResolvedValue(resumeVersions) },
     };
     return new JobsService(prisma as never, {} as never);
   }
@@ -367,6 +370,44 @@ describe('JobsService.funnel', () => {
     expect(referral.offers).toBe(1);
     expect(referral.interviewing).toBe(2); // interview + offer
     expect(referral.conversion).toBeCloseTo(1 / 3, 3);
+  });
+
+  // MOM-145: which résumé converts, joined through ResumeVersion.jobApplicationId.
+  it('breaks down conversion by résumé version, excluding apps with no version linked', async () => {
+    const jobs = [
+      { id: 'job-1', status: 'offer', source: 'referral', visaTag: 'sponsored' },
+      { id: 'job-2', status: 'interview', source: 'referral', visaTag: 'sponsored' },
+      { id: 'job-3', status: 'rejected', source: 'online', visaTag: 'sponsored' },
+      { id: 'job-4', status: 'applied', source: 'online', visaTag: 'unknown' }, // no résumé linked
+    ];
+    const versions = [
+      { label: 'Google-tailored v2', jobApplicationId: 'job-1' },
+      { label: 'Google-tailored v2', jobApplicationId: 'job-2' },
+      { label: 'Base', jobApplicationId: 'job-3' },
+    ];
+    const funnel = await serviceWith(jobs as never, [], versions).funnel('user-1');
+
+    expect(funnel.byResumeVersion.map((row) => row.key)).toEqual(['Google-tailored v2', 'Base']);
+
+    const tailored = funnel.byResumeVersion[0];
+    expect(tailored.total).toBe(2);
+    expect(tailored.offers).toBe(1);
+    expect(tailored.interviewing).toBe(2); // interview + offer
+    expect(tailored.conversion).toBeCloseTo(0.5, 3);
+
+    const base = funnel.byResumeVersion[1];
+    expect(base.total).toBe(1);
+    expect(base.offers).toBe(0);
+    expect(base.conversion).toBe(0);
+
+    // job-4 has no version linked → it must not appear in any bucket.
+    expect(funnel.byResumeVersion.reduce((sum, row) => sum + row.total, 0)).toBe(3);
+  });
+
+  it('leaves byResumeVersion empty when no version is linked to any application', async () => {
+    const jobs = [{ id: 'job-1', status: 'applied', source: 'online', visaTag: 'unknown' }];
+    const funnel = await serviceWith(jobs as never).funnel('user-1');
+    expect(funnel.byResumeVersion).toEqual([]);
   });
 
   it('coalesces a null source to "unspecified"', async () => {

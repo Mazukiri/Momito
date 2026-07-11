@@ -78,7 +78,7 @@ export class JobsService {
   // from current status; MOM-104 adds per-stage median timing from the structured
   // status_change transition history.
   async funnel(userId: string): Promise<JobFunnelResponse> {
-    const [jobs, transitions] = await Promise.all([
+    const [jobs, transitions, resumeVersions] = await Promise.all([
       this.prisma.jobApplication.findMany({
         where: { userId },
         select: { id: true, status: true, source: true, visaTag: true, rejectionReason: true, createdAt: true },
@@ -90,7 +90,16 @@ export class JobsService {
         select: { jobApplicationId: true, fromStatus: true, toStatus: true, eventAt: true },
         orderBy: [{ jobApplicationId: 'asc' }, { eventAt: 'asc' }],
       }),
+      // MOM-145: which résumé version was sent to which application. A version's
+      // jobApplicationId is the record of "this is what I sent them".
+      this.prisma.resumeVersion.findMany({
+        where: { userId, jobApplicationId: { not: null } },
+        select: { label: true, jobApplicationId: true },
+      }),
     ]);
+
+    // A job could in principle have several versions pointing at it; last write wins.
+    const versionByJob = new Map(resumeVersions.map((version) => [version.jobApplicationId!, version.label]));
 
     const medianByStage = this.stageTimings(jobs, transitions);
     const stageIndex = new Map(JOB_FUNNEL_STAGES.map((stage, index) => [stage as string, index]));
@@ -134,6 +143,9 @@ export class JobsService {
       bySource: this.breakdown(jobs, (job) => job.source ?? 'unspecified'),
       byVisaTag: this.breakdown(jobs, (job) => job.visaTag ?? 'unknown'),
       byRejectionReason: this.rejectionBreakdown(jobs),
+      // MOM-145: which résumé actually converts. Apps with no version linked are
+      // excluded (null key) — they say nothing about résumé performance.
+      byResumeVersion: this.breakdown(jobs, (job) => versionByJob.get(job.id) ?? null),
     };
   }
 
@@ -149,14 +161,18 @@ export class JobsService {
     return [...counts.entries()].map(([key, count]) => ({ key, count })).sort((left, right) => right.count - left.count);
   }
 
-  private breakdown(
-    jobs: Array<{ status: string }>,
-    keyOf: (job: { status: string; source: string | null; visaTag: string | null }) => string,
+  // keyOf returning null drops the job from the breakdown entirely — used by
+  // MOM-145's byResumeVersion, where apps with no résumé version linked carry no
+  // signal about which résumé converts and would just dilute the comparison.
+  private breakdown<T extends { status: string }>(
+    jobs: T[],
+    keyOf: (job: T) => string | null,
   ): JobFunnelBreakdownRow[] {
     const groups = new Map<string, { total: number; offers: number; interviewing: number }>();
     const interviewingStatuses = new Set(['interview', 'onsite', 'offer']);
-    for (const job of jobs as Array<{ status: string; source: string | null; visaTag: string | null }>) {
+    for (const job of jobs) {
       const key = keyOf(job);
+      if (key === null) continue;
       const row = groups.get(key) ?? { total: 0, offers: 0, interviewing: 0 };
       row.total += 1;
       if (job.status === 'offer') row.offers += 1;

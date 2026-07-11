@@ -1388,6 +1388,10 @@ export interface JobFunnelResponse {
   byVisaTag: JobFunnelBreakdownRow[];
   // MOM-106: reason breakdown over the rejected applications (empty if none).
   byRejectionReason: JobRejectionBreakdownRow[];
+  // MOM-145: conversion per résumé version — keyed by the version's label, over
+  // the applications that version was actually sent to (`ResumeVersion.jobApplicationId`).
+  // Apps with no version linked are excluded, so this is empty until versions are linked.
+  byResumeVersion: JobFunnelBreakdownRow[];
 }
 
 export const TASK_TYPES = [
