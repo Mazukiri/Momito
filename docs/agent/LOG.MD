@@ -1,5 +1,25 @@
 # LOG
 
+## 2026-07-12 - MOM-156: web tests for the résumé page — where the last two bugs actually lived (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Tests + one UI fix they caught.
+
+Both bugs fixed today (MOM-153's silent-no-op "Accept", MOM-154's write-only `aiSuggestions`) lived in **the web
+layer**, and `/profile/resumes` — by now the densest page in the app: editor, ATS panel, AI critique, rewrites,
+cover letter, drift, per-version conversion — had **zero tests**. The API suite would not have caught either. Six
+tests now pin the exact behaviours: rewrites stored on the version are restored on load (the MOM-154 bug); accepting
+patches the draft, retires the suggestion, and Save writes the applied text *and* the pruned list in one call;
+accepting a rewrite whose bullet has been edited away says so and **keeps** it; rejecting persists the dismissal;
+the drift panel names what is missing and stays quiet when it is not.
+
+**The tests immediately earned their keep.** Writing them surfaced a flaw in my own MOM-154 UI: the "Applied to the
+draft — press Save" confirmation was rendered *inside* the suggestions list, which unmounts the moment the last
+suggestion is accepted — so the confirmation was invisible in exactly the case where the user most needs it (you
+accepted the only rewrite; did anything happen?). Moved outside the list. That is a bug no API test could ever have
+seen, and I would not have found it by re-reading the diff.
+
+**Verified:** 32 web tests (+6), 319 API tests, lint + typecheck clean.
+
 ## 2026-07-12 - MOM-155: résumé drift — the snapshot nobody read (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration.

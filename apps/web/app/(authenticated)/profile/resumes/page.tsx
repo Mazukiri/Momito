@@ -435,10 +435,13 @@ export default function ResumesPage() {
                         </div>
                       </div>
                     ))}
-                    {rewriteMsg && <p className="text-emerald-700 dark:text-emerald-400">{rewriteMsg}</p>}
                     <p className="text-zinc-400">Accepting patches the draft above — press Save to keep it. Suggestions are stored with the résumé, so they survive a reload.</p>
                   </div>
                 )}
+
+                {/* Outside the list on purpose: accepting the LAST suggestion empties it, and that
+                    is precisely when the user most needs to be told the draft changed. */}
+                {rewriteMsg && <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">{rewriteMsg}</p>}
 
                 {coverLetter && (
                   <div className="mt-3 space-y-2 text-xs">
