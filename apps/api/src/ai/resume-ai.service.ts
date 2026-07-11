@@ -15,11 +15,20 @@ export type AiOutcome<T> =
   | { ok: true; result: T; inputTokens: number; outputTokens: number; model: string }
   | { ok: false; reason: string };
 
-const MAX_TOKENS = 4096;
+// Adaptive thinking is billed inside max_tokens, so a full résumé at effort:high needs real
+// headroom — 4096 truncated the answer once thinking had taken its share.
+const MAX_TOKENS = 16000;
 
 const ANALYZE_SYSTEM = `You are a senior technical recruiter reviewing a candidate's résumé. Critique the actual
 bullets — cite what they literally say. Reward measurable impact, ownership, and scope; flag vague verbs, missing
-metrics, and unclear seniority. Do not invent achievements the résumé does not claim.`;
+metrics, and unclear seniority. Do not invent achievements the résumé does not claim.
+
+COMPLETENESS IS MANDATORY. The bullets are enumerated for you below. Return exactly one bulletFeedback entry per
+numbered bullet, in order, each carrying its \`index\`. Never skip a bullet — not even a strong one: for a strong
+bullet, say what makes it strong and what would sharpen it further.
+
+Critique substance only. The résumé may carry spacing or punctuation artifacts from PDF extraction (e.g.
+"aPython script"). Ignore all formatting, spacing, and typography issues — never spend feedback on them.`;
 
 const REWRITE_SYSTEM = `You rewrite résumé bullets to be stronger and tailored to a specific job description.
 Keep every claim truthful to the original — sharpen the verb, surface measurable impact the original implies, and
@@ -54,13 +63,34 @@ export class ResumeAiService {
     return this.client;
   }
 
+  // Bullets are found here, in code — not left to the model to decide what counts as one.
+  // Weaker/cheaper models silently critique only a handful of bullets when asked to "review
+  // the résumé"; enumerating them and demanding one entry each makes coverage deterministic.
+  static extractBullets(contentMd: string): string[] {
+    const bullets: string[] = [];
+    for (const line of contentMd.split('\n')) {
+      const stripped = line.trim().replace(/^[-*•·●]\s+/, '');
+      if (stripped === line.trim()) continue; // not a bullet line
+      const text = stripped.replace(/\s+/g, ' ').trim();
+      if (text.length > 15) bullets.push(text);
+    }
+    return bullets;
+  }
+
   async analyze(contentMd: string, targetLabel: string | null): Promise<AiOutcome<ResumeAnalysis>> {
+    const bullets = ResumeAiService.extractBullets(contentMd);
+    if (bullets.length === 0) {
+      return { ok: false, reason: 'This résumé version has no bullet points to analyse yet.' };
+    }
     const user = [
       `## Target role`,
       targetLabel ?? '(no specific target given — judge for a strong generalist SWE role)',
       '',
       '## Résumé (Markdown)',
       contentMd,
+      '',
+      `## The ${bullets.length} bullets to critique, in order — return exactly ${bullets.length} entries`,
+      ...bullets.map((b, i) => `${i}. ${b}`),
     ].join('\n');
     return this.run(ANALYZE_SYSTEM, user, ResumeAnalysisSchema);
   }

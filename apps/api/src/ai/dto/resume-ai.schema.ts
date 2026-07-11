@@ -10,6 +10,7 @@ export const ResumeAnalysisSchema = z.object({
   bulletFeedback: z
     .array(
       z.object({
+        index: z.number().int().describe('The 0-based number of the enumerated bullet this entry critiques.'),
         original: z.string().describe('The résumé bullet or line being critiqued, verbatim.'),
         impactScore: z.number().min(0).max(5).describe('0-5: how much measurable impact this bullet conveys.'),
         senioritySignal: z

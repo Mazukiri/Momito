@@ -1030,6 +1030,7 @@ export type ResumeSenioritySignal = (typeof RESUME_SENIORITY_SIGNALS)[number];
 
 // MOM-136 — per-bullet impact/seniority analysis.
 export interface ResumeBulletFeedback {
+  index: number; // 0-based position of the bullet this entry critiques
   original: string;
   impactScore: number; // 0-5
   senioritySignal: ResumeSenioritySignal;

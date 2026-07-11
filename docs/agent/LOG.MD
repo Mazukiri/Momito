@@ -1,5 +1,65 @@
 # LOG
 
+## 2026-07-11 - MOM-147: model-agnostic résumé analysis + gateway pricing (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration.
+
+**Why:** the owner asked for the cheapest model that is still good enough for a résumé audit. Measured six candidates
+through the real analyze prompt + schema on a **real 1-page CV** (14 bullets), and the price table turned out to be a
+trap — the cheap models are cheap partly because they **silently do less work**:
+
+| model | cost/audit | bullets critiqued | $/bullet |
+|---|---|---|---|
+| Opus 4.8 (was default) | $0.107 | 14/14 | $0.008 |
+| Sonnet 5 | $0.069 | 14/14 | $0.005 |
+| **Gemini 3.1 Pro** | **$0.037** | **3/14** ⚠️ | **$0.012** |
+| Gemini 3 Flash | $0.007 | 6/14 | $0.001 |
+| Gemini 3.1 Flash Lite | $0.0014 | 6/14 | $0.0002 |
+
+Gemini 3.1 Pro looked 3× cheaper than Opus while critiquing **3 of 14 bullets** — per bullet actually audited it was
+*more* expensive than Opus. Flash contradicted itself (`impactScore: 5` with `issue: "None. This is a perfect bullet
+point"`). The cheap tiers were not worse *judges* so much as **incomplete auditors**, and nothing in the response
+shape revealed it.
+
+**Root cause — ours, not the model's.** Nothing in the prompt or schema required completeness. Opus/Sonnet infer
+"critique every bullet"; other models don't. Gemini also spent feedback on *missing spaces* — PDF-extraction
+artifacts, not résumé flaws.
+
+**Fix (three changes, all in our code):**
+1. **`ResumeAiService.extractBullets()`** — bullets are now found deterministically **in code**, not left to the model
+   to decide what counts as one. They are passed back enumerated (`0.`, `1.`, …).
+2. **Completeness contract** in `ANALYZE_SYSTEM` — "exactly N entries, one per numbered bullet, never skip a strong
+   one" — plus a new `index` field on `ResumeBulletFeedback` so coverage is *checkable*, not hoped for.
+3. **Ignore-formatting instruction** — stops feedback being spent on PDF whitespace artifacts.
+
+Also `MAX_TOKENS` 4096 → 16000: adaptive thinking is billed **inside** `max_tokens`, so a full résumé at `effort:high`
+was being truncated once thinking took its share. And an empty-bullet résumé now returns `{ok:false}` **without
+calling the model** (no spend on an un-analysable input).
+
+**Result — Gemini 3.1 Pro went 3/14 → 14/14** and is now the best value of the three (measured, same CV):
+
+| model | coverage | cost/audit | latency |
+|---|---|---|---|
+| **Gemini 3.1 Pro (new default)** | 14/14 | **$0.041** | **29s** |
+| Sonnet 5 | 14/14 | $0.059 | 56s |
+| Opus 4.8 | 14/14 | $0.116 | 53s |
+
+~3× cheaper and ~2× faster than Opus at equal coverage. Quality is substantive, not cosmetic: it flags that
+*"Co-developed" obscures your specific contribution*, that *"co-architected" dilutes ownership*, and rates the
+pprof/concurrency bullet a **senior** signal.
+
+**Gateway pricing rows** added to `ai.config.ts`. The `opus-4-8` fallback silently mispriced every gateway slug —
+over-reporting Gemini (cheaper than Opus) and, more dangerously, **under-reporting a Fable-tier model by 2×**, which
+would have let the daily cap overspend. Live-verified: the analyze call billed **$0.0404**, matching Gemini's $2/$12.
+
+**Verification:** 296 API tests (+3) · 26 web · lint + typecheck clean · **live round-trip**: `POST
+/resumes/:id/ai/analyze` on the real CV returned 14/14 with indexes 0–13 complete in 26s. Test résumé deleted after.
+
+**Honest caveats:** (a) `google/gemini-3.1-pro-preview` is a **preview** slug and can move or be retired — the pricing
+row and `ANTHROPIC_MODEL` both need updating when the owner moves to Gemini 3.5 Pro, and that slug is **not on
+OpenRouter yet** (checked 2026-07-11). (b) Haiku 4.5 failed schema parsing on two of three runs and passed on the
+third — **intermittent**, cause not established; it is not recommended until that is understood.
+
 ## 2026-07-11 - LIVE AI VERIFICATION: MOM-068–074 + MOM-136/137/138 unblocked (CLAUDE, no code change)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No schema, **no application code changed** — this was a

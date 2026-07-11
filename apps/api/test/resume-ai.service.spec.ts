@@ -7,12 +7,12 @@ import { ResumeAiService } from '../src/ai/resume-ai.service';
 // MOM-136/137/138 — every test here is fully mocked; no test may reach the network.
 // The live path stays VERIFICATION-BLOCKED until a real ANTHROPIC_API_KEY exists.
 
-const CONTENT_MD = '# Ada\n\n## Experience\n### SWE — Meta\nWorked on the backend.';
+const CONTENT_MD = '# Ada\n\n## Experience\n### SWE — Meta\n- Worked on the backend.\n- Cut p99 latency 40% on the payments path.';
 
 const ANALYSIS = {
   overallImpression: 'Solid but under-quantified.',
   bulletFeedback: [
-    { original: 'Worked on the backend.', impactScore: 1, senioritySignal: 'junior' as const, issue: 'Vague verb, no metric.', suggestion: 'Name the system and the impact.' },
+    { index: 0, original: 'Worked on the backend.', impactScore: 1, senioritySignal: 'junior' as const, issue: 'Vague verb, no metric.', suggestion: 'Name the system and the impact.' },
   ],
   missingThemes: ['distributed systems'],
 };
@@ -67,6 +67,46 @@ describe('ResumeAiService (MOM-136/137/138, dormant-until-key)', () => {
     expect(call.thinking).toEqual({ type: 'adaptive' });
     expect(call.messages[0].content).toContain('google-l4-swe');
     expect(call.messages[0].content).toContain(CONTENT_MD);
+  });
+
+  // MOM-147. Cheaper models silently critique only a few bullets when asked to "review the
+  // résumé" — Gemini 3.1 Pro covered 3 of 14 on a real CV. Finding the bullets in code and
+  // demanding one entry each is what makes coverage model-independent.
+  it('extracts bullets deterministically, ignoring prose and headings (MOM-147)', () => {
+    const bullets = ResumeAiService.extractBullets(
+      '# Ada\n## Experience\nProse line, not a bullet.\n- Built the thing that scaled.\n* Starred bullet counts too.\n- short\n• Unicode bullet counts too.\n',
+    );
+    expect(bullets).toEqual([
+      'Built the thing that scaled.',
+      'Starred bullet counts too.',
+      'Unicode bullet counts too.',
+    ]);
+    // "- short" (<= 15 chars) is dropped as noise, and headings/prose never count.
+  });
+
+  it('enumerates every bullet and demands one entry each (MOM-147)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    const parse = vi.fn().mockResolvedValue(okResponse(ANALYSIS));
+
+    await serviceWithFakeClient(parse).analyze(CONTENT_MD, null);
+
+    const call = parse.mock.calls[0][0];
+    expect(call.messages[0].content).toContain('0. Worked on the backend.');
+    expect(call.messages[0].content).toContain('1. Cut p99 latency 40% on the payments path.');
+    expect(call.messages[0].content).toContain('return exactly 2 entries');
+    expect(call.system).toContain('COMPLETENESS IS MANDATORY');
+    // PDF-extracted résumés carry mangled spacing; feedback must not be spent on it.
+    expect(call.system).toContain('Ignore all formatting');
+  });
+
+  it('refuses a résumé with no bullets instead of calling the model (MOM-147)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    const parse = vi.fn();
+
+    const outcome = await serviceWithFakeClient(parse).analyze('# Ada\n\nJust prose, no bullets.', null);
+
+    expect(outcome).toEqual({ ok: false, reason: expect.stringContaining('no bullet points') });
+    expect(parse).not.toHaveBeenCalled(); // no spend on an un-analysable résumé
   });
 
   it('parses bullet rewrites and passes the JD through (MOM-137)', async () => {
