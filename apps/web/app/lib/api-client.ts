@@ -573,8 +573,13 @@ export const resumesApi = {
   // MOM-136/137/138: résumé AI, dormant-until-key. These resolve to
   // {ok:false, reason} (HTTP 200) when the instance has no ANTHROPIC_API_KEY,
   // so callers render a banner rather than handling an error.
-  aiAnalyze: (id: string) =>
-    request<ResumeAiEnvelope<ResumeAnalysisResult>>(`/resumes/${id}/ai/analyze`, { method: 'POST' }),
+  // MOM-149: pass a jobApplicationId to have the critique judged against that JD and that
+  // company's focus areas. Omitted → the API falls back to the job this version is linked to.
+  aiAnalyze: (id: string, jobApplicationId?: string) =>
+    request<ResumeAiEnvelope<ResumeAnalysisResult>>(`/resumes/${id}/ai/analyze`, {
+      method: 'POST',
+      body: JSON.stringify(jobApplicationId ? { jobApplicationId } : {}),
+    }),
 
   aiRewrite: (id: string, jdText: string) =>
     request<ResumeAiEnvelope<ResumeRewriteResult>>(`/resumes/${id}/ai/rewrite`, { method: 'POST', body: JSON.stringify({ jdText }) }),

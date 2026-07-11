@@ -1,5 +1,43 @@
 # LOG
 
+## 2026-07-11 - MOM-148/149/150: complete, targeted, evidence-grounded résumé analysis (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Owner asked "how do I make the AI feature better —
+should I raise the model?" Answer: **no.** MOM-147 already showed the binding constraint was our contract with the
+model, not the model's intelligence. These three tasks fix what was actually limiting it.
+
+**MOM-148 — check the completeness contract, don't just state it.** MOM-147 added "return one entry per bullet" to
+the prompt but never *verified* it, so a model returning 10 of 14 was still accepted silently — the exact failure
+that made a cheap model look like a bargain. `analyze()` now diffs the returned `index`es against the enumerated
+bullets and, on a gap, runs **one repair pass** for the missing indexes only, merges, and sorts. Both calls are
+billed (`inputTokens` summed) — the budget must not under-count a two-call audit. If the repair itself fails we keep
+the partial: half an audit beats no audit.
+
+**MOM-149 — judge the résumé against a real target.** `analyze()` took only a role-track label, so it could only give
+generic advice, while the DB already held `jdText` on every application and `focusAreas` on every company. Analysis
+now accepts an optional `jobApplicationId`; when omitted it falls back to **`ResumeVersion.jobApplicationId`** — the
+job the version was already sent to — so a targeted critique is the *default*, not an opt-in. The JD, the role, the
+company name, and the company's focus areas all enter the prompt with "judge every bullet against THIS job".
+
+**MOM-150 — ground suggestions in evidence the candidate actually has.** The model kept saying "add a metric" because
+it *cannot know* one. It now receives the `Profile` (skills, projects, experience — the master record, D-014) and is
+told to prefer a suggestion grounded in that evidence over a placeholder, and to invent nothing that appears in
+neither résumé nor profile.
+
+**Live proof (real 1-page CV, 14 bullets, Gemini 3.1 Pro).** Same CV, same model, only the target changed:
+- *Untargeted:* "an exceptionally strong résumé … deep understanding of distributed systems."
+- *Targeted at the NVIDIA GPU SWE role (real JD):* "heavily features Go, web backends and high-level NLP, **severely
+  lacking applied C++, CUDA, and graphics or hardware-parallelism experience**." `missingThemes` came back as CUDA /
+  GPU Architecture / Applied C++ / Hardware-Software Co-design, and per-bullet scores dropped (0,3,2 vs 1,4,5)
+  because relevance *to this job* now counts. Coverage held at **14/14** in 36s.
+
+That is the difference between a résumé linter and "am I ready for *this* job" — the same loop CareerOS already runs
+for interviews.
+
+**Verification:** 301 API tests (+5) · lint + typecheck clean (api + web) · live round-trip above; test résumé deleted.
+**Risk:** the repair pass can double the cost of one audit when a model under-delivers. It only fires on an actual
+gap, and both calls are recorded against the daily budget, so it cannot silently overspend.
+
 ## 2026-07-11 - MOM-147: model-agnostic résumé analysis + gateway pricing (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration.

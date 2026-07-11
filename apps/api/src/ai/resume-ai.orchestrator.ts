@@ -8,7 +8,7 @@ import type {
 } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { BudgetService } from './budget.service';
-import { AiOutcome, ResumeAiService } from './resume-ai.service';
+import { AiOutcome, AnalyzeContext, ResumeAiService } from './resume-ai.service';
 
 // MOM-136/137/138: orchestration for résumé AI — mirrors AiService.gradeAttempt.
 // Availability first (dormant-until-key → {ok:false}, never a throw), then the
@@ -26,10 +26,62 @@ export class ResumeAiOrchestrator {
     return this.resumeAi.isAvailable();
   }
 
-  async analyze(versionId: string, userId: string): Promise<ResumeAiEnvelope<ResumeAnalysisResult>> {
-    return this.withVersion(versionId, userId, (version) =>
-      this.resumeAi.analyze(version.contentMd, version.targetRoleTrackId),
-    );
+  // MOM-149/150. jobApplicationId is optional; when omitted we fall back to the job this
+  // version was already linked to (ResumeVersion.jobApplicationId — "this is the résumé I
+  // sent them"), so a targeted analysis is the default rather than something to opt into.
+  async analyze(versionId: string, userId: string, jobApplicationId?: string): Promise<ResumeAiEnvelope<ResumeAnalysisResult>> {
+    return this.withVersion(versionId, userId, async (version) => {
+      const jobId = jobApplicationId ?? version.jobApplicationId;
+      const [job, evidence] = await Promise.all([
+        jobId ? this.loadJob(jobId, userId) : Promise.resolve(null),
+        this.loadEvidence(userId),
+      ]);
+      return this.resumeAi.analyze(version.contentMd, {
+        targetRoleTrackId: version.targetRoleTrackId,
+        job,
+        evidence,
+      });
+    });
+  }
+
+  private async loadJob(jobApplicationId: string, userId: string): Promise<AnalyzeContext['job']> {
+    const job = await this.prisma.jobApplication.findFirst({
+      where: { id: jobApplicationId, userId },
+      select: {
+        company: true,
+        roleTitle: true,
+        jdText: true,
+        companyRef: { select: { name: true, focusAreas: true } },
+      },
+    });
+    if (!job) throw new NotFoundException('Job application not found');
+    return {
+      company: job.companyRef?.name ?? job.company,
+      role: job.roleTitle,
+      jdText: job.jdText,
+      // company focus weights (MOM-121) tell the model what this employer actually cares about
+      focusAreas: Object.keys((job.companyRef?.focusAreas ?? {}) as Record<string, number>),
+    };
+  }
+
+  // The profile is the master record (D-014); the résumé is a derived artifact. Feeding the
+  // profile back in is what lets a suggestion name a real number instead of a placeholder.
+  private async loadEvidence(userId: string): Promise<AnalyzeContext['evidence']> {
+    const profile = await this.prisma.profile.findUnique({
+      where: { userId },
+      select: { skills: true, projects: true, experience: true },
+    });
+    if (!profile) return null;
+    const summarise = (rows: unknown, take: number): string[] =>
+      (Array.isArray(rows) ? rows : [])
+        .slice(0, take)
+        .map((r) => (typeof r === 'string' ? r : JSON.stringify(r)))
+        .map((s) => s.slice(0, 400));
+    return {
+      skills: summarise(profile.skills, 40),
+      projects: summarise(profile.projects, 8),
+      experience: summarise(profile.experience, 8),
+    };
   }
 
   async rewrite(versionId: string, userId: string, jdText: string): Promise<ResumeAiEnvelope<ResumeRewriteResult>> {
@@ -56,7 +108,11 @@ export class ResumeAiOrchestrator {
   private async withVersion<T>(
     versionId: string,
     userId: string,
-    call: (version: { contentMd: string; targetRoleTrackId: string | null }) => Promise<AiOutcome<T>>,
+    call: (version: {
+      contentMd: string;
+      targetRoleTrackId: string | null;
+      jobApplicationId: string | null;
+    }) => Promise<AiOutcome<T>>,
   ): Promise<ResumeAiEnvelope<T>> {
     if (!this.isAvailable()) {
       return { ok: false, reason: 'AI résumé tools are not configured on this instance (no ANTHROPIC_API_KEY).' };
@@ -64,7 +120,7 @@ export class ResumeAiOrchestrator {
 
     const version = await this.prisma.resumeVersion.findFirst({
       where: { id: versionId, userId },
-      select: { contentMd: true, targetRoleTrackId: true },
+      select: { contentMd: true, targetRoleTrackId: true, jobApplicationId: true },
     });
     if (!version) throw new NotFoundException('Résumé version not found');
 

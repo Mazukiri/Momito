@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CAREER_ROLE_TRACKS, type AtsCoverageResponse, type CareerRoleTrackId, type CoverLetterDraftResult, type ResumeAnalysisResult, type ResumeBulletRewrite, type ResumeVersionResponse } from '@momito/shared';
-import { profileScoresApi, resumesApi } from '../../../lib/api-client';
+import { CAREER_ROLE_TRACKS, type AtsCoverageResponse, type CareerRoleTrackId, type CoverLetterDraftResult, type JobApplicationResponse, type ResumeAnalysisResult, type ResumeBulletRewrite, type ResumeVersionResponse } from '@momito/shared';
+import { jobsApi, profileScoresApi, resumesApi } from '../../../lib/api-client';
 import { Card, EmptyState, ErrorBanner, Spinner } from '../../../components/ui';
 
 export default function ResumesPage() {
@@ -22,6 +22,9 @@ export default function ResumesPage() {
   const [atsMsg, setAtsMsg] = useState('');
   // MOM-136/137/138: résumé AI. `aiReason` holds the dormant-until-key banner
   // ("not configured on this instance") — an expected state, not an error.
+  // MOM-149: the application the critique is judged against (JD + company focus areas).
+  const [jobs, setJobs] = useState<JobApplicationResponse[]>([]);
+  const [targetJobId, setTargetJobId] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiReason, setAiReason] = useState('');
   const [analysis, setAnalysis] = useState<ResumeAnalysisResult | null>(null);
@@ -32,8 +35,9 @@ export default function ResumesPage() {
     setLoading(true);
     setError('');
     try {
-      const list = await resumesApi.list();
+      const [list, jobList] = await Promise.all([resumesApi.list(), jobsApi.list()]);
       setVersions(list);
+      setJobs(jobList);
       if (list.length > 0 && selectedId === null) {
         setSelectedId(list[0].id);
         setDraft(list[0].contentMd);
@@ -129,7 +133,7 @@ export default function ResumesPage() {
     setError('');
     try {
       if (kind === 'analyze') {
-        const res = await resumesApi.aiAnalyze(selectedId);
+        const res = await resumesApi.aiAnalyze(selectedId, targetJobId || undefined);
         if (res.ok) setAnalysis(res.result); else setAiReason(res.reason);
       } else if (kind === 'rewrite') {
         const res = await resumesApi.aiRewrite(selectedId, jdText.trim());
@@ -258,6 +262,20 @@ export default function ResumesPage() {
 
               <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
                 <p className="text-xs font-medium text-zinc-500">AI tailoring</p>
+                {/* MOM-149: a critique is only as good as the target it's held against. */}
+                <label className="mt-2 block text-xs text-zinc-500 dark:text-zinc-400">
+                  Judge against a specific application
+                  <select
+                    value={targetJobId}
+                    onChange={(e) => setTargetJobId(e.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                  >
+                    <option value="">No specific job — generic critique</option>
+                    {jobs.map((j) => (
+                      <option key={j.id} value={j.id}>{j.roleTitle} · {j.companyRef?.name ?? j.company}</option>
+                    ))}
+                  </select>
+                </label>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button onClick={() => runAi('analyze')} disabled={aiBusy} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">Analyze bullets</button>
                   <button onClick={() => runAi('rewrite')} disabled={aiBusy || !jdText.trim()} title={jdText.trim() ? undefined : 'Paste a JD above first'} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">Rewrite for this JD</button>

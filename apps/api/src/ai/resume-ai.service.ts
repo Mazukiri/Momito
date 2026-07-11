@@ -15,6 +15,15 @@ export type AiOutcome<T> =
   | { ok: true; result: T; inputTokens: number; outputTokens: number; model: string }
   | { ok: false; reason: string };
 
+// MOM-149/150: what the analysis is aimed at, and what evidence it may ground suggestions in.
+// Without a target the model can only give generic advice; without the profile it can only
+// say "add a metric" instead of naming a metric the candidate has already claimed elsewhere.
+export interface AnalyzeContext {
+  targetRoleTrackId: string | null;
+  job?: { company: string; role: string; jdText: string | null; focusAreas: string[] } | null;
+  evidence?: { skills: string[]; projects: string[]; experience: string[] } | null;
+}
+
 // Adaptive thinking is billed inside max_tokens, so a full résumé at effort:high needs real
 // headroom — 4096 truncated the answer once thinking had taken its share.
 const MAX_TOKENS = 16000;
@@ -77,22 +86,97 @@ export class ResumeAiService {
     return bullets;
   }
 
-  async analyze(contentMd: string, targetLabel: string | null): Promise<AiOutcome<ResumeAnalysis>> {
+  async analyze(contentMd: string, context: AnalyzeContext): Promise<AiOutcome<ResumeAnalysis>> {
     const bullets = ResumeAiService.extractBullets(contentMd);
     if (bullets.length === 0) {
       return { ok: false, reason: 'This résumé version has no bullet points to analyse yet.' };
     }
-    const user = [
-      `## Target role`,
-      targetLabel ?? '(no specific target given — judge for a strong generalist SWE role)',
-      '',
-      '## Résumé (Markdown)',
-      contentMd,
-      '',
-      `## The ${bullets.length} bullets to critique, in order — return exactly ${bullets.length} entries`,
-      ...bullets.map((b, i) => `${i}. ${b}`),
-    ].join('\n');
-    return this.run(ANALYZE_SYSTEM, user, ResumeAnalysisSchema);
+
+    const first = await this.run<ResumeAnalysis>(
+      ANALYZE_SYSTEM,
+      this.analyzeUser(contentMd, bullets, context, null),
+      ResumeAnalysisSchema,
+    );
+    if (!first.ok) return first;
+
+    // MOM-148 — the completeness contract is only worth something if we CHECK it. A model that
+    // returns 10 of 14 entries used to be accepted silently, which is exactly the bug that made
+    // a cheap model look like a bargain. Repair the gap once, then merge.
+    const missing = this.missingIndexes(first.result, bullets.length);
+    if (missing.length === 0) return first;
+
+    this.logger.warn(`Analysis covered ${bullets.length - missing.length}/${bullets.length} bullets — repairing.`);
+    const repair = await this.run<ResumeAnalysis>(
+      ANALYZE_SYSTEM,
+      this.analyzeUser(contentMd, bullets, context, missing),
+      ResumeAnalysisSchema,
+    );
+    if (!repair.ok) return first; // keep the partial rather than lose the whole audit
+
+    const merged = [...first.result.bulletFeedback, ...repair.result.bulletFeedback]
+      .filter((b, i, all) => all.findIndex((o) => o.index === b.index) === i)
+      .sort((a, b) => a.index - b.index);
+
+    return {
+      ok: true,
+      result: { ...first.result, bulletFeedback: merged },
+      inputTokens: first.inputTokens + repair.inputTokens,
+      outputTokens: first.outputTokens + repair.outputTokens,
+      model: first.model,
+    };
+  }
+
+  private missingIndexes(result: ResumeAnalysis, total: number): number[] {
+    const seen = new Set(result.bulletFeedback.map((b) => b.index));
+    return Array.from({ length: total }, (_, i) => i).filter((i) => !seen.has(i));
+  }
+
+  private analyzeUser(contentMd: string, bullets: string[], ctx: AnalyzeContext, repairOnly: number[] | null): string {
+    const parts: string[] = [];
+
+    if (ctx.job) {
+      // MOM-149: a recruiter's critique is only as good as the target they hold in mind.
+      parts.push(`## The job this résumé is aimed at`, `${ctx.job.role} at ${ctx.job.company}`);
+      if (ctx.job.focusAreas.length > 0) {
+        parts.push(`This company weights these areas most: ${ctx.job.focusAreas.join(', ')}.`);
+      }
+      if (ctx.job.jdText) parts.push('', '### Job description', ctx.job.jdText);
+      parts.push('', 'Judge every bullet against THIS job — relevance to it is part of the score.');
+    } else {
+      parts.push(
+        '## Target role',
+        ctx.targetRoleTrackId ?? '(no specific target given — judge for a strong generalist SWE role)',
+      );
+    }
+
+    if (ctx.evidence && (ctx.evidence.skills.length || ctx.evidence.projects.length || ctx.evidence.experience.length)) {
+      // MOM-150: without this the model can only say "add a metric" — it cannot know one. With it,
+      // it can point at a number the candidate has already claimed elsewhere in their profile.
+      parts.push('', '## What this candidate has actually done (from their profile — NOT on the résumé yet)');
+      if (ctx.evidence.skills.length) parts.push(`Skills: ${ctx.evidence.skills.join(', ')}`);
+      for (const e of ctx.evidence.experience) parts.push(`- Experience: ${e}`);
+      for (const p of ctx.evidence.projects) parts.push(`- Project: ${p}`);
+      parts.push(
+        '',
+        'When a bullet lacks a metric or scope, prefer a suggestion grounded in the evidence above over a',
+        'placeholder. Never invent facts that appear in neither the résumé nor the evidence.',
+      );
+    }
+
+    parts.push('', '## Résumé (Markdown)', contentMd, '');
+
+    if (repairOnly) {
+      parts.push(
+        `## You previously skipped these bullets. Return ONLY these ${repairOnly.length} entries, with these exact indexes:`,
+        ...repairOnly.map((i) => `${i}. ${bullets[i]}`),
+      );
+    } else {
+      parts.push(
+        `## The ${bullets.length} bullets to critique, in order — return exactly ${bullets.length} entries`,
+        ...bullets.map((b, i) => `${i}. ${b}`),
+      );
+    }
+    return parts.join('\n');
   }
 
   async rewriteBullets(contentMd: string, jdText: string): Promise<AiOutcome<BulletRewrite>> {

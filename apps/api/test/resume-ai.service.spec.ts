@@ -13,9 +13,12 @@ const ANALYSIS = {
   overallImpression: 'Solid but under-quantified.',
   bulletFeedback: [
     { index: 0, original: 'Worked on the backend.', impactScore: 1, senioritySignal: 'junior' as const, issue: 'Vague verb, no metric.', suggestion: 'Name the system and the impact.' },
+    { index: 1, original: 'Cut p99 latency 40% on the payments path.', impactScore: 4, senioritySignal: 'mid' as const, issue: 'Strong; scope of the system is unstated.', suggestion: 'Add the traffic the path carried.' },
   ],
   missingThemes: ['distributed systems'],
 };
+
+const CTX = { targetRoleTrackId: null };
 
 const REWRITES = {
   rewrites: [
@@ -46,7 +49,7 @@ describe('ResumeAiService (MOM-136/137/138, dormant-until-key)', () => {
     const service = new ResumeAiService();
 
     expect(service.isAvailable()).toBe(false);
-    await expect(service.analyze(CONTENT_MD, null)).resolves.toEqual({ ok: false, reason: expect.stringContaining('not configured') });
+    await expect(service.analyze(CONTENT_MD, CTX)).resolves.toEqual({ ok: false, reason: expect.stringContaining('not configured') });
     await expect(service.rewriteBullets(CONTENT_MD, 'JD')).resolves.toEqual({ ok: false, reason: expect.stringContaining('not configured') });
     await expect(service.draftCoverLetter(CONTENT_MD, 'JD')).resolves.toEqual({ ok: false, reason: expect.stringContaining('not configured') });
   });
@@ -55,7 +58,7 @@ describe('ResumeAiService (MOM-136/137/138, dormant-until-key)', () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
     const parse = vi.fn().mockResolvedValue(okResponse(ANALYSIS));
 
-    const outcome = await serviceWithFakeClient(parse).analyze(CONTENT_MD, 'google-l4-swe');
+    const outcome = await serviceWithFakeClient(parse).analyze(CONTENT_MD, { targetRoleTrackId: 'google-l4-swe' });
 
     expect(outcome.ok).toBe(true);
     if (outcome.ok) {
@@ -88,7 +91,7 @@ describe('ResumeAiService (MOM-136/137/138, dormant-until-key)', () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
     const parse = vi.fn().mockResolvedValue(okResponse(ANALYSIS));
 
-    await serviceWithFakeClient(parse).analyze(CONTENT_MD, null);
+    await serviceWithFakeClient(parse).analyze(CONTENT_MD, CTX);
 
     const call = parse.mock.calls[0][0];
     expect(call.messages[0].content).toContain('0. Worked on the backend.');
@@ -103,10 +106,81 @@ describe('ResumeAiService (MOM-136/137/138, dormant-until-key)', () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
     const parse = vi.fn();
 
-    const outcome = await serviceWithFakeClient(parse).analyze('# Ada\n\nJust prose, no bullets.', null);
+    const outcome = await serviceWithFakeClient(parse).analyze('# Ada\n\nJust prose, no bullets.', CTX);
 
     expect(outcome).toEqual({ ok: false, reason: expect.stringContaining('no bullet points') });
     expect(parse).not.toHaveBeenCalled(); // no spend on an un-analysable résumé
+  });
+
+  // MOM-148 — the completeness contract is only worth something if we CHECK it. Accepting a
+  // short answer silently is precisely what let a cheap model look like a bargain.
+  it('repairs an incomplete analysis instead of accepting it silently (MOM-148)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    const partial = { ...ANALYSIS, bulletFeedback: [ANALYSIS.bulletFeedback[0]] }; // skipped bullet 1
+    const repaired = { ...ANALYSIS, bulletFeedback: [ANALYSIS.bulletFeedback[1]] };
+    const parse = vi.fn()
+      .mockResolvedValueOnce(okResponse(partial))
+      .mockResolvedValueOnce(okResponse(repaired));
+
+    const outcome = await serviceWithFakeClient(parse).analyze(CONTENT_MD, CTX);
+
+    expect(parse).toHaveBeenCalledTimes(2);
+    expect(parse.mock.calls[1][0].messages[0].content).toContain('You previously skipped these bullets');
+    expect(parse.mock.calls[1][0].messages[0].content).toContain('1. Cut p99 latency 40% on the payments path.');
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.result.bulletFeedback.map((b) => b.index)).toEqual([0, 1]); // merged + ordered
+      expect(outcome.inputTokens).toBe(800); // both calls are billed, not just the first
+      expect(outcome.outputTokens).toBe(400);
+    }
+  });
+
+  it('keeps the partial audit if the repair pass itself fails (MOM-148)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    const partial = { ...ANALYSIS, bulletFeedback: [ANALYSIS.bulletFeedback[0]] };
+    const parse = vi.fn()
+      .mockResolvedValueOnce(okResponse(partial))
+      .mockRejectedValueOnce(new Anthropic.RateLimitError(429, {}, 'slow down', new Headers()));
+
+    const outcome = await serviceWithFakeClient(parse).analyze(CONTENT_MD, CTX);
+
+    // half an audit beats no audit — the user still sees the bullet that was critiqued
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.result.bulletFeedback).toHaveLength(1);
+  });
+
+  // MOM-149 — a critique is only as good as the target it is held against.
+  it('judges the résumé against a specific job, JD and company focus areas (MOM-149)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    const parse = vi.fn().mockResolvedValue(okResponse(ANALYSIS));
+
+    await serviceWithFakeClient(parse).analyze(CONTENT_MD, {
+      targetRoleTrackId: null,
+      job: { company: 'Meta', role: 'Backend Engineer', jdText: 'Go, low-latency payments.', focusAreas: ['system_design', 'dsa'] },
+    });
+
+    const content = parse.mock.calls[0][0].messages[0].content;
+    expect(content).toContain('Backend Engineer at Meta');
+    expect(content).toContain('system_design, dsa');
+    expect(content).toContain('Go, low-latency payments.');
+    expect(content).toContain('Judge every bullet against THIS job');
+  });
+
+  // MOM-150 — the model cannot invent a metric it was never told. Feed it the profile and it can
+  // point at a number the candidate already claims instead of emitting a placeholder.
+  it('grounds suggestions in the profile evidence (MOM-150)', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    const parse = vi.fn().mockResolvedValue(okResponse(ANALYSIS));
+
+    await serviceWithFakeClient(parse).analyze(CONTENT_MD, {
+      targetRoleTrackId: null,
+      evidence: { skills: ['Go'], projects: ['Ledger — 5,000 RPS sustained'], experience: [] },
+    });
+
+    const content = parse.mock.calls[0][0].messages[0].content;
+    expect(content).toContain('5,000 RPS sustained');
+    expect(content).toContain('prefer a suggestion grounded in the evidence above over a');
+    expect(content).toContain('Never invent facts');
   });
 
   it('parses bullet rewrites and passes the JD through (MOM-137)', async () => {
@@ -132,15 +206,15 @@ describe('ResumeAiService (MOM-136/137/138, dormant-until-key)', () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
 
     const unparsed = vi.fn().mockResolvedValue({ parsed_output: null, usage: { input_tokens: 1, output_tokens: 1 } });
-    await expect(serviceWithFakeClient(unparsed).analyze(CONTENT_MD, null))
+    await expect(serviceWithFakeClient(unparsed).analyze(CONTENT_MD, CTX))
       .resolves.toEqual({ ok: false, reason: expect.stringContaining('did not match') });
 
     const rateLimited = vi.fn().mockRejectedValue(new Anthropic.RateLimitError(429, {}, 'slow down', new Headers()));
-    await expect(serviceWithFakeClient(rateLimited).analyze(CONTENT_MD, null))
+    await expect(serviceWithFakeClient(rateLimited).analyze(CONTENT_MD, CTX))
       .resolves.toEqual({ ok: false, reason: expect.stringContaining('rate-limited') });
 
     const badKey = vi.fn().mockRejectedValue(new Anthropic.AuthenticationError(401, {}, 'bad key', new Headers()));
-    await expect(serviceWithFakeClient(badKey).analyze(CONTENT_MD, null))
+    await expect(serviceWithFakeClient(badKey).analyze(CONTENT_MD, CTX))
       .resolves.toEqual({ ok: false, reason: expect.stringContaining('misconfigured') });
   });
 });
@@ -152,8 +226,23 @@ describe('ResumeAiOrchestrator (MOM-136/137/138)', () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const prisma = {
       resumeVersion: {
-        findFirst: vi.fn().mockResolvedValue({ contentMd: CONTENT_MD, targetRoleTrackId: null }),
+        findFirst: vi.fn().mockResolvedValue({ contentMd: CONTENT_MD, targetRoleTrackId: null, jobApplicationId: null }),
         updateMany,
+      },
+      jobApplication: {
+        findFirst: vi.fn().mockResolvedValue({
+          company: 'Meta (free text)',
+          roleTitle: 'Backend Engineer',
+          jdText: 'Go, Kubernetes, low-latency payments.',
+          companyRef: { name: 'Meta', focusAreas: { system_design: 5, dsa: 4 } },
+        }),
+      },
+      profile: {
+        findUnique: vi.fn().mockResolvedValue({
+          skills: ['Go', 'PostgreSQL'],
+          projects: [{ name: 'Ledger', impact: '5,000 RPS sustained' }],
+          experience: [],
+        }),
       },
       ...overrides.prisma,
     };
@@ -171,6 +260,28 @@ describe('ResumeAiOrchestrator (MOM-136/137/138)', () => {
     const orchestrator = new ResumeAiOrchestrator(prisma as never, budget as never, resumeAi as never);
     return { orchestrator, prisma, budget, resumeAi, updateMany };
   }
+
+  // MOM-149 — a version already records the job it was sent to, so a targeted critique is the
+  // DEFAULT, not something the user has to opt into.
+  it('falls back to the job the version is already linked to (MOM-149)', async () => {
+    const { orchestrator, prisma, resumeAi } = build({
+      prisma: {
+        resumeVersion: {
+          findFirst: vi.fn().mockResolvedValue({ contentMd: CONTENT_MD, targetRoleTrackId: null, jobApplicationId: 'job-9' }),
+          updateMany: vi.fn(),
+        },
+      },
+    });
+
+    await orchestrator.analyze('rv-1', 'user-1'); // no jobApplicationId passed
+
+    expect((prisma.jobApplication as { findFirst: ReturnType<typeof vi.fn> }).findFirst)
+      .toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'job-9', userId: 'user-1' } }));
+    const ctx = (resumeAi.analyze as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(ctx.job).toMatchObject({ company: 'Meta', role: 'Backend Engineer' });
+    expect(ctx.job.focusAreas).toEqual(['system_design', 'dsa']);
+    expect(ctx.evidence.projects[0]).toContain('5,000 RPS');
+  });
 
   it('is dormant with no key: returns {ok:false} without touching the DB, the budget, or the model', async () => {
     const { orchestrator, prisma, budget, resumeAi } = build({ resumeAi: { isAvailable: () => false } });
