@@ -312,3 +312,22 @@ sitting here now"), and `active` is now computed independently (not-terminal cou
 `total`. `JobFunnelResponse` shape is unchanged — the web renders it as-is.
 **Consequences:** Honest conversion numbers. A rejected app that reached an onsite now counts toward onsite and
 credits the résumé/source that got it there. No schema change, no web change. MOM-160.
+
+### D-023 — Demonstrated performance closes weakness signals (repair evidence)
+**Context:** The repair loop was half-closed. A bombed interview emits a `WeaknessSignal` → Today shows a "Repair:"
+card → the user runs the `weakness_repair`/`job_prep` session it drives → and *nothing happened to the signal*.
+`sessions.service` never touched signals; the `repairing` status in `WEAKNESS_SIGNAL_STATUSES` was set by no code;
+the only way a weakness left the board was the 21-day severity half-life (D-013/MOM-127) or a manual resolve/dismiss
+endpoint that had zero UI callers. So a user could repair a weakness perfectly and the app would keep nagging.
+**Decision:** Completing a `weakness_repair` or `job_prep` session credits its **positive attempts** (the one
+canonical `isPositiveAttempt` rule, D-013) against the OPEN **area-type** signals for those areas: one positive marks
+a signal `repairing`; two positives in one session — or one more on an already-`repairing` signal (evidence carried
+across sessions) — mark it `resolved`. `reason`-type signals (time_pressure, communication, …) are **untouched** —
+an attempt can't measure them, so they stay manual-resolve-only. Abandoned sessions credit nothing. The positive
+verdict is computed in `sessions.service` (which owns the attempt rows) and handed as plain `{area, positive}` data to
+`WeaknessesService.creditRepairEvidence`, which owns the status transitions — keeping the weakness engine
+persistence-only. Crediting never breaks session completion (try/warn, like the FSRS-schedule hook). Per ADR-0011 the
+derived struggle path is unchanged: practice still does not *create* stored signals; this only *closes* them.
+**Consequences:** The loop closes — repair a weakness and it visibly clears from Today and from the job-readiness
+penalty. Time-decay stays the fallback for anything never demonstrably repaired. No schema change (all four statuses
+already existed). MOM-166; the dead resolve/dismiss endpoints get their UI in MOM-167.

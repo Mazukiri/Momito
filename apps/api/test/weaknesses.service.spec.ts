@@ -218,6 +218,76 @@ describe('WeaknessesService.resolveSignal / dismissSignal (MOM-127)', () => {
   });
 });
 
+describe('WeaknessesService.creditRepairEvidence (MOM-166, D-023)', () => {
+  // Helper: a service whose weaknessSignal.findMany returns `signals` and captures updates.
+  function creditService(signals: unknown[]) {
+    const update = vi.fn().mockResolvedValue({});
+    const findMany = vi.fn().mockResolvedValue(signals);
+    const service = new WeaknessesService({ weaknessSignal: { findMany, update } } as never);
+    return { service, update, findMany };
+  }
+
+  it('marks an open area-signal `repairing` on one positive attempt', async () => {
+    const { service, update } = creditService([signalRow({ id: 'sig-1', area: 'system_design', status: 'open' })]);
+
+    const result = await service.creditRepairEvidence('user-1', [{ area: 'system_design', positive: true }]);
+
+    expect(result).toEqual({ repairing: 1, resolved: 0 });
+    expect(update).toHaveBeenCalledWith({ where: { id: 'sig-1' }, data: { status: 'repairing' } });
+  });
+
+  it('resolves an open area-signal on two positives in one batch', async () => {
+    const { service, update } = creditService([signalRow({ id: 'sig-1', area: 'system_design', status: 'open' })]);
+
+    const result = await service.creditRepairEvidence('user-1', [
+      { area: 'system_design', positive: true },
+      { area: 'system_design', positive: true },
+    ]);
+
+    expect(result).toEqual({ repairing: 0, resolved: 1 });
+    expect(update.mock.calls[0][0].data.status).toBe('resolved');
+    expect(update.mock.calls[0][0].data.resolvedAt).toBeInstanceOf(Date);
+  });
+
+  it('resolves an already-`repairing` signal on one more positive (evidence across sessions)', async () => {
+    const { service, update } = creditService([signalRow({ id: 'sig-1', area: 'dsa', status: 'repairing' })]);
+
+    const result = await service.creditRepairEvidence('user-1', [{ area: 'dsa', positive: true }]);
+
+    expect(result).toEqual({ repairing: 0, resolved: 1 });
+    expect(update.mock.calls[0][0].data.status).toBe('resolved');
+  });
+
+  it('credits nothing when the attempts are not positive', async () => {
+    const { service, update, findMany } = creditService([signalRow({ area: 'system_design', status: 'open' })]);
+
+    const result = await service.creditRepairEvidence('user-1', [{ area: 'system_design', positive: false }]);
+
+    expect(result).toEqual({ repairing: 0, resolved: 0 });
+    expect(findMany).not.toHaveBeenCalled(); // no positive areas → never even queries
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('never touches reason-type signals (the query filters to signalType area)', async () => {
+    const { service, findMany } = creditService([]);
+
+    await service.creditRepairEvidence('user-1', [{ area: 'dsa', positive: true }]);
+
+    expect(findMany.mock.calls[0][0].where).toMatchObject({ signalType: 'area', status: { in: ['open', 'repairing'] } });
+  });
+
+  it('only credits areas that actually saw a positive attempt', async () => {
+    // A positive in dsa; the signal is for system_design → no match, no write.
+    const { service, update } = creditService([signalRow({ id: 'sig-sd', area: 'system_design', status: 'open' })]);
+    // findMany is filtered by area IN [dsa]; system_design signal wouldn't be returned in reality,
+    // but even if it leaks through, positivesByArea has no entry for it → skipped.
+    const result = await service.creditRepairEvidence('user-1', [{ area: 'dsa', positive: true }]);
+
+    expect(result).toEqual({ repairing: 0, resolved: 0 });
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
 describe('WeaknessesService.struggledQuestionIds', () => {
   it('excludes questions repaired by a later clean attempt (attempts arrive newest-first)', async () => {
     const { service } = serviceWith([

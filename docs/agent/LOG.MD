@@ -1,5 +1,32 @@
 # LOG
 
+## 2026-07-12 - MOM-166: repair sessions actually repair (Momito 1.1 PR 1) (CLAUDE, no schema, D-023)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. First PR of the Momito 1.1 "close the half-closed
+loops" release.
+
+**The gap.** The repair loop was half-closed: a bombed interview emits a `WeaknessSignal`, Today shows a "Repair:"
+card, the user runs the `weak_area_review`/`job_prep` session it drives — and *nothing happened to the signal*. The
+`repairing` status was set by no code; the only exits were the 21-day half-life or the resolve/dismiss endpoints,
+which had zero UI callers. You could repair a weakness perfectly and the app kept nagging.
+
+**The fix.** Completing a `weak_area_review` or `job_prep` session now credits its **positive attempts** (the one
+canonical `isPositiveAttempt` rule — extracted to a pure exported function in `readiness.service.ts` so sessions
+reuses the exact D-013 definition without a service dependency) against the OPEN **area-type** signals for those
+areas: one positive → `repairing`; two in a session, or one more on an already-`repairing` signal (evidence across
+sessions) → `resolved`. `reason`-type signals stay manual-only (an attempt can't measure them). `sessions.service`
+computes the `{area, positive}` verdict and hands it to `WeaknessesService.creditRepairEvidence`, which owns the
+transitions (persistence-only). Crediting is gated to `status:'completed'` and wrapped in try/warn — an abandoned
+session credits nothing and a credit failure never breaks completion.
+
+**Live testing caught a real bug:** I first gated on `'weakness_repair'`, but the actual session-type enum value is
+**`weak_area_review`** — my gate would have never fired for repair sessions. Fixed and re-verified.
+
+**Verified.** 338 API tests (+10). Lint + typecheck clean. Live against local Postgres with the fixed build: bombed a
+Meta debrief (areasWeak dsa) → open dsa signal; completed a 1-positive `weak_area_review` session → dsa `repairing`;
+completed a second → `resolved` (gone from the open list). All test data (round, signal, 3 sessions, 4 attempts, 2
+review states, 1 evidence row) removed afterward; the demo's 3 baseline signals are intact.
+
 ## 2026-07-12 - MOM-165: navigation restructure into sections (Momito 1.0 PR 6) (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Final PR of Momito 1.0.

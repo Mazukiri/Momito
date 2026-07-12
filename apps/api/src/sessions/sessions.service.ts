@@ -2,8 +2,15 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { Prisma } from '@prisma/client';
 import { CAREER_ROLE_AREA_IDS } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { isPositiveAttempt } from '../readiness/readiness.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { WeaknessesService } from '../weaknesses/weaknesses.service';
+
+// MOM-166: the session types whose whole point is to work down stored weakness signals —
+// `weak_area_review` (the weakness-repair type; drawn weak-area-first) and `job_prep` (draws the
+// target's exposed weak areas first). Completing one credits its positive attempts against those
+// signals (D-023).
+const REPAIR_SESSION_TYPES = new Set(['weak_area_review', 'job_prep']);
 import { CreateAnswerDto } from './dto/create-answer.dto';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { ListSessionsDto } from './dto/list-sessions.dto';
@@ -390,11 +397,34 @@ export class SessionsService {
       data: { status, endedAt: new Date() },
     });
     if (result.count === 1) {
-      return this.prisma.interviewSession.findUniqueOrThrow({ where: { id } });
+      const session = await this.prisma.interviewSession.findUniqueOrThrow({ where: { id } });
+      // MOM-166: a completed repair/job_prep session's positive attempts close the weakness
+      // signals it targeted. Only on completion (an abandoned session credits nothing), and
+      // never allowed to break the finish — the session already succeeded.
+      if (status === 'completed' && REPAIR_SESSION_TYPES.has(session.sessionType)) {
+        await this.creditRepairEvidence(id, userId);
+      }
+      return session;
     }
     const existing = await this.prisma.interviewSession.findFirst({ where: { id, userId }, select: { status: true } });
     if (!existing) throw new NotFoundException('Session not found');
     throw new ConflictException(`Session is already ${existing.status}`);
+  }
+
+  // MOM-166: turn this session's attempts into repair evidence — area + the canonical
+  // positive-attempt verdict (D-013) per attempt — and hand it to the weakness engine, which
+  // owns the status transitions. Persistence-only there; the positive rule lives here.
+  private async creditRepairEvidence(sessionId: string, userId: string): Promise<void> {
+    try {
+      const attempts = await this.prisma.answerAttempt.findMany({
+        where: { sessionId, userId },
+        select: { area: true, selfRating: true, correctness: true, rubricScore: true, aiScore: true },
+      });
+      const evidence = attempts.map((attempt) => ({ area: attempt.area, positive: isPositiveAttempt(attempt) }));
+      await this.weaknesses.creditRepairEvidence(userId, evidence);
+    } catch (error) {
+      this.logger.warn(`Failed to credit repair evidence for session ${sessionId}: ${error}`);
+    }
   }
 
   private shuffle<T>(items: T[]): T[] {

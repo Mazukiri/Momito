@@ -19,6 +19,7 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-166 | CLAUDE | `apps/api/src/{weaknesses,sessions,readiness}/*.service.ts`, `apps/api/test/{weaknesses,sessions}.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-165 | CLAUDE | `apps/web/app/lib/navigation.ts`, `apps/web/app/components/Sidebar.tsx`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-164 | CLAUDE | `apps/api/src/jobs/dto/{create,update}-job.dto.ts`, `apps/api/src/jobs/jobs.service.ts`, `packages/shared/src/index.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-163 | CLAUDE | `apps/api/src/missions/**` (deleted), `apps/api/src/app.module.ts`, `apps/api/src/{recommendations,dashboard}/**`, `packages/shared/src/index.ts`, `apps/api/test/{recommendations,dashboard}.service.spec.ts`, `apps/web/app/(authenticated)/today/page.tsx`, `docs/agent/*.MD` | 2026-07-12 |

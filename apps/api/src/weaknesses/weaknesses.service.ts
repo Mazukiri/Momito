@@ -21,6 +21,10 @@ const SEVERITY_HALFLIFE_DAYS = 21;
 const SEVERITY_FLOOR = 0.15;
 const SEVERITY_CAP = 10;
 const OPEN_STATUSES = ['open', 'repairing'] as const;
+// MOM-166 (D-023): positive attempts in a weak area needed, in one session, to fully resolve
+// its open signal. One positive marks it `repairing`; two resolve it (or one more when already
+// repairing — evidence carried across sessions).
+const REPAIR_POSITIVE_TARGET = 2;
 
 export interface RecordWeaknessSignalInput {
   signalType: WeaknessSignalType;
@@ -162,6 +166,53 @@ export class WeaknessesService {
           },
         });
     return this.serializeSignal(signal);
+  }
+
+  // MOM-166 (D-023): demonstrated performance closes the loop. When a weakness-repair or
+  // job_prep session finishes, its positive attempts (the canonical isPositiveAttempt rule,
+  // computed by the caller) credit the OPEN area-signals for those areas: one positive marks a
+  // signal `repairing`; two in one batch — or one more on an already-`repairing` signal
+  // (evidence across two sessions) — `resolved`. reason-type signals (time_pressure, …) are
+  // untouched: an attempt can't measure them, so they stay manual-resolve. Time-decay remains
+  // the fallback for anything never demonstrably repaired. No-op (no writes) when nothing
+  // positive lands on an open area-signal.
+  async creditRepairEvidence(
+    userId: string,
+    attempts: Array<{ area: string | null; positive: boolean }>,
+  ): Promise<{ repairing: number; resolved: number }> {
+    const positivesByArea = new Map<string, number>();
+    for (const attempt of attempts) {
+      if (!attempt.area || !attempt.positive) continue;
+      positivesByArea.set(attempt.area, (positivesByArea.get(attempt.area) ?? 0) + 1);
+    }
+    if (positivesByArea.size === 0) return { repairing: 0, resolved: 0 };
+
+    const signals = await this.prisma.weaknessSignal.findMany({
+      where: {
+        userId,
+        signalType: 'area',
+        status: { in: [...OPEN_STATUSES] },
+        area: { in: [...positivesByArea.keys()] },
+      },
+    });
+
+    const now = new Date();
+    let repairing = 0;
+    let resolved = 0;
+    for (const signal of signals) {
+      const positives = positivesByArea.get(signal.area ?? '') ?? 0;
+      if (positives === 0) continue;
+      const shouldResolve = positives >= REPAIR_POSITIVE_TARGET || (signal.status === 'repairing' && positives >= 1);
+      if (shouldResolve) {
+        await this.prisma.weaknessSignal.update({ where: { id: signal.id }, data: { status: 'resolved', resolvedAt: now } });
+        resolved += 1;
+      } else if (signal.status !== 'repairing') {
+        // open → repairing (one positive, not yet enough to fully resolve). No resolvedAt.
+        await this.prisma.weaknessSignal.update({ where: { id: signal.id }, data: { status: 'repairing' } });
+        repairing += 1;
+      }
+    }
+    return { repairing, resolved };
   }
 
   async resolveSignal(id: string, userId: string): Promise<WeaknessSignalResponse> {

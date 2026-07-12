@@ -11,6 +11,7 @@ const weaknessesStub = () =>
   ({
     struggledQuestionIds: vi.fn().mockResolvedValue([]),
     summary: vi.fn().mockResolvedValue({ windowDays: 30, totalAttempts: 0, totalStruggles: 0, reasons: [], patterns: [], topics: [] }),
+    creditRepairEvidence: vi.fn().mockResolvedValue({ repairing: 0, resolved: 0 }),
   }) as never;
 
 describe('SessionsService', () => {
@@ -264,6 +265,66 @@ describe('SessionsService', () => {
     const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
     await expect(service.abandon('session-1', 'user-1'))
       .rejects.toEqual(new ConflictException('Session is already completed'));
+  });
+
+  // MOM-166: completing a repair/job_prep session closes the weakness signals it targeted.
+  function finishSetup(sessionType: string, attempts: unknown[]) {
+    const prisma = {
+      interviewSession: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 'session-1', sessionType }),
+      },
+      answerAttempt: { findMany: vi.fn().mockResolvedValue(attempts) },
+    };
+    const weaknesses = {
+      struggledQuestionIds: vi.fn().mockResolvedValue([]),
+      summary: vi.fn(),
+      creditRepairEvidence: vi.fn().mockResolvedValue({ repairing: 0, resolved: 0 }),
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknesses as never);
+    return { service, weaknesses, prisma };
+  }
+
+  it('credits repair evidence when a weakness_repair session completes', async () => {
+    const { service, weaknesses } = finishSetup('weak_area_review', [
+      { area: 'system_design', selfRating: 4, correctness: null, rubricScore: null, aiScore: null }, // positive
+      { area: 'system_design', selfRating: 1, correctness: null, rubricScore: null, aiScore: null }, // not
+      { area: 'dsa', selfRating: null, correctness: 'strong', rubricScore: null, aiScore: null }, // positive
+    ]);
+
+    await service.complete('session-1', 'user-1');
+
+    expect(weaknesses.creditRepairEvidence).toHaveBeenCalledWith('user-1', [
+      { area: 'system_design', positive: true },
+      { area: 'system_design', positive: false },
+      { area: 'dsa', positive: true },
+    ]);
+  });
+
+  it('does not credit for a non-repair session type', async () => {
+    const { service, weaknesses, prisma } = finishSetup('quick_practice', []);
+
+    await service.complete('session-1', 'user-1');
+
+    expect(weaknesses.creditRepairEvidence).not.toHaveBeenCalled();
+    expect(prisma.answerAttempt.findMany).not.toHaveBeenCalled();
+  });
+
+  it('does not credit when a repair session is abandoned, only when completed', async () => {
+    const { service, weaknesses } = finishSetup('weak_area_review', []);
+
+    await service.abandon('session-1', 'user-1');
+
+    expect(weaknesses.creditRepairEvidence).not.toHaveBeenCalled();
+  });
+
+  it('never lets a crediting failure break session completion', async () => {
+    const { service, weaknesses } = finishSetup('job_prep', [{ area: 'dsa', selfRating: 4, correctness: null, rubricScore: null, aiScore: null }]);
+    weaknesses.creditRepairEvidence.mockRejectedValue(new Error('db down'));
+
+    const result = await service.complete('session-1', 'user-1');
+
+    expect(result).toMatchObject({ id: 'session-1' }); // completion still returns the session
   });
 });
 

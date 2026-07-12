@@ -26,6 +26,19 @@ export interface AttemptQuality {
   aiScore?: number | null;
 }
 
+// The ONE canonical "did this attempt demonstrate mastery" rule (D-013), as a pure exported
+// function so non-readiness callers reuse the exact same definition without depending on the
+// service — MOM-166's weakness-repair crediting imports this directly. 'partial' correctness is
+// deliberately excluded (attempted, not there yet).
+export function isPositiveAttempt(attempt: AttemptQuality): boolean {
+  return (
+    (attempt.rubricScore ?? 0) >= 0.6 ||
+    (attempt.aiScore ?? 0) >= 0.6 ||
+    (attempt.selfRating ?? 0) >= 3 ||
+    ['correct', 'strong'].includes((attempt.correctness ?? '').toLowerCase())
+  );
+}
+
 export interface AreaMastery {
   area: string;
   // Average FSRS retrievability across the area's reviewed questions (0–1), or
@@ -55,16 +68,10 @@ export class ReadinessService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  // The ONE canonical "did this attempt demonstrate mastery" rule — the union of
-  // the definitions career.service and missions.service used to keep separately.
-  // 'partial' correctness is deliberately excluded (attempted, not there yet).
+  // Instance method kept for existing callers (career.service, tests); delegates to the
+  // canonical standalone rule above so there is exactly one definition.
   isPositiveAttempt(attempt: AttemptQuality): boolean {
-    return (
-      (attempt.rubricScore ?? 0) >= 0.6 ||
-      (attempt.aiScore ?? 0) >= 0.6 ||
-      (attempt.selfRating ?? 0) >= 3 ||
-      ['correct', 'strong'].includes((attempt.correctness ?? '').toLowerCase())
-    );
+    return isPositiveAttempt(attempt);
   }
 
   // Per-area FSRS-grounded mastery for a user. Retention half: average
