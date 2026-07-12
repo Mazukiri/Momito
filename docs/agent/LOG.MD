@@ -1,5 +1,29 @@
 # LOG
 
+## 2026-07-12 - MOM-160: true ever-reached funnel conversion (Momito 1.0 PR 1) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. First PR of the Momito 1.0 consolidation release
+(plan approved this session; D-022).
+
+**The problem.** `funnel()` built `reached[k]` from currently-active apps at stage ≥ k. A rejected/withdrawn app was
+dropped from every denominator, so conversion and responseRate were systematically inflated — the losses the metric
+exists to surface were erased. MOM-103/104's `fromStatus/toStatus` transition history made the honest computation
+possible.
+
+**The change.** New `maxStageReached()` computes each app's deepest-ever funnel stage = max over {current status} ∪
+{every from/to status of its `status_change` transitions}; a pre-MOM-102 terminal app with no transitions falls back
+to `applied` (if it has an appliedDate) else `saved`. `reached[k]` = apps with depth ≥ k; `conversionFromPrev`,
+`responseRate`, and the `breakdown()` offers/interviewing counts all derive from that. `atStage` stays a
+current-status snapshot; `active` is now computed as the non-terminal count (it could no longer come from
+`reached[0]`, which now equals `total`). `JobFunnelResponse` shape unchanged → zero web changes.
+
+**Verified.** 326 API tests (+1 counterfactual: an app rejected out of an interview still counts at interview, in
+responseRate, and as `interviewing` in the source breakdown; a no-transition rejected app with an appliedDate counts
+only through applied). Lint + typecheck clean. Live: walked a throwaway job saved→applied→interview→rejected against
+the running localhost API — `interview.reached` went 3→4 (the rejected app still counts), then deleted the throwaway
+(no `@Delete` route exists on jobs, so removed it via a one-off Prisma script, since deleted) and confirmed the funnel
+returned to baseline (total 8, interview.reached 3).
+
 ## 2026-07-12 - MOM-159: ATS coverage false-missed skills at sentence ends (CLAUDE, no schema, bug fix)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Found by careful reading of the ATS keyword matcher.

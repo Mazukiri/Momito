@@ -81,7 +81,9 @@ export class JobsService {
     const [jobs, transitions, resumeVersions] = await Promise.all([
       this.prisma.jobApplication.findMany({
         where: { userId },
-        select: { id: true, status: true, source: true, visaTag: true, rejectionReason: true, createdAt: true },
+        // MOM-160: appliedDate is the ever-reached fallback for a pre-MOM-102 terminal
+        // app that carries no transition history (see maxStageReached).
+        select: { id: true, status: true, source: true, visaTag: true, rejectionReason: true, createdAt: true, appliedDate: true },
       }),
       // Ordered so each job's transitions are chronological; fromStatus/toStatus
       // reconstruct how long each stage was occupied before the app moved on.
@@ -103,10 +105,11 @@ export class JobsService {
 
     const medianByStage = this.stageTimings(jobs, transitions);
     const stageIndex = new Map(JOB_FUNNEL_STAGES.map((stage, index) => [stage as string, index]));
+
+    // atStage = current-status snapshot ("who is sitting at each stage right now").
     const atStage = JOB_FUNNEL_STAGES.map(() => 0);
     let rejected = 0;
     let withdrawn = 0;
-
     for (const job of jobs) {
       if (job.status === 'rejected') rejected += 1;
       else if (job.status === 'withdrawn') withdrawn += 1;
@@ -116,9 +119,14 @@ export class JobsService {
       }
     }
 
-    // reached[k] = active apps at stage k or deeper (cumulative funnel).
-    const reached = atStage.map((_, index) => atStage.slice(index).reduce((sum, count) => sum + count, 0));
-    const active = reached[0] ?? 0;
+    // MOM-160 (D-022): reached[k] = how many apps EVER got to stage k or deeper, from
+    // transition history — NOT just the ones still active there. A rejected app that
+    // reached an onsite still counts toward onsite; excluding it (the old snapshot
+    // behavior) inflated every conversion rate by erasing the losses.
+    const maxStageByJob = this.maxStageReached(jobs, transitions, stageIndex);
+    const reached = JOB_FUNNEL_STAGES.map(
+      (_, index) => jobs.reduce((sum, job) => sum + ((maxStageByJob.get(job.id) ?? -1) >= index ? 1 : 0), 0),
+    );
 
     const stages = JOB_FUNNEL_STAGES.map((stage, index) => ({
       stage,
@@ -130,7 +138,10 @@ export class JobsService {
 
     const appliedIdx = stageIndex.get('applied')!;
     const oaIdx = stageIndex.get('oa')!;
+    // Headline offers = offers currently held (snapshot); active = still in play (not a
+    // terminal status). `active` can no longer come from reached[0], which now equals total.
     const offers = atStage[stageIndex.get('offer')!];
+    const active = jobs.filter((job) => job.status !== 'rejected' && job.status !== 'withdrawn').length;
 
     return {
       total: jobs.length,
@@ -140,13 +151,44 @@ export class JobsService {
       withdrawn,
       responseRate: this.ratio(reached[oaIdx], reached[appliedIdx]) ?? 0,
       stages,
-      bySource: this.breakdown(jobs, (job) => job.source ?? 'unspecified'),
-      byVisaTag: this.breakdown(jobs, (job) => job.visaTag ?? 'unknown'),
+      bySource: this.breakdown(jobs, (job) => job.source ?? 'unspecified', maxStageByJob, stageIndex),
+      byVisaTag: this.breakdown(jobs, (job) => job.visaTag ?? 'unknown', maxStageByJob, stageIndex),
       byRejectionReason: this.rejectionBreakdown(jobs),
       // MOM-145: which résumé actually converts. Apps with no version linked are
       // excluded (null key) — they say nothing about résumé performance.
-      byResumeVersion: this.breakdown(jobs, (job) => versionByJob.get(job.id) ?? null),
+      byResumeVersion: this.breakdown(jobs, (job) => versionByJob.get(job.id) ?? null, maxStageByJob, stageIndex),
     };
+  }
+
+  // MOM-160 (D-022): the deepest funnel stage each job EVER occupied, keyed by job id.
+  // Sources, unioned: the current status (covers an app created directly at a deep stage),
+  // and every fromStatus/toStatus of its status_change transitions (covers an app that has
+  // since moved on OR been rejected out of a deep stage — the fromStatus preserves the depth).
+  // A terminal app (rejected/withdrawn) is not itself a funnel stage; one with NO transition
+  // history at all (pre-MOM-102) falls back to `applied` when it has an appliedDate, else
+  // `saved` — so a rejected-but-applied app still lands in the responseRate denominator.
+  private maxStageReached(
+    jobs: Array<{ id: string; status: string; appliedDate: Date | null }>,
+    transitions: Array<{ jobApplicationId: string; fromStatus: string | null; toStatus: string | null }>,
+    stageIndex: Map<string, number>,
+  ): Map<string, number> {
+    const byJob = new Map<string, number>();
+    const consider = (jobId: string, status: string | null) => {
+      if (!status) return;
+      const idx = stageIndex.get(status);
+      if (idx === undefined) return; // a terminal/unknown status is not a funnel stage
+      byJob.set(jobId, Math.max(byJob.get(jobId) ?? -1, idx));
+    };
+    for (const job of jobs) consider(job.id, job.status);
+    for (const transition of transitions) {
+      consider(transition.jobApplicationId, transition.fromStatus);
+      consider(transition.jobApplicationId, transition.toStatus);
+    }
+    for (const job of jobs) {
+      if (byJob.has(job.id)) continue; // terminal app with no funnel-stage signal
+      consider(job.id, job.appliedDate ? 'applied' : 'saved');
+    }
+    return byJob;
   }
 
   // MOM-106: loss analysis over the rejected applications — a plain count per
@@ -164,19 +206,26 @@ export class JobsService {
   // keyOf returning null drops the job from the breakdown entirely — used by
   // MOM-145's byResumeVersion, where apps with no résumé version linked carry no
   // signal about which résumé converts and would just dilute the comparison.
-  private breakdown<T extends { status: string }>(
+  // MOM-160 (D-022): offers/interviewing are EVER-reached, not current status — a
+  // rejected app that got an interview is positive evidence about the résumé/source
+  // that got it there, which is exactly what this comparison exists to measure.
+  private breakdown<T extends { id: string; status: string }>(
     jobs: T[],
     keyOf: (job: T) => string | null,
+    maxStageByJob: Map<string, number>,
+    stageIndex: Map<string, number>,
   ): JobFunnelBreakdownRow[] {
+    const offerIdx = stageIndex.get('offer')!;
+    const interviewIdx = stageIndex.get('interview')!;
     const groups = new Map<string, { total: number; offers: number; interviewing: number }>();
-    const interviewingStatuses = new Set(['interview', 'onsite', 'offer']);
     for (const job of jobs) {
       const key = keyOf(job);
       if (key === null) continue;
+      const depth = maxStageByJob.get(job.id) ?? -1;
       const row = groups.get(key) ?? { total: 0, offers: 0, interviewing: 0 };
       row.total += 1;
-      if (job.status === 'offer') row.offers += 1;
-      if (interviewingStatuses.has(job.status)) row.interviewing += 1;
+      if (depth >= offerIdx) row.offers += 1;
+      if (depth >= interviewIdx) row.interviewing += 1;
       groups.set(key, row);
     }
     return [...groups.entries()]

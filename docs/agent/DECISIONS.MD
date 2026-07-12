@@ -279,3 +279,36 @@ Json` reserved for the dormant-until-key AI (MOM-137). CRUD at `/resumes`.
 (MOM-139), AI tailoring (MOM-136–138), and which-résumé-converts analytics (MOM-145). Rollback = drop the
 table. Trade-off: a version's `contentMd` is a point-in-time derivation — later Profile edits don't propagate
 (intentional; the version is a tailored artifact, not a live view).
+
+### D-021 — Missions retired; the pipeline loop is the sole primary loop (supersedes D-015)
+**Context:** D-015 froze the mission engine but kept it "working and optional/legacy." A release later the
+pipeline-driven CareerOS loop is fully built and proven (Gate 1 met), and Missions still ships two web pages,
+a nav entry, a 775-line service, and — worst — its cards outrank *everything* on Today (priority 110, above
+interview countdowns). Frozen-but-shipping is a tax: dead tests, dual recommendation backends
+(RecommendationsService.list vs DashboardService.summary re-embedding it), and a confusing second "what to do
+next" surface. Owner decision (2026-07-12): retire it.
+**Decision:** Remove the Missions *surface* — the two web pages, the nav entry, the API module + controller +
+DTOs, the `missionsApi` client, the shared `Mission*` types, and both external couplings (recommendations'
+priority-110 cards + overdue-task deep-link; dashboard's focusMission/activeMissions/todayPlanItems). Keep the
+**database untouched**: all five tables (Mission, MissionCompetencyState, WeeklyPlan, PlanItem, MissionCheckIn)
+and every `missionId` FK column (on Task, InterviewSession, LearningEvidence) stay — this is additive-discipline
+in reverse (D-004): no data is destroyed and the feature is fully restorable from git if the decision is undone.
+`CreateSessionDto.missionId` stays accepted (harmless; sessions once created from a mission remain valid history).
+**Consequences:** Today has one authoritative queue. ~1000 lines of code + tests deleted. No migration. The
+mission tables become inert (no reader/writer) but preserved. Restoring = `git revert` the retirement PRs.
+
+### D-022 — Funnel conversion is ever-reached history, not a current-status snapshot
+**Context:** `jobs.service.funnel()` computed `reached[k]` from *currently-active* apps at stage ≥ k, so a
+rejected or withdrawn app vanished from every denominator. Conversion and responseRate were therefore inflated —
+a pipeline where 9 of 10 interviews are rejected showed the same interview→offer rate as one where all advanced,
+because the 9 losses were erased. That is exactly backwards for the decision the metric exists to inform ("where
+do my applications die?"). MOM-103/104 gave us structured `fromStatus/toStatus` transition history, making the
+true "ever reached" computable.
+**Decision:** `reached[k]` = count of apps whose **deepest-ever** funnel stage (max over current status ∪ all
+transition from/to statuses; pre-MOM-102 terminal apps fall back to `applied` if they have an appliedDate, else
+`saved`) is ≥ k. `conversionFromPrev`, `responseRate`, and the per-source/visa/résumé `offers`/`interviewing`
+breakdown counts all derive from ever-reached depth. `atStage` stays a **current-status snapshot** ("who is
+sitting here now"), and `active` is now computed independently (not-terminal count) since `reached[0]` now equals
+`total`. `JobFunnelResponse` shape is unchanged — the web renders it as-is.
+**Consequences:** Honest conversion numbers. A rejected app that reached an onsite now counts toward onsite and
+credits the résumé/source that got it there. No schema change, no web change. MOM-160.

@@ -296,13 +296,16 @@ describe('JobsService — stall detection (MOM-105)', () => {
 
 describe('JobsService.funnel', () => {
   function serviceWith(
-    jobs: Array<{ status: string; source: string | null; visaTag: string | null }>,
+    jobs: Array<{ id?: string; status: string; source: string | null; visaTag: string | null; appliedDate?: Date | null }>,
     transitions: Array<{ jobApplicationId: string; fromStatus: string | null; toStatus: string | null; eventAt: Date }> = [],
     // MOM-145: résumé versions carrying a jobApplicationId — "this is what I sent them".
     resumeVersions: Array<{ label: string; jobApplicationId: string }> = [],
   ) {
+    // MOM-160: the ever-reached funnel keys per-job depth on job.id, so give any job that
+    // didn't specify one a distinct id (else they'd all collapse onto the `undefined` key).
+    const withIds = jobs.map((job, index) => ({ ...job, id: job.id ?? `job-auto-${index}` }));
     const prisma = {
-      jobApplication: { findMany: vi.fn().mockResolvedValue(jobs) },
+      jobApplication: { findMany: vi.fn().mockResolvedValue(withIds) },
       jobEvent: { findMany: vi.fn().mockResolvedValue(transitions) },
       resumeVersion: { findMany: vi.fn().mockResolvedValue(resumeVersions) },
     };
@@ -318,8 +321,10 @@ describe('JobsService.funnel', () => {
     expect(funnel.stages[0].conversionFromPrev).toBeNull();
   });
 
-  it('computes cumulative reached counts and stage conversions from current status', async () => {
-    // saved:1, applied:2, oa:1, interview:2, onsite:1, offer:1, rejected:1, withdrawn:1
+  it('computes ever-reached counts and stage conversions (MOM-160)', async () => {
+    // saved:1, applied:2, oa:1, interview:2, onsite:1, offer:1, rejected:1, withdrawn:1.
+    // The rejected/withdrawn apps here carry no transition history and no appliedDate, so
+    // they fall back to `saved` (the deepest stage we can attribute to them).
     const jobs = [
       { status: 'saved', source: 'online', visaTag: 'sponsored' },
       { status: 'applied', source: 'online', visaTag: 'sponsored' },
@@ -335,14 +340,15 @@ describe('JobsService.funnel', () => {
     const funnel = await serviceWith(jobs).funnel('user-1');
 
     expect(funnel.total).toBe(10);
-    expect(funnel.active).toBe(8); // excludes rejected + withdrawn
-    expect(funnel.offers).toBe(1);
+    expect(funnel.active).toBe(8); // excludes rejected + withdrawn (decoupled from reached[0])
+    expect(funnel.offers).toBe(1); // offers currently held (snapshot)
     expect(funnel.rejected).toBe(1);
     expect(funnel.withdrawn).toBe(1);
 
     const byStage = Object.fromEntries(funnel.stages.map((row) => [row.stage, row]));
-    expect(byStage.saved.reached).toBe(8); // everyone active
-    expect(byStage.applied.reached).toBe(7); // all but the 1 still at saved
+    // Every app ever reached at least `saved` — including the two terminal ones (fallback).
+    expect(byStage.saved.reached).toBe(10);
+    expect(byStage.applied.reached).toBe(7); // the saved app + the two terminal fallbacks stay behind
     expect(byStage.oa.reached).toBe(5);
     expect(byStage.interview.reached).toBe(4);
     expect(byStage.onsite.reached).toBe(2);
@@ -351,8 +357,45 @@ describe('JobsService.funnel', () => {
 
     // applied→oa conversion = reached[oa]/reached[applied] = 5/7
     expect(byStage.oa.conversionFromPrev).toBeCloseTo(5 / 7, 3);
-    // responseRate = reached[oa]/reached[applied]
     expect(funnel.responseRate).toBeCloseTo(5 / 7, 3);
+  });
+
+  // MOM-160 (D-022) — the whole point: an app rejected OUT of a deep stage still counts as
+  // having reached it. Under the old snapshot semantics these losses vanished from every
+  // denominator, inflating conversion.
+  it('counts an app at the deepest stage it ever reached, even after rejection (MOM-160)', async () => {
+    const jobs = [
+      { id: 'won', status: 'offer', source: 'referral', visaTag: 'sponsored' },
+      // reached interview, then rejected — no longer "active" anywhere, but it DID interview.
+      { id: 'lost', status: 'rejected', source: 'referral', visaTag: 'sponsored' },
+      // terminal with no transitions but an appliedDate → counts through `applied`, not lost.
+      { id: 'ghosted', status: 'rejected', source: 'online', visaTag: 'unknown', appliedDate: new Date('2026-06-01T00:00:00Z') },
+    ];
+    const transitions = [
+      { jobApplicationId: 'lost', fromStatus: 'saved', toStatus: 'applied', eventAt: new Date('2026-06-02T00:00:00Z') },
+      { jobApplicationId: 'lost', fromStatus: 'applied', toStatus: 'interview', eventAt: new Date('2026-06-05T00:00:00Z') },
+      { jobApplicationId: 'lost', fromStatus: 'interview', toStatus: 'rejected', eventAt: new Date('2026-06-09T00:00:00Z') },
+    ];
+    const funnel = await serviceWith(jobs, transitions).funnel('user-1');
+
+    const byStage = Object.fromEntries(funnel.stages.map((row) => [row.stage, row]));
+    expect(byStage.applied.reached).toBe(3); // all three reached applied (ghosted via appliedDate fallback)
+    expect(byStage.interview.reached).toBe(2); // won + lost — lost counts despite the rejection
+    expect(byStage.onsite.reached).toBe(1); // only won
+    expect(byStage.offer.reached).toBe(1);
+    expect(funnel.active).toBe(1); // only `won` is not terminal
+    expect(funnel.rejected).toBe(2);
+
+    // responseRate = reached[oa]/reached[applied]: won(offer≥oa) + lost(interview≥oa) = 2 over
+    // won + lost + ghosted(applied, below oa) = 3.
+    expect(funnel.responseRate).toBeCloseTo(2 / 3, 3);
+
+    // the source breakdown credits `referral` with reaching interview twice.
+    const referral = funnel.bySource.find((row) => row.key === 'referral')!;
+    expect(referral.total).toBe(2);
+    expect(referral.offers).toBe(1); // only `won` reached offer
+    expect(referral.interviewing).toBe(2); // won (offer≥interview) + lost (interview)
+    expect(referral.conversion).toBeCloseTo(0.5, 3);
   });
 
   it('breaks down conversion by source and visa tag, sorted by volume', async () => {
