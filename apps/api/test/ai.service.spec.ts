@@ -63,7 +63,7 @@ describe('AiService', () => {
       outputTokens: 200,
       result: {
         overallScore: 90,
-        criteriaScores: [{ criterionId: 'c1', criterionTitle: 'Correctness', score: 5, comment: 'Great.' }],
+        criteriaScores: [{ index: 0, criterionId: 'c1', criterionTitle: 'Correctness', score: 5, comment: 'Great.' }],
         strengths: ['Correct'],
         gaps: [],
         followUpQuestions: ['What about duplicates?'],

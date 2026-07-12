@@ -1,5 +1,26 @@
 # LOG
 
+## 2026-07-12 - MOM-161: grading reaches résumé-AI hardening parity (Momito 1.0 PR 2) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 2 of the Momito 1.0 consolidation release.
+
+**The gap.** `grading.service.ts` was a near-clone of the résumé AI's model call but never got MOM-147/148's hardening:
+it still ran `MAX_TOKENS = 4096` (the exact value that truncated résumé output once adaptive thinking bills inside
+it), and had no completeness contract — so a cheap/gateway model could silently score 3 of 5 rubric criteria and the
+grade would be accepted whole, with no signal. Same coverage-not-quality trap the résumé work exposed.
+
+**The change.** `MAX_TOKENS` 4096 → 16000. Rubric criteria are now enumerated `0..n-1` in the prompt; the
+`GradeResultSchema` criteriaScores items carry an `index`; after the first parse, when a rubric was given, missing
+indexes trigger **one repair pass** for only the skipped criteria, merged (deduped, sorted) with both calls' tokens
+summed; a failed repair keeps the partial grade. No-rubric grading is exempt (nothing to enumerate → one call).
+`formatFeedback()` needed no change (renders `criterionTitle` in the now-guaranteed rubric order).
+
+**Verified.** 330 API tests (+4: max_tokens pin, criterion enumeration, repair-on-incomplete with summed tokens,
+keep-partial-on-repair-failure). Lint + typecheck clean. Live against the running API with the real key: created an
+attempt on a 4-criterion question, graded it — all 4 criteria scored (aiScore 0.41, correctly docking the missing
+edge-case analysis), one request, $0.0165 (the model covered all 4 in the first pass, so the repair path stayed idle
+— the happy path the headroom enables). Throwaway attempt deleted afterward.
+
 ## 2026-07-12 - MOM-160: true ever-reached funnel conversion (Momito 1.0 PR 1) (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. First PR of the Momito 1.0 consolidation release

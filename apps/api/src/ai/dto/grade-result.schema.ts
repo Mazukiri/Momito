@@ -8,13 +8,15 @@ export const GradeResultSchema = z.object({
   criteriaScores: z
     .array(
       z.object({
+        // MOM-161: the 0-based number of the enumerated rubric criterion, so coverage is checkable.
+        index: z.number().int().describe('The 0-based number of the rubric criterion this entry scores.'),
         criterionId: z.string(),
         criterionTitle: z.string(),
         score: z.number().min(0).max(5).describe('0-5 against this criterion.'),
         comment: z.string().describe('One or two sentences on why this score.'),
       }),
     )
-    .describe('One entry per rubric criterion, in the order given.'),
+    .describe('One entry per numbered rubric criterion, carrying its index.'),
   strengths: z.array(z.string()).describe('What the answer did well, 1-4 bullet points.'),
   gaps: z.array(z.string()).describe('What is missing or wrong, 1-4 bullet points.'),
   followUpQuestions: z

@@ -19,6 +19,7 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-161 | CLAUDE | `apps/api/src/ai/grading.service.ts`, `apps/api/src/ai/dto/grade-result.schema.ts`, `apps/api/test/{ai.grading,ai.service}.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-160 | CLAUDE | `apps/api/src/jobs/jobs.service.ts`, `apps/api/test/jobs.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-159 | CLAUDE | `apps/api/src/profile-scores/profile-scores.service.ts`, `apps/api/test/profile-scores.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-158 | CLAUDE | `apps/api/src/career/career.service.ts`, `apps/api/test/career.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
