@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { JOB_APPLICATION_STATUSES, REJECTION_REASONS, type CompanyResponse, type JobApplicationStatus, type RejectionReason } from '@momito/shared';
-import { companiesApi, jobsApi, missionsApi, remindersApi } from '../../../lib/api-client';
+import { companiesApi, jobsApi, remindersApi } from '../../../lib/api-client';
 import { Badge, Card, ErrorBanner, Spinner } from '../../../components/ui';
 import { InterviewRoundsCard } from '../../../components/InterviewRoundsCard';
 import { JobReadinessCard } from '../../../components/JobReadinessCard';
@@ -25,7 +25,6 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
-  const [missionId, setMissionId] = useState<string | null>(null);
   // MOM-122: catalog + the currently-linked company, for fixing/removing a link.
   const [companies, setCompanies] = useState<CompanyResponse[]>([]);
   const [companyId, setCompanyId] = useState<string>('');
@@ -40,8 +39,6 @@ export default function JobDetailPage() {
       setRejectionReason(data.rejectionReason ?? '');
       setCompanies(companyList);
       setCompanyId(data.companyId ?? '');
-      const relatedMission = await missionsApi.list();
-      setMissionId(relatedMission.find((item) => item.jobApplicationId === params.id)?.id ?? null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load job');
     } finally {
@@ -108,18 +105,6 @@ export default function JobDetailPage() {
     }
   }
 
-  async function openMission() {
-    setWorking(true);
-    try {
-      const mission = await missionsApi.createFromJob(params.id);
-      router.push(`/missions/${mission.id}`);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to open mission');
-    } finally {
-      setWorking(false);
-    }
-  }
-
   async function dismissReminder(id: string) {
     setWorking(true);
     try {
@@ -167,7 +152,6 @@ export default function JobDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={openMission} disabled={working} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">{missionId ? 'Open Mission' : 'Create Mission'}</button>
           <button onClick={generatePrep} disabled={working} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Generate Prep</button>
           <button onClick={scoreProfile} disabled={working} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Score Profile</button>
         </div>
@@ -256,7 +240,7 @@ export default function JobDetailPage() {
           <Card>
             <h2 className="mb-3 font-semibold text-zinc-800 dark:text-zinc-100">Prep Tasks</h2>
             <p className="text-sm text-zinc-500">{job.tasks.length} tasks linked to this job.</p>
-            <button onClick={() => router.push(missionId ? `/calendar?missionId=${missionId}` : '/calendar')} className="mt-3 text-sm font-medium text-indigo-600">Open calendar</button>
+            <button onClick={() => router.push('/calendar')} className="mt-3 text-sm font-medium text-indigo-600">Open calendar</button>
           </Card>
 
           <Card>

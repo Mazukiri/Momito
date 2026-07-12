@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { useSearchParams } from 'next/navigation';
 import {
   CAREER_ROLE_AREA_IDS,
   CAREER_ROLE_TRACKS,
@@ -26,8 +25,6 @@ function tomorrowIso() {
 }
 
 export default function CalendarPage() {
-  const searchParams = useSearchParams();
-  const missionId = searchParams.get('missionId') || undefined;
   const [range, setRange] = useState<(typeof RANGES)[number]>('week');
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [reminders, setReminders] = useState<ReminderResponse[]>([]);
@@ -47,7 +44,7 @@ export default function CalendarPage() {
     setError('');
     try {
       const [taskList, reminderList] = await Promise.all([
-        tasksApi.list({ range, missionId }),
+        tasksApi.list({ range }),
         remindersApi.list(),
       ]);
       setTasks(taskList);
@@ -57,7 +54,7 @@ export default function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [missionId, range]);
+  }, [range]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard data load
@@ -74,7 +71,6 @@ export default function CalendarPage() {
         priority,
         roleTrackId,
         area,
-        missionId: missionId ?? null,
         dueDate: dueDate || null,
         reminderOffsetMinutes: 24 * 60,
       });
@@ -136,7 +132,7 @@ export default function CalendarPage() {
         <div>
           <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Calendar</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            {missionId ? 'Scheduled work filtered to one mission.' : 'Scheduled prep work, reminders, and overdue career tasks.'}
+            Scheduled prep work, reminders, and overdue career tasks.
           </p>
         </div>
         <button onClick={() => setShowForm((value) => !value)} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white">
@@ -194,7 +190,6 @@ export default function CalendarPage() {
                     <Badge label={task.status} />
                     <Badge label={task.priority} />
                     {task.area && <Badge label={task.area.replaceAll('_', ' ')} />}
-                    {task.missionId && <Badge label="mission" />}
                   </div>
                 </div>
                 <div className="flex gap-2">

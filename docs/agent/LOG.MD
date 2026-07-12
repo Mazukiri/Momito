@@ -1,5 +1,25 @@
 # LOG
 
+## 2026-07-12 - MOM-162: retire Missions — web half (Momito 1.0 PR 3) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 3 of Momito 1.0; D-021. Web-first so no page
+can 404 against the API before PR 4 removes the routes (the API keeps serving `/missions` through this PR —
+harmless, since the web simply stops calling it).
+
+**Removed:** the two `missions/` pages, the `Mission` nav entry, the entire `missionsApi` client + its 7 shared-type
+imports, the "Open/Create Mission" button + `openMission`/`missionId` state on the job detail page, the "Focus
+Mission" card on the dashboard (and its now-orphaned `Link` import), and the `?missionId` filter handling on the
+calendar and learning pages (filter param, badge, create-task/create-evidence `missionId` writes) and the
+practice/new session-creation pass-through.
+
+**Kept deliberately (D-021):** `tasksApi.list`, `learningApi.ledger`, and session creation still accept a `missionId`
+param — the server columns stay, so this is harmless and lets any mission-linked history remain valid. The Today
+page's copy still lists "missions"; that line changes in PR 4 when the mission recommendation cards are actually
+removed from the backend.
+
+**Verified:** web lint + typecheck clean (cleared the stale `.next` type cache that still referenced the deleted
+pages), 34 web tests green. No API change, so the API suite is untouched.
+
 ## 2026-07-12 - MOM-161: grading reaches résumé-AI hardening parity (Momito 1.0 PR 2) (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 2 of the Momito 1.0 consolidation release.

@@ -1,15 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { CAREER_ROLE_AREA_IDS, CAREER_ROLE_TRACKS, type LearningEvidenceResponse, type ReadwiseConnectionResponse } from '@momito/shared';
 import { learningApi } from '../../lib/api-client';
 import { Card, ErrorBanner, Spinner } from '../../components/ui';
 
 export default function LearningPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const missionId = searchParams.get('missionId') || undefined;
   const [connection, setConnection] = useState<ReadwiseConnectionResponse | null>(null);
   const [ledger, setLedger] = useState<LearningEvidenceResponse[]>([]);
   const [token, setToken] = useState('');
@@ -27,7 +25,7 @@ export default function LearningPage() {
     try {
       const [readwise, evidence] = await Promise.all([
         learningApi.readwiseConnection(),
-        learningApi.ledger({ missionId }),
+        learningApi.ledger({}),
       ]);
       setConnection(readwise);
       setLedger(evidence);
@@ -36,7 +34,7 @@ export default function LearningPage() {
     } finally {
       setLoading(false);
     }
-  }, [missionId]);
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard data load
@@ -79,7 +77,6 @@ export default function LearningPage() {
         body: body.trim() || null,
         roleTrackId,
         area,
-        missionId: missionId ?? null,
       });
       setTitle('');
       setBody('');
@@ -99,7 +96,7 @@ export default function LearningPage() {
         <div>
           <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Learning Ledger</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            {missionId ? 'Evidence is filtered to the active mission so learning stays tied to one target.' : 'A permanent record of what you read, practiced, built, and learned.'}
+            A permanent record of what you read, practiced, built, and learned.
           </p>
         </div>
         <button onClick={() => router.push('/learning/inbox')} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">
@@ -155,7 +152,7 @@ export default function LearningPage() {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h2 className="font-semibold text-zinc-800 dark:text-zinc-100">{item.title}</h2>
-                  <p className="mt-1 text-sm text-zinc-500">{item.type} {item.area ? `- ${item.area.replaceAll('_', ' ')}` : ''}{item.missionId ? ' - mission linked' : ''}</p>
+                  <p className="mt-1 text-sm text-zinc-500">{item.type} {item.area ? `- ${item.area.replaceAll('_', ' ')}` : ''}</p>
                 </div>
                 <span className="text-xs text-zinc-400">{new Date(item.occurredAt).toLocaleDateString()}</span>
               </div>

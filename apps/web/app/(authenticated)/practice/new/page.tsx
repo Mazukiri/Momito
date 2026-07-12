@@ -41,7 +41,6 @@ export default function NewPracticePage() {
   const [difficulty, setDifficulty] = useState('');
   const [roleTrackId, setRoleTrackId] = useState(searchParams.get('roleTrackId') || '');
   const [area, setArea] = useState(searchParams.get('area') || '');
-  const missionId = searchParams.get('missionId') || undefined;
   const [pattern, setPattern] = useState(searchParams.get('pattern') || '');
   const [questionCount, setQuestionCount] = useState(5);
 
@@ -97,7 +96,6 @@ export default function NewPracticePage() {
         ? await sessionsApi.create({
             title: title || undefined,
             sessionType,
-            missionId,
             questionCount: Math.min(dueQuestionCount, 100),
           })
         : await sessionsApi.create({
@@ -109,7 +107,6 @@ export default function NewPracticePage() {
             roleTrackId: roleTrackId || undefined,
             area: area || undefined,
             pattern: pattern || undefined,
-            missionId,
             questionCount,
           });
       router.push(`/practice/session/${res.session.id}`);

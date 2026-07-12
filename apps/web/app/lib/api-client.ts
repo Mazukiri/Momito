@@ -467,7 +467,6 @@ import type {
   CreateContactRequest,
   CreateInterviewRoundRequest,
   CreateJobApplicationRequest,
-  CreateMissionRequest,
   CreateTaskRequest,
   InterviewRoundResponse,
   JobApplicationResponse,
@@ -476,10 +475,6 @@ import type {
   UpdateInterviewRoundRequest,
   LearningEvidenceResponse,
   LearningHighlightResponse,
-  MissionCheckInResponse,
-  MissionDetailResponse,
-  MissionResponse,
-  MissionTodayResponse,
   JobReadinessResponse,
   JobStoryGapResponse,
   OfferResponse,
@@ -501,9 +496,7 @@ import type {
   TaskResponse,
   UpdateContactRequest,
   UpdateJobApplicationRequest,
-  UpdateMissionRequest,
   UpdateTaskRequest,
-  WeeklyPlanResponse,
 } from '@momito/shared';
 
 export const careerApi = {
@@ -809,41 +802,7 @@ export const recommendationsApi = {
     request<PracticeRecommendationResponse[]>('/practice/recommendations'),
 };
 
-export const missionsApi = {
-  list: (params: { stage?: string } = {}) => {
-    const qs = new URLSearchParams();
-    if (params.stage) qs.set('stage', params.stage);
-    const query = qs.toString();
-    return request<MissionResponse[]>(`/missions${query ? `?${query}` : ''}`);
-  },
-
-  create: (body: CreateMissionRequest) =>
-    request<MissionResponse>('/missions', { method: 'POST', body: JSON.stringify(body) }),
-
-  createFromJob: (jobId: string) =>
-    request<MissionDetailResponse>(`/missions/from-job/${jobId}`, { method: 'POST' }),
-
-  get: (id: string) =>
-    request<MissionDetailResponse>(`/missions/${id}`),
-
-  update: (id: string, body: UpdateMissionRequest) =>
-    request<MissionResponse>(`/missions/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-
-  diagnose: (id: string) =>
-    request<MissionDetailResponse>(`/missions/${id}/diagnose`, { method: 'POST' }),
-
-  generatePlan: (id: string) =>
-    request<WeeklyPlanResponse>(`/missions/${id}/plans/generate`, { method: 'POST' }),
-
-  today: (id: string) =>
-    request<MissionTodayResponse>(`/missions/${id}/today`),
-
-  createCheckIn: (id: string, body: { summary: string; wins?: string | null; blockers?: string | null; adjustments?: string | null }) =>
-    request<MissionCheckInResponse>(`/missions/${id}/check-ins`, { method: 'POST', body: JSON.stringify(body) }),
-
-  reviewPlan: (id: string, body: { summary?: string; wins?: string | null; blockers?: string | null; adjustments?: string | null } = {}) =>
-    request<WeeklyPlanResponse>(`/plans/${id}/review`, { method: 'POST', body: JSON.stringify(body) }),
-};
+// MOM-162 (D-021): missionsApi removed — the Missions engine is retired.
 
 // ── Content Coverage (MOM-062) ────────────────────
 import type { ContentCoverageResponse, DsaProgressResponse } from '@momito/shared';

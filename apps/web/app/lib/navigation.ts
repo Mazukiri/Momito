@@ -13,7 +13,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/learning', label: 'Learning', icon: '📚', primary: true },
   { href: '/profile', label: 'Profile', icon: '👤', primary: true },
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
-  { href: '/missions', label: 'Mission', icon: '🎯' },
   { href: '/career', label: 'Career', icon: '🚀' },
   { href: '/calendar', label: 'Calendar', icon: '📅' },
   { href: '/companies', label: 'Companies', icon: '🏢' },
