@@ -350,9 +350,6 @@ export interface DashboardSummaryResponse {
   weakTopics: WeakTopic[];
   suggestedNextTopics: TopicSummary[];
   activeGoals?: CareerGoalResponse[];
-  activeMissions?: MissionResponse[];
-  focusMission?: MissionResponse | null;
-  todayPlanItems?: PlanItemResponse[];
   roleReadiness?: RoleReadinessResponse[];
   dueTasks?: TaskResponse[];
   reminders?: ReminderResponse[];
@@ -686,144 +683,9 @@ export interface TargetShortlistResponse {
   preferredRegions: string[];
 }
 
-export const MISSION_SOURCE_TYPES = ['manual', 'career_goal', 'job_application'] as const;
-export type MissionSourceType = (typeof MISSION_SOURCE_TYPES)[number];
-
-export const MISSION_STAGES = [
-  'diagnose',
-  'weekly_plan',
-  'execute',
-  'interview',
-  'retrospective',
-  'archived',
-] as const;
-export type MissionStage = (typeof MISSION_STAGES)[number];
-
-export const MISSION_COMPETENCY_STATUSES = ['missing', 'building', 'ready'] as const;
-export type MissionCompetencyStatus = (typeof MISSION_COMPETENCY_STATUSES)[number];
-
-export const PLAN_ITEM_TYPES = ['learn', 'practice', 'build', 'apply', 'review'] as const;
-export type PlanItemType = (typeof PLAN_ITEM_TYPES)[number];
-
-export const PLAN_ITEM_STATUSES = ['todo', 'in_progress', 'done', 'skipped'] as const;
-export type PlanItemStatus = (typeof PLAN_ITEM_STATUSES)[number];
-
-export interface MissionCompetencyStateResponse {
-  id: string;
-  missionId: string;
-  checklistItemId: string;
-  roleTrackId: CareerRoleTrackId;
-  area: CareerRoleAreaId;
-  title: string;
-  description: string;
-  evidenceType: RoleChecklistItem['evidenceType'];
-  weight: number;
-  targetLevel: number;
-  currentLevel: number;
-  confidence: number;
-  status: MissionCompetencyStatus;
-  rationale: string | null;
-  evidenceCount: number;
-  lastEvidenceAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface MissionResponse {
-  id: string;
-  userId: string;
-  name: string;
-  summary: string | null;
-  sourceType: MissionSourceType;
-  stage: MissionStage;
-  roleTrackId: CareerRoleTrackId;
-  roleTrack: CareerRoleTrack;
-  careerGoalId: string | null;
-  jobApplicationId: string | null;
-  jobApplication?: Pick<JobApplicationResponse, 'id' | 'company' | 'roleTitle' | 'status' | 'deadline'> | null;
-  targetDate: string | null;
-  weeklyHours: number;
-  successDefinition: string | null;
-  diagnosisSummary: string | null;
-  activePlanId: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PlanItemResponse {
-  id: string;
-  planId: string;
-  missionId: string;
-  taskId: string | null;
-  title: string;
-  description: string | null;
-  type: PlanItemType;
-  status: PlanItemStatus;
-  roleTrackId: CareerRoleTrackId | null;
-  area: CareerRoleAreaId | null;
-  estimatedMinutes: number;
-  expectedArtifact: string | null;
-  scheduledFor: string | null;
-  completedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface WeeklyPlanResponse {
-  id: string;
-  missionId: string;
-  weekStart: string;
-  weekEnd: string;
-  status: 'active' | 'completed' | 'archived';
-  focusSummary: string | null;
-  generatedFromDiagnosis: string | null;
-  totalPlannedHours: number;
-  createdAt: string;
-  updatedAt: string;
-  items: PlanItemResponse[];
-}
-
-export interface MissionCheckInResponse {
-  id: string;
-  missionId: string;
-  summary: string;
-  wins: string | null;
-  blockers: string | null;
-  adjustments: string | null;
-  checkInAt: string;
-  createdAt: string;
-}
-
-export interface MissionDetailResponse extends MissionResponse {
-  competencyStates: MissionCompetencyStateResponse[];
-  plans: WeeklyPlanResponse[];
-  recentCheckIns: MissionCheckInResponse[];
-}
-
-export interface CreateMissionRequest {
-  name: string;
-  summary?: string | null;
-  sourceType?: MissionSourceType;
-  roleTrackId: CareerRoleTrackId;
-  careerGoalId?: string | null;
-  jobApplicationId?: string | null;
-  targetDate?: string | null;
-  weeklyHours?: number;
-  successDefinition?: string | null;
-}
-
-export type UpdateMissionRequest = Partial<CreateMissionRequest> & {
-  stage?: MissionStage;
-  diagnosisSummary?: string | null;
-};
-
-export interface MissionTodayResponse {
-  mission: MissionResponse;
-  activePlan: WeeklyPlanResponse | null;
-  dueTasks: TaskResponse[];
-  recentEvidence: LearningEvidenceResponse[];
-  topCompetencies: MissionCompetencyStateResponse[];
-}
+// MOM-163 (D-021): the Missions engine is retired. Its types (Mission*, WeeklyPlan*, PlanItem*,
+// MissionCheckIn*, the MISSION_*/PLAN_ITEM_* constants) were removed here. The database tables and
+// missionId FK columns are preserved — see D-021 — so this is a surface removal, not a data one.
 
 export interface ProfileExperienceItem {
   company: string;

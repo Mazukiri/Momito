@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { INTERVIEW_ROUND_TYPE_LABELS, JOB_STAGE_STALL_THRESHOLDS, PracticeRecommendationResponse } from '@momito/shared';
 import { CareerService } from '../career/career.service';
-import { MissionsService } from '../missions/missions.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ResumesService } from '../resumes/resumes.service';
 import { WeaknessesService } from '../weaknesses/weaknesses.service';
@@ -11,7 +10,6 @@ import { WeaknessesService } from '../weaknesses/weaknesses.service';
 // interpolated fragments). This module already had a `reason` field; this only
 // normalizes the text it's populated with.
 const RECOMMENDATION_REASONS = {
-  activeMission: (name: string) => `"${name}" is an active mission that needs weekly execution.`,
   overdueTask: () => 'This task is overdue.',
   readinessGap: (roleTrackLabel: string) => `This closes a readiness gap for ${roleTrackLabel}.`,
   jobDeadline: () => 'This job application has an upcoming deadline.',
@@ -100,7 +98,6 @@ export class RecommendationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly career: CareerService,
-    private readonly missions: MissionsService,
     private readonly weaknesses: WeaknessesService,
     private readonly resumes: ResumesService,
   ) {}
@@ -108,10 +105,9 @@ export class RecommendationsService {
   async list(userId: string): Promise<PracticeRecommendationResponse[]> {
     const now = new Date();
     const countdownHorizon = new Date(now.getTime() + INTERVIEW_COUNTDOWN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-    const [readiness, activeMissions, overdueTasks, jobs, inboxCount, weaknessSummary, upcomingRounds, driftSummaries, savedJobs] =
+    const [readiness, overdueTasks, jobs, inboxCount, weaknessSummary, upcomingRounds, driftSummaries, savedJobs] =
       await Promise.all([
         this.career.listActiveReadiness(userId),
-        this.missions.list(userId),
         this.prisma.task.findMany({
           where: { userId, status: { not: 'done' }, dueDate: { lt: new Date() } },
           orderBy: { dueDate: 'asc' },
@@ -239,18 +235,8 @@ export class RecommendationsService {
         });
       }
     }
-    for (const mission of activeMissions.filter((item) => item.stage !== 'archived').slice(0, 2)) {
-      recommendations.push({
-        id: `mission:${mission.id}`,
-        type: 'task',
-        title: `Focus ${mission.name}`,
-        reason: mission.diagnosisSummary ?? RECOMMENDATION_REASONS.activeMission(mission.name),
-        roleTrackId: mission.roleTrackId,
-        area: null,
-        targetHref: `/missions/${mission.id}`,
-        priority: 110,
-      });
-    }
+    // MOM-163 (D-021): the Missions engine is retired — its priority-110 "Focus <mission>" cards
+    // no longer lead Today, and overdue tasks link to the calendar (the missionId deep-link is gone).
     for (const task of overdueTasks) {
       recommendations.push({
         id: `task:${task.id}`,
@@ -259,7 +245,7 @@ export class RecommendationsService {
         reason: RECOMMENDATION_REASONS.overdueTask(),
         roleTrackId: task.roleTrackId as PracticeRecommendationResponse['roleTrackId'],
         area: task.area as PracticeRecommendationResponse['area'],
-        targetHref: task.missionId ? `/missions/${task.missionId}` : '/calendar',
+        targetHref: '/calendar',
         priority: 100,
       });
     }

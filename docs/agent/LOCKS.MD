@@ -19,6 +19,7 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-163 | CLAUDE | `apps/api/src/missions/**` (deleted), `apps/api/src/app.module.ts`, `apps/api/src/{recommendations,dashboard}/**`, `packages/shared/src/index.ts`, `apps/api/test/{recommendations,dashboard}.service.spec.ts`, `apps/web/app/(authenticated)/today/page.tsx`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-162 | CLAUDE | `apps/web/app/(authenticated)/missions/**` (deleted), `apps/web/app/lib/{navigation,api-client}.ts`, `apps/web/app/(authenticated)/{jobs/[id],dashboard,calendar,learning,practice/new}/page.tsx`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-161 | CLAUDE | `apps/api/src/ai/grading.service.ts`, `apps/api/src/ai/dto/grade-result.schema.ts`, `apps/api/test/{ai.grading,ai.service}.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-160 | CLAUDE | `apps/api/src/jobs/jobs.service.ts`, `apps/api/test/jobs.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RecommendationsService } from '../src/recommendations/recommendations.service';
 
-// The other sources (missions, tasks, readiness, jobs, inbox) are covered by
+// The other sources (tasks, readiness, jobs, inbox) are covered by
 // their own services; these tests pin the new weakness-repair source: plan
 // §6.1 priority 3, with §6.2-style concrete reasons.
 
@@ -29,7 +29,6 @@ function buildService(
     interviewRound: { findMany: vi.fn().mockResolvedValue(upcomingRounds) },
   };
   const career = { listActiveReadiness: vi.fn().mockResolvedValue([]) };
-  const missions = { list: vi.fn().mockResolvedValue([]) };
   const weaknesses = {
     summary: vi.fn().mockResolvedValue({
       windowDays: 30,
@@ -42,7 +41,7 @@ function buildService(
     }),
   };
   const resumes = { driftSummary: vi.fn().mockResolvedValue(extras.driftSummaries ?? []) };
-  return new RecommendationsService(prisma as never, career as never, missions as never, weaknesses as never, resumes as never);
+  return new RecommendationsService(prisma as never, career as never, weaknesses as never, resumes as never);
 }
 
 function openSignal(overrides: Record<string, unknown> = {}): Record<string, unknown> {

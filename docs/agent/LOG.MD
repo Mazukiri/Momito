@@ -1,5 +1,26 @@
 # LOG
 
+## 2026-07-12 - MOM-163: retire Missions — API half + shared types (Momito 1.0 PR 4) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 4 of Momito 1.0; completes D-021.
+
+**Removed:** the whole `apps/api/src/missions/` module (controller, 775-line service, module, 4 DTOs) + its spec;
+`MissionsModule` from `app.module.ts`; the `MissionsService` injection + priority-110 "Focus <mission>" cards +
+overdue-task `missionId` deep-link from `recommendations.service` (overdue tasks now link to `/calendar`
+unconditionally); the `MissionsService` injection + `focusMission`/`activeMissions`/`todayPlanItems` from
+`dashboard.service`; all `Mission*`/`WeeklyPlan*`/`PlanItem*`/`MissionCheckIn*` types + `MISSION_*`/`PLAN_ITEM_*`
+constants from `@momito/shared` (and the three mission fields on `DashboardSummaryResponse`). Also unwired the two
+consuming modules (`recommendations.module`, `dashboard.module`) and refreshed the Today page's descriptive copy.
+
+**Untouched (D-021):** the Prisma schema — all five mission tables and every `missionId` FK column (Task,
+InterviewSession, LearningEvidence) stay. `TaskResponse.missionId` and `CreateSessionDto.missionId` remain accepted.
+No data destroyed; the feature is restorable by reverting PRs 3+4.
+
+**Verified:** shared builds; 328 API tests (−1 file: the deleted missions spec) + 34 web tests green; lint +
+typecheck clean on both apps. Live against a rebuilt API: `GET /missions` → 404; `/practice/recommendations` → zero
+`mission:` cards (8 cards total), overdue tasks link to `/calendar`; `/dashboard/summary` → no
+focusMission/activeMissions/todayPlanItems, still carries recommendations + roleReadiness.
+
 ## 2026-07-12 - MOM-162: retire Missions — web half (Momito 1.0 PR 3) (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 3 of Momito 1.0; D-021. Web-first so no page
