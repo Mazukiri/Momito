@@ -61,7 +61,9 @@ export class AiService {
     if (!attempt) throw new NotFoundException('Attempt not found');
 
     if (attempt.aiFeedback && !force) {
-      return { attemptId: attempt.id, aiScore: attempt.aiScore, aiFeedback: attempt.aiFeedback, cached: true };
+      // MOM-168: the structured suggestedRating isn't recoverable from the persisted Markdown,
+      // so the cached path returns null for it (honest — only a fresh grade carries the tap-through).
+      return { attemptId: attempt.id, aiScore: attempt.aiScore, aiFeedback: attempt.aiFeedback, suggestedRating: null, cached: true };
     }
 
     const { allowed, remainingUsd } = await this.budget.checkAndReserve(userId);
@@ -88,6 +90,8 @@ export class AiService {
 
     await this.prisma.answerAttempt.update({ where: { id: attempt.id }, data: { aiScore, aiFeedback } });
 
-    return { attemptId: attempt.id, aiScore, aiFeedback, cached: false };
+    // MOM-168: surface the grader's FSRS-style rating as a structured field so the reveal panel
+    // can offer a one-tap "use the AI's rating" instead of leaving it buried in the Markdown.
+    return { attemptId: attempt.id, aiScore, aiFeedback, suggestedRating: outcome.result.suggestedRating, cached: false };
   }
 }

@@ -45,7 +45,8 @@ describe('AiService', () => {
 
     const result = await service.gradeAttempt('attempt-1', 'user-1', false);
 
-    expect(result).toEqual({ attemptId: 'attempt-1', aiScore: 0.8, aiFeedback: 'cached feedback', cached: true });
+    // MOM-168: the cached path can't recover the structured rating from Markdown → null.
+    expect(result).toEqual({ attemptId: 'attempt-1', aiScore: 0.8, aiFeedback: 'cached feedback', suggestedRating: null, cached: true });
     expect(grading.grade).not.toHaveBeenCalled();
   });
 
@@ -83,6 +84,7 @@ describe('AiService', () => {
     expect(result.aiScore).toBeCloseTo(0.9);
     expect(result.cached).toBe(false);
     expect(result.aiFeedback).toContain('Correctness');
+    expect(result.suggestedRating).toBe('easy'); // MOM-168: structured, for the one-tap rating
     expect(record).toHaveBeenCalledWith('user-1', 'claude-opus-4-8', 400, 200);
     expect(update).toHaveBeenCalledWith({ where: { id: 'attempt-1' }, data: { aiScore: result.aiScore, aiFeedback: result.aiFeedback } });
   });

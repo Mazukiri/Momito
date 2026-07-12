@@ -19,6 +19,7 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-168 | CLAUDE | `apps/api/src/ai/ai.service.ts`, `apps/web/app/lib/api-client.ts`, `apps/web/app/components/{ai-feedback-card,session/RevealPanel}.tsx`, `apps/api/test/ai.service.spec.ts`, `apps/web/app/(authenticated)/practice/session/[id]/__tests__/page.test.tsx`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-167 | CLAUDE | `apps/web/app/components/JobReadinessCard.tsx`, `apps/api/src/recommendations/recommendations.service.ts`, `apps/api/test/recommendations.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-166 | CLAUDE | `apps/api/src/{weaknesses,sessions,readiness}/*.service.ts`, `apps/api/test/{weaknesses,sessions}.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-165 | CLAUDE | `apps/web/app/lib/navigation.ts`, `apps/web/app/components/Sidebar.tsx`, `docs/agent/*.MD` | 2026-07-12 |

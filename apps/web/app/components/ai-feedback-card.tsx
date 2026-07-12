@@ -1,9 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { aiApi } from '../lib/api-client';
+import { aiApi, type SuggestedRating } from '../lib/api-client';
 import { Button, Card, Spinner } from './ui';
 import { Markdown } from './Markdown';
+
+// MOM-168: the grader speaks FSRS ('again'|'hard'|'good'|'easy'); the study loop rates on the
+// 1-5 star scale. This is the exact inverse of fsrs-scheduler's SELF_RATING_TO_GRADE
+// (1→Again, 2→Hard, 3/4→Good, 5→Easy) — Good maps back to 3 (the representative middle), NOT 4,
+// so a tap-through and a manual "Good" schedule identically.
+const RATING_FROM_SUGGESTION: Record<SuggestedRating, { value: number; label: string }> = {
+  again: { value: 1, label: 'Again' },
+  hard: { value: 2, label: 'Hard' },
+  good: { value: 3, label: 'Good' },
+  easy: { value: 5, label: 'Easy' },
+};
 
 // Workstream C: hidden entirely when GET /ai/usage reports available:false (no
 // ANTHROPIC_API_KEY configured on the API) — this instance is fully usable on
@@ -12,15 +23,22 @@ export function AiFeedbackCard({
   attemptId,
   aiScore: initialAiScore,
   aiFeedback: initialAiFeedback,
+  onUseSuggested,
+  alreadyRated = false,
 }: {
   attemptId: string;
   aiScore: number | null;
   aiFeedback: string | null;
+  // MOM-168: when provided, a fresh grade offers a one-tap "use the AI's rating" that routes
+  // through the reveal panel's normal rate() (missTags/reflection flow identical to a manual tap).
+  onUseSuggested?: (rating: number) => void;
+  alreadyRated?: boolean;
 }) {
   const [available, setAvailable] = useState(false);
   const [checked, setChecked] = useState(false);
   const [aiScore, setAiScore] = useState(initialAiScore);
   const [aiFeedback, setAiFeedback] = useState(initialAiFeedback);
+  const [suggestedRating, setSuggestedRating] = useState<SuggestedRating | null>(null);
   const [grading, setGrading] = useState(false);
   const [error, setError] = useState('');
 
@@ -51,6 +69,7 @@ export function AiFeedbackCard({
       const result = await aiApi.grade(attemptId, force);
       setAiScore(result.aiScore);
       setAiFeedback(result.aiFeedback);
+      setSuggestedRating(result.suggestedRating);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'AI grading failed');
     } finally {
@@ -97,6 +116,15 @@ export function AiFeedbackCard({
             </p>
           )}
           <Markdown>{aiFeedback}</Markdown>
+          {/* MOM-168: the grade becomes schedulable input — one tap sets the FSRS rating. */}
+          {suggestedRating && onUseSuggested && !alreadyRated && (
+            <button
+              onClick={() => onUseSuggested(RATING_FROM_SUGGESTION[suggestedRating].value)}
+              className="mt-3 rounded-lg border border-indigo-300 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50 dark:border-indigo-700 dark:text-indigo-300 dark:hover:bg-indigo-950/40"
+            >
+              Rate “{RATING_FROM_SUGGESTION[suggestedRating].label}” — the AI’s suggestion
+            </button>
+          )}
         </div>
       )}
     </Card>

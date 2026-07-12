@@ -365,10 +365,15 @@ export interface AiUsageResponse {
   remainingUsd: number;
 }
 
+// MOM-168: the grader's FSRS-style verdict, so the reveal panel can offer a one-tap rating.
+// Null on the cached path (not recoverable from the persisted Markdown).
+export type SuggestedRating = 'again' | 'hard' | 'good' | 'easy';
+
 export interface AiGradeResponse {
   attemptId: string;
   aiScore: number | null;
   aiFeedback: string | null;
+  suggestedRating: SuggestedRating | null;
   cached: boolean;
 }
 

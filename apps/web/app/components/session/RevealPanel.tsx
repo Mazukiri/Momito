@@ -176,8 +176,15 @@ export function RevealPanel({
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       </div>
 
-      {/* Optional AI grade — rubric-grounded second opinion; hides itself when no key is configured. */}
-      <AiFeedbackCard attemptId={attempt.id} aiScore={attempt.aiScore} aiFeedback={attempt.aiFeedback} />
+      {/* Optional AI grade — rubric-grounded second opinion; hides itself when no key is configured.
+          MOM-168: its suggested FSRS rating routes through rate(), so a tap-through is identical to a manual rating. */}
+      <AiFeedbackCard
+        attemptId={attempt.id}
+        aiScore={attempt.aiScore}
+        aiFeedback={attempt.aiFeedback}
+        onUseSuggested={rate}
+        alreadyRated={savedRating !== null}
+      />
 
       <div className="mt-4 flex items-center justify-between">
         <div>

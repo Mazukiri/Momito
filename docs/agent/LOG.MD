@@ -1,5 +1,24 @@
 # LOG
 
+## 2026-07-12 - MOM-168: the AI grade feeds FSRS (one-tap suggested rating) (Momito 1.1 PR 3) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 3 of Momito 1.1.
+
+`GradeResult.suggestedRating` ('again'|'hard'|'good'|'easy') was computed on every AI grade but only embedded as
+Markdown text in `aiFeedback` — the FSRS rating stayed purely manual, and the grade never became schedulable input.
+`gradeAttempt` now returns `suggestedRating` as a structured field (`null` on the cached path — it can't be recovered
+from the persisted Markdown, stated honestly). `AiFeedbackCard` renders a one-tap "Rate '<Good>' — the AI's
+suggestion" button (only on a fresh grade, only when the user hasn't already rated) that routes through
+`RevealPanel.rate()`, so the missTags/reflection/FSRS-schedule flow is identical to a manual tap. The suggestion→star
+map is the exact **inverse** of `fsrs-scheduler`'s `SELF_RATING_TO_GRADE` — again→1, hard→2, good→**3** (the
+representative middle, not 4), easy→5 — so a tap-through and a manual "Good" schedule identically. No schema change
+(no column added).
+
+**Verified.** 339 API tests (+1: fresh returns the rating, cached returns null), 35 web tests (+1: tapping the
+suggestion drives `PATCH /attempts/:id` with selfRating 3 for 'good'). Lint + typecheck clean. Live: a fresh grade
+returned `suggestedRating:'again'` (aiScore 0.46), the immediate re-grade (cached) returned `suggestedRating:null`.
+Throwaway attempt removed.
+
 ## 2026-07-12 - MOM-167: wire the dead resolve/dismiss endpoints + surface repairing (Momito 1.1 PR 2) (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 2 of Momito 1.1.
