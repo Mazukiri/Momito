@@ -128,8 +128,6 @@ All frontend pages are under `apps/web/app/`.
 | `/register` | Register (mobile-first, restyled) |
 | `/today` | Daily queue for due reviews, recommendations, reminders, and scheduled prep work |
 | `/dashboard` | Progress overview, topic progress, weak areas, recent sessions |
-| `/missions` | Mission list (goal-driven weekly planning) |
-| `/missions/[id]` | Mission detail: competency states, weekly plan, check-ins |
 | `/career` | Role tracks, active career goals, readiness gaps, target shortlist |
 | `/jobs` | Job pipeline — list view (funnel + filter pills) or drag-and-drop kanban board |
 | `/jobs/[id]` | Job detail: interview rounds, debriefs, readiness verdict, story gaps, prep queue, contacts, offer, timeline |
@@ -175,7 +173,7 @@ Momito/
 │   └── web/                    # Next.js frontend (client of record)
 │       └── app/
 │           ├── (auth)/         # Login, Register pages
-│           ├── (authenticated)/# Today, Dashboard, Missions, Career, Jobs, Companies,
+│           ├── (authenticated)/# Today, Dashboard, Career, Jobs, Companies,
 │           │                   # Contacts, Offers, Questions, Practice, Attempts,
 │           │                   # Study Plan, Stories, Profile (+ résumé versions),
 │           │                   # Learning, Calendar, Settings
@@ -517,7 +515,7 @@ decision log at `docs/agent/DECISIONS.MD` and formal ADRs under `docs/adr/`:
 
 - **ADR-0001**: NestJS `apps/api` is the backend of record (not the archived Python `backend/`)
 - **ADR-0002**: `ReviewState` uses a polymorphic `objectType`/`objectId` reference for persisted review scheduling
-- **ADR-0003**: The FSRS learning engine coexists with the existing Mission engine rather than replacing it
+- **ADR-0003**: The FSRS learning engine coexists with the existing Mission engine rather than replacing it *(the Mission engine was later retired — see D-021; its tables are preserved but the surface is removed)*
 - **ADR-0004**: No copyrighted third-party problem statements in seed content — metadata, links, and original notes only
 - **ADR-0005**: Story Bank schema (STAR-format, user-authored, reviewable via the same polymorphic `ReviewState`)
 - **ADR-0006**: Weekly encrypted database backup workflow (dormant until `BACKUP_DATABASE_URL`/`BACKUP_GPG_PASSPHRASE` secrets are set)

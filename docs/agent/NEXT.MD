@@ -2,6 +2,33 @@
 
 > The single active PR-sized task. Only one at a time (Engineering Invariant 2.4.1).
 
+## ★ Momito 1.0 — Consolidation Release SHIPPED (2026-07-12)
+
+The consolidation release is complete — 6 PRs, all live-verified against localhost, all suites green
+(**328 API + 34 web tests**, lint + typecheck clean on both apps):
+
+- **MOM-160** (`8c81765`) — true ever-reached funnel conversion (D-022): rejected/withdrawn apps now count
+  toward the deepest stage they reached, so conversion isn't inflated by erasing losses.
+- **MOM-161** (`a3dde20`) — AI grading reached résumé-AI hardening parity: MAX_TOKENS 4096→16000 + a
+  completeness contract with one repair pass (mirrors MOM-147/148).
+- **MOM-162** (`204af05`) + **MOM-163** (`845daf3`) — **Missions retired** (D-021): web surface, then API
+  module + shared types + both couplings. **The 5 DB tables and every `missionId` FK column are preserved**
+  — restorable by reverting these two PRs; no migration.
+- **MOM-164** (`56cebe9`) — stripped 3 vestigial write-only job fields (referralName/h1bCountLastYear/
+  compensationNotes); columns preserved.
+- **MOM-165** (`3082f5b`) — sidebar restructured into Pipeline / Prep / Insights sections + Settings.
+
+**Deployed to localhost** (API :3001, web :3000, both running as background processes). Golden path verified:
+`/missions`→404, zero mission cards on Today, ever-reached funnel numbers, clean job + dashboard responses,
+sectioned nav in the bundle. D-021/D-022 recorded; README's routes/dir/ADR-0003 refs updated.
+
+**Known follow-up (not blocking):** the résumé-page test `refuses to "accept" a rewrite whose bullet is no
+longer in the draft` flakes under parallel vitest load (queries before the async state flush; it renders no
+Sidebar so it's unrelated to MOM-165). Passes in isolation and on re-run. Worth a `waitFor` hardening pass.
+
+Also still pending from the `/doctor` run: the one-line `CLAUDE.md` fix in the working tree (owner to review in
+`git diff`), and disabling the unused Google Drive `/mcp` connection.
+
 ## Active initiative (2026-07-08): CareerOS transformation
 
 New plan `docs/plans/MOMITO_CAREEROS_PLAN.md` — turn the study tool into a role-landing OS.
