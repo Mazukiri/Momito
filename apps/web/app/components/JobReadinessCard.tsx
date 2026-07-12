@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { JobReadinessResponse, JobReadinessStatus } from '@momito/shared';
-import { careerApi } from '../lib/api-client';
+import type { JobReadinessResponse, JobReadinessStatus, WeaknessSignalResponse } from '@momito/shared';
+import { careerApi, weaknessesApi } from '../lib/api-client';
 import { Card } from './ui';
 
 const areaLabel = (id: string) => id.replace(/_/g, ' ');
@@ -30,6 +30,24 @@ export function JobReadinessCard({ jobId }: { jobId: string }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- standard data load
     load();
   }, [load]);
+
+  // MOM-167: resolve ("I've repaired this") / dismiss ("not a real weakness") a flagged signal.
+  // Optimistic — drop it immediately — then reload so the score/penalty reflect the change.
+  const [busy, setBusy] = useState<string | null>(null);
+  async function actOnSignal(id: string, action: 'resolve' | 'dismiss') {
+    setBusy(id);
+    setReadiness((current) =>
+      current ? { ...current, blockingSignals: current.blockingSignals.filter((s) => s.id !== id) } : current,
+    );
+    try {
+      await (action === 'resolve' ? weaknessesApi.resolveSignal(id) : weaknessesApi.dismissSignal(id));
+      await load();
+    } catch {
+      await load(); // revert to server truth on failure
+    } finally {
+      setBusy(null);
+    }
+  }
 
   if (loading) return <Card><p className="text-sm text-zinc-500">Assessing readiness…</p></Card>;
   if (!readiness) return null;
@@ -79,13 +97,51 @@ export function JobReadinessCard({ jobId }: { jobId: string }) {
           <p className="mb-1 text-xs font-medium text-zinc-500">Flagged in interviews</p>
           <div className="flex flex-wrap gap-1.5">
             {readiness.blockingSignals.slice(0, 5).map((signal) => (
-              <span key={signal.id} className="rounded-full bg-rose-100 px-2 py-0.5 text-xs text-rose-700 dark:bg-rose-950 dark:text-rose-400">
-                {signal.label}
-              </span>
+              <SignalChip key={signal.id} signal={signal} busy={busy === signal.id} onAct={actOnSignal} />
             ))}
           </div>
+          <p className="mt-1.5 text-[11px] text-zinc-400">✓ mark repaired · ✕ not a real weakness</p>
         </div>
       )}
     </Card>
+  );
+}
+
+// MOM-167: a flagged-weakness pill with the two actions that were, until now, dead endpoints.
+// A `repairing` signal (partial repair evidence, MOM-166) reads amber instead of rose.
+function SignalChip({
+  signal,
+  busy,
+  onAct,
+}: {
+  signal: WeaknessSignalResponse;
+  busy: boolean;
+  onAct: (id: string, action: 'resolve' | 'dismiss') => void;
+}) {
+  const repairing = signal.status === 'repairing';
+  const tone = repairing
+    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+    : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400';
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${tone} ${busy ? 'opacity-50' : ''}`}>
+      {signal.label}
+      {repairing && <span className="text-[10px] uppercase tracking-wide opacity-70">repairing</span>}
+      <button
+        onClick={() => onAct(signal.id, 'resolve')}
+        disabled={busy}
+        aria-label={`Mark "${signal.label}" repaired`}
+        className="ml-0.5 rounded px-0.5 font-bold hover:text-emerald-600 disabled:opacity-50"
+      >
+        ✓
+      </button>
+      <button
+        onClick={() => onAct(signal.id, 'dismiss')}
+        disabled={busy}
+        aria-label={`Dismiss "${signal.label}"`}
+        className="rounded px-0.5 font-bold hover:text-zinc-500 disabled:opacity-50"
+      >
+        ✕
+      </button>
+    </span>
   );
 }

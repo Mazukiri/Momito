@@ -1,5 +1,25 @@
 # LOG
 
+## 2026-07-12 - MOM-167: wire the dead resolve/dismiss endpoints + surface repairing (Momito 1.1 PR 2) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 2 of Momito 1.1.
+
+The `POST /weaknesses/signals/:id/{resolve,dismiss}` endpoints and their `weaknessesApi` client methods existed but
+had **zero UI callers** — dead code. `JobReadinessCard`'s flagged-signal chips are now interactive: each carries ✓
+("mark repaired" → resolve) and ✕ ("not a real weakness" → dismiss), optimistically removed then reloaded so the
+score/penalty update. A `repairing` signal (partial repair evidence from MOM-166) renders amber with a "repairing"
+tag instead of rose, so in-progress repairs read differently from untouched ones. On Today, the repair recommendation
+now titles `Repairing:` (with a "one more strong rep clears it" nudge) when the signal is repairing — progress, not
+just a nag. **Judgment call:** the Today card is a full-width navigation `<button>`, so a nested dismiss button would
+be invalid HTML and require restructuring the generic card for every rec type; full resolve/dismiss control lives on
+the job card (where signals are naturally scoped), and Today shows repair *progress*. No API endpoint logic changed
+beyond the copy.
+
+**Verified.** 339 API tests (+1: repairing → "Repairing:" copy). Web lint + typecheck + 34 tests green. Live: a
+throwaway dsa signal resolved via the formerly-dead `POST …/resolve` endpoint returned `status:resolved` and dropped
+from the open list; throwaway removed, demo baseline (3 signals) intact. The JobReadinessCard buttons get an explicit
+test in PR 6.
+
 ## 2026-07-12 - MOM-166: repair sessions actually repair (Momito 1.1 PR 1) (CLAUDE, no schema, D-023)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. First PR of the Momito 1.1 "close the half-closed

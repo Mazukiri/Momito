@@ -179,6 +179,16 @@ describe('RecommendationsService — open weakness signals (MOM-142)', () => {
     expect(card?.reason).toBe('An interview debrief flagged this weakness.');
   });
 
+  // MOM-167: a signal the user has already made repair progress on reads as encouragement.
+  it('shows a repairing signal as "Repairing:" with a one-more-rep nudge', async () => {
+    const service = buildService({ openSignals: [openSignal({ severity: 2, status: 'repairing' })] });
+
+    const card = (await service.list('user-1')).find((item) => item.id.startsWith('signal:'));
+
+    expect(card?.title).toBe('Repairing: System design — weak at Meta');
+    expect(card?.reason).toContain('one more strong rep');
+  });
+
   it('ranks a severe recurring signal higher and names the occurrence count', async () => {
     const service = buildService({ openSignals: [openSignal({ severity: 9, occurrences: 3 })] });
     const card = (await service.list('user-1')).find((item) => item.id.startsWith('signal:'));

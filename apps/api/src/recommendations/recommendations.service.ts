@@ -182,11 +182,16 @@ export class RecommendationsService {
     for (const signal of openSignals) {
       surfacedSignalKeys.add(signal.key);
       const isArea = signal.signalType === 'area' && Boolean(signal.area);
+      // MOM-167: a signal the user has already shown one clean rep on (MOM-166) reads
+      // `Repairing:` — visible progress, so the card is encouragement, not just a nag.
+      const repairing = signal.status === 'repairing';
       recommendations.push({
         id: `signal:${signal.signalType}:${signal.key}:${signal.jobApplicationId ?? 'global'}`,
         type: 'practice',
-        title: `Repair: ${signal.label}`,
-        reason: RECOMMENDATION_REASONS.weaknessSignal(signal.source, signal.occurrences),
+        title: `${repairing ? 'Repairing' : 'Repair'}: ${signal.label}`,
+        reason: repairing
+          ? `You've made progress here — one more strong rep in ${isArea ? signal.area?.replace(/_/g, ' ') : 'this area'} clears it.`
+          : RECOMMENDATION_REASONS.weaknessSignal(signal.source, signal.occurrences),
         roleTrackId: signal.roleTrackId as PracticeRecommendationResponse['roleTrackId'],
         area: (isArea ? signal.area : null) as PracticeRecommendationResponse['area'],
         targetHref: isArea
