@@ -66,9 +66,10 @@ describe('ResumesPage — AI suggestions (MOM-153/154)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
 
-    const draft = screen.getByDisplayValue(new RegExp(REWRITE.rewritten.slice(0, 20)));
-    expect(draft).toBeInTheDocument();
-    expect(screen.getByText(/Applied to the draft/)).toBeInTheDocument();
+    // MOM-171: await the post-click render flush rather than asserting synchronously (flaky
+    // under parallel load — the state update hadn't committed yet).
+    expect(await screen.findByText(/Applied to the draft/)).toBeInTheDocument();
+    expect(screen.getByDisplayValue(new RegExp(REWRITE.rewritten.slice(0, 20)))).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
 
     // Saving writes the applied text AND the pruned list in one call — so it cannot come back.
@@ -89,7 +90,8 @@ describe('ResumesPage — AI suggestions (MOM-153/154)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
 
-    expect(screen.getByText(/no longer in the draft/)).toBeInTheDocument();
+    // MOM-171: await the post-click render flush (same flaky class as the accept-happy-path).
+    expect(await screen.findByText(/no longer in the draft/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument(); // still offered
   });
 

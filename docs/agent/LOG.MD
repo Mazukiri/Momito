@@ -1,5 +1,23 @@
 # LOG
 
+## 2026-07-12 - MOM-171: web test hardening (Momito 1.1 PR 6) (CLAUDE, no schema)
+
+**Actor:** CLAUDE → Grok resume. Branch `feat/careeros-phase-0`. No migration. Final PR of Momito 1.1.
+
+Three web surfaces that carried production logic with thin/no unit coverage:
+
+1. **Flaky résumé Accept path** — two post-`fireEvent.click` assertions in `profile/resumes/__tests__/page.test.tsx`
+   ran synchronously under parallel vitest load and sometimes read pre-flush state. Both now use `findBy*` /
+   await the render flush (the known flake flagged in NEXT.MD after MOM-165).
+2. **`JobReadinessCard`** (promised in MOM-167) — four tests pin load/render, ✓ resolve → formerly-dead
+   `POST …/resolve` with optimistic drop + reload, ✕ dismiss via `…/dismiss`, and the amber `repairing` tag
+   (partial evidence from MOM-166).
+3. **Jobs list** — three tests pin sponsorship filter pills (companyRef preferred over `visaTag`, null → unknown),
+   the ⏳ stalled badge with days-in-stage, and list→board toggle grouping by funnel stage.
+
+**Verified.** 42 web tests (+7: 4 readiness card, 3 jobs page; résumé suite still 8). Typecheck + lint clean on web.
+No API change.
+
 ## 2026-07-12 - MOM-170: ATS matching understands lowercase + multi-word skills (Momito 1.1 PR 5) (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 5 of Momito 1.1.
