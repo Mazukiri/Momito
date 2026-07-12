@@ -1,5 +1,21 @@
 # LOG
 
+## 2026-07-12 - MOM-165: navigation restructure into sections (Momito 1.0 PR 6) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Final PR of Momito 1.0.
+
+The sidebar was a flat 17-entry list (16 after Missions left) that accreted rather than being designed. Added an
+optional `section` field to `NavItem` and grouped the 11 secondary items into **Pipeline** (Companies, Contacts,
+Offers), **Prep** (Questions, Story Bank, History, Study Plan), and **Insights** (Career, Dashboard, Calendar), with
+Settings as an un-sectioned tail. The 5 primary items (Today, Practice, Jobs, Learning, Profile) are unchanged and
+stay ungrouped at the top; `BottomTabs` reads `PRIMARY_NAV_ITEMS` only, so mobile is untouched, and the
+`PRIMARY_NAV_ITEMS.length > 5` guard stays. `Sidebar` now emits a small uppercase section header the first time each
+section appears (items sharing a section are contiguous in the list).
+
+**Verified:** web typecheck + lint + 34 tests green. (One résumé-page test flaked once under parallel load — it
+renders no Sidebar, so it is unrelated to this change; passes in isolation and on re-run. Flagged in NEXT.MD as a
+test-robustness follow-up.)
+
 ## 2026-07-12 - MOM-164: strip vestigial write-only job fields (Momito 1.0 PR 5) (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 5 of Momito 1.0.
