@@ -1,8 +1,16 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { CAREER_ROLE_AREA_IDS } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { isPositiveAttempt } from '../readiness/readiness.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { WeaknessesService } from '../weaknesses/weaknesses.service';
+
+// MOM-166: the session types whose whole point is to work down stored weakness signals —
+// `weak_area_review` (the weakness-repair type; drawn weak-area-first) and `job_prep` (draws the
+// target's exposed weak areas first). Completing one credits its positive attempts against those
+// signals (D-023).
+const REPAIR_SESSION_TYPES = new Set(['weak_area_review', 'job_prep']);
 import { CreateAnswerDto } from './dto/create-answer.dto';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { ListSessionsDto } from './dto/list-sessions.dto';
@@ -38,7 +46,11 @@ export class SessionsService {
         ? await this.selectDueReviewQuestions(userId, questionCount)
         : sessionData.sessionType === 'weak_area_review'
           ? await this.selectWeaknessQuestions(userId, { topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern })
-          : await this.selectFilteredQuestions({ topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern });
+          : sessionData.sessionType === 'mixed_interview'
+            ? await this.selectMixedInterviewQuestions(userId, { topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern })
+            : sessionData.sessionType === 'job_prep'
+              ? await this.selectJobPrepQuestions(userId, jobApplicationId, { topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern })
+              : await this.selectFilteredQuestions({ topicId, companyId, difficulty, questionCount, roleTrackId, area, pattern });
 
     if (selected.length === 0) throw new BadRequestException('No questions match the selected filters');
 
@@ -157,6 +169,114 @@ export class SessionsService {
     return unique.map((id) => ({ id }));
   }
 
+  // MOM-127 mixed_interview: a mock-loop draw weighted toward weak spots.
+  // Interleaves recently-struggled questions (up to half the slots) with a fresh
+  // filtered draw across areas, so the session both re-tests known gaps and
+  // exercises breadth like a real onsite. Degrades to a plain filtered draw when
+  // there's no struggle history yet (UX invariant: the type never dead-ends).
+  private async selectMixedInterviewQuestions(
+    userId: string,
+    filters: {
+      topicId?: string;
+      companyId?: string;
+      difficulty?: string;
+      roleTrackId?: string;
+      area?: string;
+      pattern?: string;
+      questionCount: number;
+    },
+  ) {
+    const struggledIds = await this.weaknesses.struggledQuestionIds(userId);
+    const weakSlots = Math.floor(filters.questionCount / 2);
+    const weakPicks = struggledIds.slice(0, weakSlots);
+
+    const fresh = await this.selectFilteredQuestions(filters);
+    const weakSet = new Set(weakPicks);
+    const freshIds = fresh.map(({ id }) => id).filter((id) => !weakSet.has(id));
+
+    const interleaved: string[] = [];
+    for (let index = 0; index < Math.max(weakPicks.length, freshIds.length); index += 1) {
+      if (index < weakPicks.length) interleaved.push(weakPicks[index]);
+      if (index < freshIds.length) interleaved.push(freshIds[index]);
+    }
+    const unique = [...new Set(interleaved)].slice(0, filters.questionCount);
+    if (unique.length === 0) return this.selectFilteredQuestions(filters);
+    return unique.map((id) => ({ id }));
+  }
+
+  // MOM-128 job_prep: a target-scoped mock — the questions that matter for *this*
+  // application. Draws from (1) the target company's linked question bank and
+  // (2) this target's exposed weak areas (open WeaknessSignals scoped to the job,
+  // fed by the MOM-113 debrief edge), weak-area questions first so a bombed round
+  // demonstrably reshapes the next prep set. Company is matched by name until the
+  // MOM-122 FK lands. Degrades to the job's role-track filtered draw, then a plain
+  // draw, so the type never dead-ends.
+  private async selectJobPrepQuestions(
+    userId: string,
+    jobApplicationId: string | undefined,
+    filters: {
+      topicId?: string;
+      companyId?: string;
+      difficulty?: string;
+      roleTrackId?: string;
+      area?: string;
+      pattern?: string;
+      questionCount: number;
+    },
+  ) {
+    if (!jobApplicationId) return this.selectFilteredQuestions(filters);
+    const job = await this.prisma.jobApplication.findFirst({
+      where: { id: jobApplicationId, userId },
+      select: { company: true, roleTrackId: true },
+    });
+    if (!job) return this.selectFilteredQuestions(filters);
+
+    const roleTrackId = filters.roleTrackId ?? job.roleTrackId ?? undefined;
+
+    // Match the free-text company to the catalog to reach its linked question bank.
+    const company = job.company
+      ? await this.prisma.company.findFirst({
+          where: { name: { equals: job.company, mode: 'insensitive' } },
+          select: { id: true },
+        })
+      : null;
+
+    // This target's exposed weak areas (debrief/attempt signals scoped to the job).
+    const summary = await this.weaknesses.summary(userId);
+    const weakAreas = new Set(
+      (summary.openSignals ?? [])
+        .filter((signal) => signal.jobApplicationId === jobApplicationId && signal.signalType === 'area' && signal.area)
+        .map((signal) => signal.area as string),
+    );
+
+    const candidates = await this.prisma.question.findMany({
+      where: {
+        ...(filters.difficulty && { difficulty: filters.difficulty }),
+        ...(company && { companies: { some: { companyId: company.id } } }),
+      },
+      select: { id: true, roleTags: true, areaTags: true, patternTags: true, importance: true },
+    });
+
+    const scored = candidates
+      .map((question) => {
+        const roleTags = this.asStringArray(question.roleTags);
+        const areaTags = this.asStringArray(question.areaTags);
+        const roleOk = !roleTrackId || roleTags.length === 0 || roleTags.includes(roleTrackId);
+        const hitsWeakArea = areaTags.some((tag) => weakAreas.has(tag));
+        return { id: question.id, importance: question.importance, roleOk, hitsWeakArea };
+      })
+      .filter((question) => question.roleOk);
+
+    // Weak-area questions lead (targeted repair for this job), then the rest,
+    // each importance-weighted within a shuffle.
+    const weakFirst = this.shuffle(scored.filter((question) => question.hitsWeakArea)).sort((left, right) => right.importance - left.importance);
+    const others = this.shuffle(scored.filter((question) => !question.hitsWeakArea)).sort((left, right) => right.importance - left.importance);
+    const ordered = [...weakFirst, ...others].map((question) => question.id);
+    const unique = [...new Set(ordered)].slice(0, filters.questionCount);
+    if (unique.length === 0) return this.selectFilteredQuestions({ ...filters, roleTrackId });
+    return unique.map((id) => ({ id }));
+  }
+
   private async selectFilteredQuestions(filters: {
     topicId?: string;
     companyId?: string;
@@ -221,15 +341,29 @@ export class SessionsService {
   async answer(id: string, dto: CreateAnswerDto, userId: string) {
     const session = await this.prisma.interviewSession.findFirst({
       where: { id, userId },
-      select: { status: true, sessionQuestions: { where: { questionId: dto.questionId }, select: { id: true } } },
+      select: {
+        status: true,
+        roleTrackId: true,
+        area: true,
+        sessionQuestions: {
+          where: { questionId: dto.questionId },
+          select: { id: true, question: { select: { areaTags: true } } },
+        },
+      },
     });
     if (!session) throw new NotFoundException('Session not found');
     if (session.status !== 'active') throw new ConflictException('Session is not active');
     if (session.sessionQuestions.length === 0) {
       throw new BadRequestException('Question is not part of this session');
     }
+    // MOM-128: attribute the attempt to a target dimension so per-area readiness
+    // (MOM-129/130) can group graded attempts. Area comes from the question that
+    // was actually practiced; role track from the session's declared target. Both
+    // stay null for untargeted global practice — correct: it isn't attributable.
+    const area = this.firstArea(session.sessionQuestions[0]?.question?.areaTags) ?? session.area ?? null;
+    const roleTrackId = session.roleTrackId ?? null;
     const attempt = await this.prisma.answerAttempt.create({
-      data: { ...dto, sessionId: id, userId },
+      data: { ...dto, sessionId: id, userId, roleTrackId, area },
       include: { question: { select: { id: true, title: true } } },
     });
 
@@ -263,11 +397,34 @@ export class SessionsService {
       data: { status, endedAt: new Date() },
     });
     if (result.count === 1) {
-      return this.prisma.interviewSession.findUniqueOrThrow({ where: { id } });
+      const session = await this.prisma.interviewSession.findUniqueOrThrow({ where: { id } });
+      // MOM-166: a completed repair/job_prep session's positive attempts close the weakness
+      // signals it targeted. Only on completion (an abandoned session credits nothing), and
+      // never allowed to break the finish — the session already succeeded.
+      if (status === 'completed' && REPAIR_SESSION_TYPES.has(session.sessionType)) {
+        await this.creditRepairEvidence(id, userId);
+      }
+      return session;
     }
     const existing = await this.prisma.interviewSession.findFirst({ where: { id, userId }, select: { status: true } });
     if (!existing) throw new NotFoundException('Session not found');
     throw new ConflictException(`Session is already ${existing.status}`);
+  }
+
+  // MOM-166: turn this session's attempts into repair evidence — area + the canonical
+  // positive-attempt verdict (D-013) per attempt — and hand it to the weakness engine, which
+  // owns the status transitions. Persistence-only there; the positive rule lives here.
+  private async creditRepairEvidence(sessionId: string, userId: string): Promise<void> {
+    try {
+      const attempts = await this.prisma.answerAttempt.findMany({
+        where: { sessionId, userId },
+        select: { area: true, selfRating: true, correctness: true, rubricScore: true, aiScore: true },
+      });
+      const evidence = attempts.map((attempt) => ({ area: attempt.area, positive: isPositiveAttempt(attempt) }));
+      await this.weaknesses.creditRepairEvidence(userId, evidence);
+    } catch (error) {
+      this.logger.warn(`Failed to credit repair evidence for session ${sessionId}: ${error}`);
+    }
   }
 
   private shuffle<T>(items: T[]): T[] {
@@ -291,6 +448,13 @@ export class SessionsService {
 
   private asStringArray(value: Prisma.JsonValue): string[] {
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  }
+
+  // The question's primary competency area — the first areaTag that is a known
+  // CAREER_ROLE_AREA_ID. Used to attribute an attempt for per-area readiness.
+  private firstArea(value: Prisma.JsonValue | undefined): string | null {
+    const areaIds = CAREER_ROLE_AREA_IDS as readonly string[];
+    return this.asStringArray(value ?? []).find((tag) => areaIds.includes(tag)) ?? null;
   }
 
   private serializeSessionQuestion(item: SessionQuestionWithQuestion) {

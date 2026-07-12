@@ -48,6 +48,11 @@ model User {
   readwiseSyncRuns ReadwiseSyncRun[]
   aiUsage        AiUsage[]
   pushSubscriptions PushSubscription[]
+  weaknessSignals WeaknessSignal[]
+  interviewRounds InterviewRound[]
+  contacts       Contact[]
+  offers         Offer[]
+  resumeVersions ResumeVersion[]
 
   @@map("users")
 }
@@ -111,10 +116,20 @@ model Company {
   name      String
   region    String?
   notes     String?
+  // MOM-121 (ADR-0010 / D-017): structured interview intelligence. Json map/array
+  // (not relation tables) because the area/track taxonomies are TS-owned
+  // (CAREER_ROLE_AREA_IDS / CAREER_ROLE_TRACK_IDS) and the only query is
+  // "load one company, weight its readiness" — never "find companies by area".
+  focusAreas        Json    @default("{}") @map("focus_areas")       // { [CareerRoleAreaId]: 1-5 weight }
+  roleTrackIds      Json    @default("[]") @map("role_track_ids")    // CareerRoleTrackId[]
+  interviewProcess  Json    @default("[]") @map("interview_process") // ordered [{ roundType, label, notes? }]
+  sponsorshipStatus String? @map("sponsorship_status")              // VISA_TAGS value; null = no data
+  compBand          String? @map("comp_band")                       // free text
   createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
   questions QuestionCompany[]
   stories   StoryCompany[]
+  jobApplications JobApplication[]
 
   @@map("companies")
 }
@@ -283,6 +298,12 @@ model AnswerAttempt {
   // isn't DB-constrained to it — validated at the DTO layer instead.
   missTags   String[]          @default([]) @map("miss_tags")
   reflectionNote String?       @map("reflection_note")
+  // MOM-126/128 (ADR-0011): target-scope columns so a study signal can be
+  // attributed to a specific role track / competency area without joining
+  // through the (optional) session. Populated on create by MOM-128; existing
+  // rows are NULL (additive, no backfill).
+  roleTrackId String?          @map("role_track_id")
+  area       String?
   language   String?
   complexity String?
   createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -297,6 +318,9 @@ model AnswerAttempt {
   // access pattern directly instead of relying on the single-column index
   // plus a sort.
   @@index([userId, createdAt])
+  // MOM-129 grounds per-area readiness on graded attempts; this covers the
+  // per-user, per-area group-by.
+  @@index([userId, area])
   @@index([sessionId])
   @@index([questionId])
   @@index([needsReview])
@@ -373,6 +397,11 @@ model JobApplication {
   id                String             @id @default(uuid()) @db.Uuid
   userId            String             @map("user_id") @db.Uuid
   company           String
+  // MOM-122 (ADR-0010 / D-017): optional link to the curated catalog. Free-text
+  // `company` is KEPT as fallback + display; SetNull so pipeline data survives a
+  // catalog deletion. Backfilled by exact case-insensitive name match.
+  companyId         String?            @map("company_id") @db.Uuid
+  companyRef        Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
   roleTitle         String             @map("role_title")
   url               String?
   location          String?
@@ -387,6 +416,8 @@ model JobApplication {
   h1bCountLastYear  Int?               @map("h1b_count_last_year")
   compensationNotes String?            @map("compensation_notes")
   notes             String?
+  // MOM-106: why a rejected application was lost (REJECTION_REASONS); null otherwise.
+  rejectionReason   String?            @map("rejection_reason")
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -396,11 +427,17 @@ model JobApplication {
   reminders         Reminder[]
   sessions          InterviewSession[]
   learningEvidence  LearningEvidence[]
+  weaknessSignals   WeaknessSignal[]
+  interviewRounds   InterviewRound[]
+  contacts          Contact[]
+  offer             Offer?
+  resumeVersions    ResumeVersion[]
 
   @@index([userId])
   @@index([status])
   @@index([roleTrackId])
   @@index([deadline])
+  @@index([companyId])
   @@map("job_applications")
 }
 
@@ -411,6 +448,10 @@ model JobEvent {
   type             String
   title            String
   notes            String?
+  // MOM-103/104: structured transition endpoints for a `status_change` event
+  // (null for other event types). Backfilled from the machine-written `title`.
+  fromStatus       String?        @map("from_status")
+  toStatus         String?        @map("to_status")
   eventAt          DateTime       @map("event_at") @db.Timestamptz(6)
   createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -434,6 +475,7 @@ model Task {
   area                  String?
   topicId               String?            @map("topic_id") @db.Uuid
   jobApplicationId      String?            @map("job_application_id") @db.Uuid
+  interviewRoundId      String?            @map("interview_round_id") @db.Uuid
   missionId             String?            @map("mission_id") @db.Uuid
   plannedFor            DateTime?          @map("planned_for") @db.Timestamptz(6)
   dueDate               DateTime?          @map("due_date") @db.Timestamptz(6)
@@ -446,6 +488,7 @@ model Task {
   user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   topic                 Topic?             @relation(fields: [topicId], references: [id], onDelete: SetNull)
   jobApplication        JobApplication?    @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+  interviewRound        InterviewRound?    @relation(fields: [interviewRoundId], references: [id], onDelete: SetNull)
   mission               Mission?           @relation(fields: [missionId], references: [id], onDelete: SetNull)
   reminders             Reminder[]
   learningEvidence      LearningEvidence[]
@@ -459,6 +502,7 @@ model Task {
   @@index([dueDate])
   @@index([plannedFor])
   @@index([missionId])
+  @@index([interviewRoundId])
   @@map("tasks")
 }
 
@@ -467,6 +511,7 @@ model Reminder {
   userId           String          @map("user_id") @db.Uuid
   taskId           String?         @map("task_id") @db.Uuid
   jobApplicationId String?         @map("job_application_id") @db.Uuid
+  interviewRoundId String?         @map("interview_round_id") @db.Uuid
   type             String
   title            String
   dueAt            DateTime        @map("due_at") @db.Timestamptz(6)
@@ -478,12 +523,14 @@ model Reminder {
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   task             Task?           @relation(fields: [taskId], references: [id], onDelete: Cascade)
   jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+  interviewRound   InterviewRound? @relation(fields: [interviewRoundId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([status])
   @@index([dueAt])
   @@index([taskId])
   @@index([jobApplicationId])
+  @@index([interviewRoundId])
   @@map("reminders")
 }
 
@@ -783,4 +830,148 @@ model ReviewState {
   @@unique([userId, objectType, objectId])
   @@index([userId, due])
   @@map("review_states")
+}
+
+// MOM-126/127 (ADR-0011 / D-013, plan §5.4): persistent weakness signals for
+// the CareerOS loop. The derived weakness engine (weaknesses.service) still
+// handles practice struggles on the fly; this table stores only the signals
+// that CANNOT be re-derived — interview debriefs (source='debrief') and manual
+// entries — plus the state the derived path can't hold: severity accrual,
+// decay, and a repair/dismiss lifecycle. `summary()` merges both sources.
+// Target scoping is by roleTrackId/area/jobApplicationId; companyId is
+// deliberately deferred until the Company FK migration (MOM-122) lands.
+model WeaknessSignal {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  signalType       String    @map("signal_type") // reason | pattern | topic | area | round
+  key              String                        // MissTagReason | patternTag | topicId | areaId | roundType
+  label            String
+  roleTrackId      String?   @map("role_track_id")
+  area             String?
+  jobApplicationId String?   @map("job_application_id") @db.Uuid
+  severity         Float     @default(1)
+  occurrences      Int       @default(1)
+  source           String                         // attempt | debrief | manual
+  status           String    @default("open")     // open | repairing | resolved | dismissed
+  lastSignalAt     DateTime  @map("last_signal_at") @db.Timestamptz(6)
+  resolvedAt       DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([jobApplicationId])
+  @@index([roleTrackId, area])
+  @@map("weakness_signals")
+}
+
+// MOM-109/110 (ADR-0013 / D-016, Track N): a first-class interview round on a
+// JobApplication, replacing the JobEvent-as-interview hack. Carries the schedule
+// (drives reminders/countdown/auto-prep) and the outcome+debrief that MOM-113
+// turns into WeaknessSignals — the edge that closes the CareerOS loop. Owns no
+// prep/practice rows: a round's prep is an ordinary Task and its mock an ordinary
+// InterviewSession, attributed by a nullable interviewRoundId back-ref added when
+// needed (MOM-111/141) — never a copy (avoids the PlanItem/Task dual-write).
+model InterviewRound {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  jobApplicationId String    @map("job_application_id") @db.Uuid
+  roundType        String    @map("round_type")   // INTERVIEW_ROUND_TYPES
+  sequence         Int       @default(0)
+  scheduledAt      DateTime? @map("scheduled_at") @db.Timestamptz(6)
+  durationMinutes  Int?      @map("duration_minutes")
+  interviewer      String?
+  outcome          String    @default("pending")  // INTERVIEW_ROUND_OUTCOMES
+  debrief          String?
+  areasWeak        String[]  @default([]) @map("areas_weak")  // CAREER_ROLE_AREA_IDS
+  missTags         String[]  @default([]) @map("miss_tags")   // MISS_TAG_REASONS
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobApplication   JobApplication @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+  tasks            Task[]
+  reminders        Reminder[]
+
+  @@index([userId])
+  @@index([jobApplicationId])
+  @@index([scheduledAt])
+  @@map("interview_rounds")
+}
+
+// MOM-116/117 (ADR-0014, D-018): a networking contact. Can be standalone or
+// attached to a job (jobApplicationId, SetNull so the contact survives the job's
+// deletion). `relationship` is one of CONTACT_RELATIONSHIPS (string-constrained
+// at the DTO). Supersedes the free-text JobApplication.referralName (kept as a
+// backfilled fallback, D-004).
+model Contact {
+  id               String          @id @default(uuid()) @db.Uuid
+  userId           String          @map("user_id") @db.Uuid
+  jobApplicationId String?         @map("job_application_id") @db.Uuid
+  name             String
+  email            String?
+  linkedinUrl      String?         @map("linkedin_url")
+  company          String?
+  relationship     String? // CONTACT_RELATIONSHIPS
+  notes            String?
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([jobApplicationId])
+  @@map("contacts")
+}
+
+// MOM-114/115 (ADR-0015, D-019, SPIKE-015): a job offer, kept deliberately
+// minimal — enough to compare without over-modeling. At most one per application
+// (jobApplicationId @unique; Cascade so it dies with the job). Money is stored as
+// Decimal; the normalized annual total (base + bonus + equity/years) and any FX is
+// computed at read/display time. `status` is one of OFFER_STATUSES.
+model Offer {
+  id               String          @id @default(uuid()) @db.Uuid
+  userId           String          @map("user_id") @db.Uuid
+  jobApplicationId String?         @unique @map("job_application_id") @db.Uuid
+  baseSalary       Decimal?        @map("base_salary") @db.Decimal(14, 2)
+  bonus            Decimal?        @db.Decimal(14, 2)
+  equityTotal      Decimal?        @map("equity_total") @db.Decimal(14, 2)
+  equityYears      Int             @default(4) @map("equity_years")
+  currency         String          @default("USD")
+  location         String?
+  visaSponsored    Boolean?        @map("visa_sponsored")
+  deadline         DateTime?       @db.Date
+  notes            String?
+  status           String          @default("received") // OFFER_STATUSES
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("offers")
+}
+
+// MOM-132/133 (ADR-0012, D-020): a tailored résumé artifact derived from the
+// master Profile (D-014). Many per user; optionally linked to the job it was sent
+// to (SetNull). `contentMd` is the canonical editable content (Markdown);
+// `baseProfileSnapshot` records what it was derived from; `aiSuggestions` is where
+// MOM-137 writes accept/reject suggestions.
+model ResumeVersion {
+  id                  String          @id @default(uuid()) @db.Uuid
+  userId              String          @map("user_id") @db.Uuid
+  jobApplicationId    String?         @map("job_application_id") @db.Uuid
+  label               String
+  targetRoleTrackId   String?         @map("target_role_track_id")
+  contentMd           String          @map("content_md")
+  baseProfileSnapshot Json?           @map("base_profile_snapshot")
+  aiSuggestions       Json            @default("[]") @map("ai_suggestions")
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobApplication      JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([jobApplicationId])
+  @@map("resume_versions")
 }

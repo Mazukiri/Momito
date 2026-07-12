@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { Reminder, Task } from '@prisma/client';
 import { ReminderResponse, TaskResponse } from '@momito/shared';
 import { CareerService } from '../career/career.service';
-import { MissionsService } from '../missions/missions.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecommendationsService } from '../recommendations/recommendations.service';
 
@@ -11,7 +10,6 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly career?: CareerService,
-    private readonly missions?: MissionsService,
     private readonly recommendations?: RecommendationsService,
   ) {}
 
@@ -20,7 +18,7 @@ export class DashboardService {
     const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     const taskClient = (this.prisma as PrismaService & { task?: { findMany: (args: unknown) => Promise<Task[]> } }).task;
     const reminderClient = (this.prisma as PrismaService & { reminder?: { findMany: (args: unknown) => Promise<Reminder[]> } }).reminder;
-    const [topics, attempts, attemptDates, totalSessions, recentSessions, activeGoals, activeMissions, roleReadiness, dueTasks, reminders, recommendations] = await Promise.all([
+    const [topics, attempts, attemptDates, totalSessions, recentSessions, activeGoals, roleReadiness, dueTasks, reminders, recommendations] = await Promise.all([
       this.prisma.topic.findMany({
         include: { _count: { select: { questions: true } } },
         orderBy: { name: 'asc' },
@@ -42,7 +40,6 @@ export class DashboardService {
         take: 5,
       }),
       this.career ? this.career.listGoals(userId).then((goals) => goals.filter((goal) => goal.status === 'active')) : Promise.resolve([]),
-      this.missions ? this.missions.list(userId).then((missions) => missions.filter((mission) => mission.stage !== 'archived').slice(0, 4)) : Promise.resolve([]),
       this.career ? this.career.listActiveReadiness(userId) : Promise.resolve([]),
       taskClient ? taskClient.findMany({
         where: {
@@ -106,10 +103,6 @@ export class DashboardService {
       })
       .slice(0, 3)
       .map(({ id, name }) => ({ id, name }));
-    const focusMission = activeMissions[0] ?? null;
-    const todayPlan = focusMission && this.missions
-      ? await this.missions.today(focusMission.id, userId)
-      : null;
 
     return {
       totalQuestionsPracticed: attemptedQuestions.size,
@@ -120,9 +113,6 @@ export class DashboardService {
       weakTopics,
       suggestedNextTopics,
       activeGoals,
-      activeMissions,
-      focusMission,
-      todayPlanItems: todayPlan?.activePlan?.items ?? [],
       roleReadiness,
       dueTasks: dueTasks.map((task) => this.serializeTask(task)),
       reminders: reminders.map((reminder) => this.serializeReminder(reminder)),

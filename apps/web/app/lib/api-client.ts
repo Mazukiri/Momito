@@ -126,7 +126,7 @@ export const authApi = {
 };
 
 // ── Questions ─────────────────────────────────────
-import type { QuestionResponse, PaginatedResponse, TopicSummary, CompanySummary } from '@momito/shared';
+import type { QuestionResponse, PaginatedResponse, TopicSummary, CompanyResponse } from '@momito/shared';
 
 export interface ListQuestionsParams {
   topic?: string;
@@ -204,13 +204,16 @@ export const topicsApi = {
 // ── Companies ─────────────────────────────────────
 export const companiesApi = {
   list: () =>
-    request<CompanySummary[]>('/companies'),
+    request<CompanyResponse[]>('/companies'),
+
+  get: (id: string) =>
+    request<CompanyResponse>(`/companies/${id}`),
 
   create: (body: { name: string; region?: string; notes?: string }) =>
-    request<CompanySummary>('/companies', { method: 'POST', body: JSON.stringify(body) }),
+    request<CompanyResponse>('/companies', { method: 'POST', body: JSON.stringify(body) }),
 
   update: (id: string, body: { name?: string; region?: string; notes?: string }) =>
-    request<CompanySummary>(`/companies/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    request<CompanyResponse>(`/companies/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
   delete: (id: string) =>
     request<void>(`/companies/${id}`, { method: 'DELETE' }),
@@ -222,6 +225,7 @@ import type {
   SessionQuestionResponse,
   AnswerAttemptResponse,
   MissTagReason,
+  WeaknessSignalResponse,
   WeaknessSummaryResponse,
 } from '@momito/shared';
 
@@ -342,6 +346,11 @@ export const attemptsApi = {
 // ── Weakness signals (plan §5.4/§6.1) ───────────────────────────────────────
 export const weaknessesApi = {
   summary: () => request<WeaknessSummaryResponse>('/weaknesses'),
+  // MOM-127: act on a persisted signal from summary.openSignals.
+  resolveSignal: (id: string) =>
+    request<WeaknessSignalResponse>(`/weaknesses/signals/${id}/resolve`, { method: 'POST' }),
+  dismissSignal: (id: string) =>
+    request<WeaknessSignalResponse>(`/weaknesses/signals/${id}/dismiss`, { method: 'POST' }),
 };
 
 // ── AI grading (Workstream C: dormant until ANTHROPIC_API_KEY is set) ──────
@@ -356,10 +365,15 @@ export interface AiUsageResponse {
   remainingUsd: number;
 }
 
+// MOM-168: the grader's FSRS-style verdict, so the reveal panel can offer a one-tap rating.
+// Null on the cached path (not recoverable from the persisted Markdown).
+export type SuggestedRating = 'again' | 'hard' | 'good' | 'easy';
+
 export interface AiGradeResponse {
   attemptId: string;
   aiScore: number | null;
   aiFeedback: string | null;
+  suggestedRating: SuggestedRating | null;
   cached: boolean;
 }
 
@@ -402,6 +416,7 @@ export const dashboardApi = {
 
 // Profile and CV Scoring
 import type {
+  AtsCoverageResponse,
   CreateProfileScoreRequest,
   ProfileResponse,
   ProfileScoreResponse,
@@ -431,33 +446,62 @@ export const profileScoresApi = {
 
   get: (id: string) =>
     request<ProfileScoreResponse>(`/profile-scores/${id}`),
+
+  generateTasks: (id: string) =>
+    request<{ created: number }>(`/profile-scores/${id}/generate-tasks`, { method: 'POST' }),
+
+  atsCoverage: (jdText: string, resumeVersionId?: string) =>
+    request<AtsCoverageResponse>('/profile-scores/ats-coverage', {
+      method: 'POST',
+      body: JSON.stringify({ jdText, resumeVersionId }),
+    }),
+
+  // MOM-134-full: turn the JD keywords missing from a résumé/profile into tasks.
+  atsGenerateTasks: (jdText: string, resumeVersionId?: string) =>
+    request<{ created: number }>('/profile-scores/ats-coverage/generate-tasks', {
+      method: 'POST',
+      body: JSON.stringify({ jdText, resumeVersionId }),
+    }),
 };
 
 // Career OS
 import type {
   CareerGoalResponse,
   CareerRoleTrack,
+  ContactResponse,
+  CreateContactRequest,
+  CreateInterviewRoundRequest,
   CreateJobApplicationRequest,
-  CreateMissionRequest,
   CreateTaskRequest,
+  InterviewRoundResponse,
   JobApplicationResponse,
   JobEventResponse,
+  JobFunnelResponse,
+  UpdateInterviewRoundRequest,
   LearningEvidenceResponse,
   LearningHighlightResponse,
-  MissionCheckInResponse,
-  MissionDetailResponse,
-  MissionResponse,
-  MissionTodayResponse,
+  JobReadinessResponse,
+  JobStoryGapResponse,
+  OfferResponse,
+  UpsertOfferRequest,
+  ResumeVersionResponse,
+  ResumeDriftResponse,
+  CreateResumeVersionRequest,
+  UpdateResumeVersionRequest,
+  ResumeAiEnvelope,
+  ResumeAnalysisResult,
+  ResumeRewriteResult,
+  CoverLetterDraftResult,
   PracticeRecommendationResponse,
   ReadwiseConnectionResponse,
   ReadwiseSyncRunResponse,
   ReminderResponse,
   RoleReadinessResponse,
+  TargetShortlistResponse,
   TaskResponse,
+  UpdateContactRequest,
   UpdateJobApplicationRequest,
-  UpdateMissionRequest,
   UpdateTaskRequest,
-  WeeklyPlanResponse,
 } from '@momito/shared';
 
 export const careerApi = {
@@ -478,6 +522,120 @@ export const careerApi = {
 
   activeReadiness: () =>
     request<RoleReadinessResponse[]>('/career/readiness'),
+
+  jobReadiness: (jobId: string) =>
+    request<JobReadinessResponse>(`/career/jobs/${jobId}/readiness`),
+
+  jobStoryGaps: (jobId: string) =>
+    request<JobStoryGapResponse>(`/career/jobs/${jobId}/story-gaps`),
+
+  targetShortlist: () =>
+    request<TargetShortlistResponse>('/career/target-shortlist'),
+};
+
+export const contactsApi = {
+  list: () =>
+    request<ContactResponse[]>('/contacts'),
+
+  listForJob: (jobId: string) =>
+    request<ContactResponse[]>(`/jobs/${jobId}/contacts`),
+
+  createForJob: (jobId: string, body: CreateContactRequest) =>
+    request<ContactResponse>(`/jobs/${jobId}/contacts`, { method: 'POST', body: JSON.stringify(body) }),
+
+  create: (body: CreateContactRequest) =>
+    request<ContactResponse>('/contacts', { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (id: string, body: UpdateContactRequest) =>
+    request<ContactResponse>(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  remove: (id: string) =>
+    request<void>(`/contacts/${id}`, { method: 'DELETE' }),
+};
+
+export const resumesApi = {
+  list: () =>
+    request<ResumeVersionResponse[]>('/resumes'),
+
+  get: (id: string) =>
+    request<ResumeVersionResponse>(`/resumes/${id}`),
+
+  create: (body: CreateResumeVersionRequest) =>
+    request<ResumeVersionResponse>('/resumes', { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (id: string, body: UpdateResumeVersionRequest) =>
+    request<ResumeVersionResponse>(`/resumes/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  remove: (id: string) =>
+    request<void>(`/resumes/${id}`, { method: 'DELETE' }),
+
+  // MOM-136/137/138: résumé AI, dormant-until-key. These resolve to
+  // {ok:false, reason} (HTTP 200) when the instance has no ANTHROPIC_API_KEY,
+  // so callers render a banner rather than handling an error.
+  // MOM-149: pass a jobApplicationId to have the critique judged against that JD and that
+  // company's focus areas. Omitted → the API falls back to the job this version is linked to.
+  aiAnalyze: (id: string, jobApplicationId?: string) =>
+    request<ResumeAiEnvelope<ResumeAnalysisResult>>(`/resumes/${id}/ai/analyze`, {
+      method: 'POST',
+      body: JSON.stringify(jobApplicationId ? { jobApplicationId } : {}),
+    }),
+
+  // MOM-155: what the profile has gained since this version was derived from it.
+  drift: (id: string) => request<ResumeDriftResponse>(`/resumes/${id}/drift`),
+
+  // MOM-151: the analysis's missing themes become study tasks (deduped server-side, no AI spend).
+  aiThemesToTasks: (id: string, themes: string[]) =>
+    request<{ created: number }>(`/resumes/${id}/ai/themes-to-tasks`, {
+      method: 'POST',
+      body: JSON.stringify({ themes }),
+    }),
+
+  // MOM-153: both take a pasted JD *or* a jobApplicationId whose stored JD (plus that company's
+  // focus areas and sponsorship posture) is used instead — so a JD captured once in the pipeline
+  // never has to be re-pasted. Neither → the API falls back to the job this version is linked to.
+  aiRewrite: (id: string, target: { jdText?: string; jobApplicationId?: string }) =>
+    request<ResumeAiEnvelope<ResumeRewriteResult>>(`/resumes/${id}/ai/rewrite`, { method: 'POST', body: JSON.stringify(target) }),
+
+  aiCoverLetter: (id: string, target: { jdText?: string; jobApplicationId?: string }) =>
+    request<ResumeAiEnvelope<CoverLetterDraftResult>>(`/resumes/${id}/ai/cover-letter`, { method: 'POST', body: JSON.stringify(target) }),
+
+  // MOM-139: fetch the export with the auth header (a plain <a href> can't send
+  // the Bearer token), then trigger a browser download of the returned blob.
+  download: async (id: string, format: 'md' | 'pdf') => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/resumes/${id}/export?format=${format}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      if (res.status === 401) notifyUnauthorized();
+      throw new ApiClientError({ statusCode: res.status, error: res.statusText, message: `Export failed (${res.status})` });
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') ?? '';
+    const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `resume.${format}`;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  },
+};
+
+export const offersApi = {
+  list: () =>
+    request<OfferResponse[]>('/offers'),
+
+  getForJob: (jobId: string) =>
+    request<OfferResponse | null>(`/jobs/${jobId}/offer`),
+
+  upsertForJob: (jobId: string, body: UpsertOfferRequest) =>
+    request<OfferResponse>(`/jobs/${jobId}/offer`, { method: 'PUT', body: JSON.stringify(body) }),
+
+  removeForJob: (jobId: string) =>
+    request<void>(`/jobs/${jobId}/offer`, { method: 'DELETE' }),
 };
 
 export const jobsApi = {
@@ -487,6 +645,8 @@ export const jobsApi = {
     const query = qs.toString();
     return request<JobApplicationResponse[]>(`/jobs${query ? `?${query}` : ''}`);
   },
+
+  funnel: () => request<JobFunnelResponse>('/jobs/funnel'),
 
   create: (body: CreateJobApplicationRequest) =>
     request<JobApplicationResponse>('/jobs', { method: 'POST', body: JSON.stringify(body) }),
@@ -505,6 +665,24 @@ export const jobsApi = {
 
   scoreProfile: (id: string) =>
     request<ProfileScoreResponse>(`/jobs/${id}/score-profile`, { method: 'POST' }),
+};
+
+// MOM-110: interview rounds nested under a job.
+export const interviewRoundsApi = {
+  list: (jobId: string) =>
+    request<InterviewRoundResponse[]>(`/jobs/${jobId}/rounds`),
+
+  create: (jobId: string, body: CreateInterviewRoundRequest) =>
+    request<InterviewRoundResponse>(`/jobs/${jobId}/rounds`, { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (jobId: string, roundId: string, body: UpdateInterviewRoundRequest) =>
+    request<InterviewRoundResponse>(`/jobs/${jobId}/rounds/${roundId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  remove: (jobId: string, roundId: string) =>
+    request<{ deleted: boolean }>(`/jobs/${jobId}/rounds/${roundId}`, { method: 'DELETE' }),
+
+  generatePrep: (jobId: string, roundId: string) =>
+    request<{ created: number }>(`/jobs/${jobId}/rounds/${roundId}/prep`, { method: 'POST' }),
 };
 
 export const tasksApi = {
@@ -595,6 +773,9 @@ export const learningApi = {
   inbox: () =>
     request<LearningHighlightResponse[]>('/learning/inbox'),
 
+  getHighlight: (id: string) =>
+    request<LearningHighlightResponse>(`/learning/highlights/${id}`),
+
   updateHighlight: (id: string, body: { roleTrackId?: string | null; area?: string | null; topicId?: string | null; reviewed?: boolean; usefulness?: string | null }) =>
     request<LearningHighlightResponse>(`/learning/highlights/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
@@ -626,41 +807,7 @@ export const recommendationsApi = {
     request<PracticeRecommendationResponse[]>('/practice/recommendations'),
 };
 
-export const missionsApi = {
-  list: (params: { stage?: string } = {}) => {
-    const qs = new URLSearchParams();
-    if (params.stage) qs.set('stage', params.stage);
-    const query = qs.toString();
-    return request<MissionResponse[]>(`/missions${query ? `?${query}` : ''}`);
-  },
-
-  create: (body: CreateMissionRequest) =>
-    request<MissionResponse>('/missions', { method: 'POST', body: JSON.stringify(body) }),
-
-  createFromJob: (jobId: string) =>
-    request<MissionDetailResponse>(`/missions/from-job/${jobId}`, { method: 'POST' }),
-
-  get: (id: string) =>
-    request<MissionDetailResponse>(`/missions/${id}`),
-
-  update: (id: string, body: UpdateMissionRequest) =>
-    request<MissionResponse>(`/missions/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-
-  diagnose: (id: string) =>
-    request<MissionDetailResponse>(`/missions/${id}/diagnose`, { method: 'POST' }),
-
-  generatePlan: (id: string) =>
-    request<WeeklyPlanResponse>(`/missions/${id}/plans/generate`, { method: 'POST' }),
-
-  today: (id: string) =>
-    request<MissionTodayResponse>(`/missions/${id}/today`),
-
-  createCheckIn: (id: string, body: { summary: string; wins?: string | null; blockers?: string | null; adjustments?: string | null }) =>
-    request<MissionCheckInResponse>(`/missions/${id}/check-ins`, { method: 'POST', body: JSON.stringify(body) }),
-
-  reviewPlan: (id: string, body: { summary?: string; wins?: string | null; blockers?: string | null; adjustments?: string | null } = {}) =>
-    request<WeeklyPlanResponse>(`/plans/${id}/review`, { method: 'POST', body: JSON.stringify(body) }),
-};
+// MOM-162 (D-021): missionsApi removed — the Missions engine is retired.
 
 // ── Content Coverage (MOM-062) ────────────────────
 import type { ContentCoverageResponse, DsaProgressResponse } from '@momito/shared';

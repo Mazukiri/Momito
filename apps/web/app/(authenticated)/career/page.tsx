@@ -1,9 +1,46 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { careerApi } from '../../lib/api-client';
-import type { CareerGoalResponse, CareerRoleTrack, RoleReadinessResponse } from '@momito/shared';
+import type { CareerGoalResponse, CareerRoleTrack, RoleReadinessResponse, TargetShortlistItem, VisaTag } from '@momito/shared';
 import { Card, ErrorBanner, Spinner } from '../../components/ui';
+
+function SponsorshipPill({ status }: { status: VisaTag | null }) {
+  if (status === 'sponsored') return <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">Sponsors visas</span>;
+  if (status === 'not_sponsoring') return <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-950 dark:text-rose-400">No sponsorship</span>;
+  return <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Sponsorship unknown</span>;
+}
+
+function ShortlistCard({ items }: { items: TargetShortlistItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <Card>
+      <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">Where to apply next</h2>
+      <p className="mt-1 text-sm text-zinc-500">Catalog companies ranked by your grounded fit, weighted for visa sponsorship and region.</p>
+      <div className="mt-4 space-y-2">
+        {items.slice(0, 3).map((item, index) => (
+          <Link
+            key={item.companyId}
+            href={`/companies/${item.companyId}`}
+            className="flex items-center gap-3 rounded-lg border border-zinc-200 p-3 transition-colors hover:border-indigo-400 dark:border-zinc-700 dark:hover:border-indigo-500"
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">{index + 1}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-zinc-800 dark:text-zinc-100">{item.name}</span>
+                <SponsorshipPill status={item.sponsorshipStatus} />
+                {item.region && <span className="text-xs text-zinc-400">{item.region}</span>}
+              </div>
+              <p className="mt-0.5 truncate text-xs text-zinc-500">{item.reason}</p>
+            </div>
+            <span className="text-xl font-bold text-indigo-600">{item.score}</span>
+          </Link>
+        ))}
+      </div>
+    </Card>
+  );
+}
 
 function Bar({ value }: { value: number }) {
   return (
@@ -20,6 +57,7 @@ export default function CareerPage() {
   const [tracks, setTracks] = useState<CareerRoleTrack[]>([]);
   const [goals, setGoals] = useState<CareerGoalResponse[]>([]);
   const [readiness, setReadiness] = useState<RoleReadinessResponse[]>([]);
+  const [shortlist, setShortlist] = useState<TargetShortlistItem[]>([]);
   const [selectedRole, setSelectedRole] = useState('big-tech-swe');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -29,14 +67,16 @@ export default function CareerPage() {
     setLoading(true);
     setError('');
     try {
-      const [roleTracks, careerGoals, readinessList] = await Promise.all([
+      const [roleTracks, careerGoals, readinessList, shortlistData] = await Promise.all([
         careerApi.roleTracks(),
         careerApi.goals(),
         careerApi.activeReadiness(),
+        careerApi.targetShortlist(),
       ]);
       setTracks(roleTracks);
       setGoals(careerGoals);
       setReadiness(readinessList);
+      setShortlist(shortlistData.items);
       if (roleTracks[0]) setSelectedRole(roleTracks[0].id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load career plan');
@@ -95,6 +135,8 @@ export default function CareerPage() {
       </div>
 
       {error && <ErrorBanner message={error} onRetry={load} />}
+
+      <ShortlistCard items={shortlist} />
 
       <div className="grid gap-4 md:grid-cols-2">
         {tracks.map((track) => {

@@ -27,9 +27,39 @@ function buildAttempt(overrides: Partial<{
   };
 }
 
-function serviceWith(attempts: unknown[]) {
+function serviceWith(attempts: unknown[], signals: unknown[] = []) {
   const findMany = vi.fn().mockResolvedValue(attempts);
-  return { service: new WeaknessesService({ answerAttempt: { findMany } } as never), findMany };
+  const signalFindMany = vi.fn().mockResolvedValue(signals);
+  return {
+    service: new WeaknessesService({
+      answerAttempt: { findMany },
+      weaknessSignal: { findMany: signalFindMany },
+    } as never),
+    findMany,
+    signalFindMany,
+  };
+}
+
+function signalRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'sig-1',
+    userId: 'user-1',
+    signalType: 'area',
+    key: 'system_design',
+    label: 'System design',
+    roleTrackId: 'big-tech-swe',
+    area: 'system_design',
+    jobApplicationId: 'job-1',
+    severity: 2,
+    occurrences: 2,
+    source: 'debrief',
+    status: 'open',
+    lastSignalAt: new Date(),
+    resolvedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
 }
 
 describe('isStruggleAttempt', () => {
@@ -75,6 +105,186 @@ describe('WeaknessesService.summary', () => {
     expect(summary.patterns).toEqual([
       expect.objectContaining({ key: 'sliding-window', struggles: 1, attempts: 1 }),
     ]);
+  });
+});
+
+describe('WeaknessesService.summary — openSignals (MOM-127)', () => {
+  it('surfaces a recent stored signal, decayed and above the floor', async () => {
+    const { service } = serviceWith([], [signalRow({ severity: 3, lastSignalAt: new Date() })]);
+
+    const summary = await service.summary('user-1');
+
+    expect(summary.openSignals).toHaveLength(1);
+    const signal = summary.openSignals[0];
+    expect(signal).toMatchObject({ key: 'system_design', source: 'debrief', occurrences: 2 });
+    // Fresh signal (~0 age) keeps ~full raw severity.
+    expect(signal.severity).toBeGreaterThan(2.9);
+  });
+
+  it('drops a stale signal whose decayed severity falls below the floor', async () => {
+    // A single-severity signal aged ~1 year decays far below the 0.15 floor.
+    const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    const { service } = serviceWith([], [signalRow({ severity: 1, lastSignalAt: oneYearAgo })]);
+
+    const summary = await service.summary('user-1');
+
+    expect(summary.openSignals).toEqual([]);
+  });
+
+  it('sorts open signals by decayed severity, most severe first', async () => {
+    const now = new Date();
+    const { service } = serviceWith(
+      [],
+      [
+        signalRow({ id: 'sig-low', key: 'behavioral', severity: 1, lastSignalAt: now }),
+        signalRow({ id: 'sig-high', key: 'coding', severity: 5, lastSignalAt: now }),
+      ],
+    );
+
+    const summary = await service.summary('user-1');
+
+    expect(summary.openSignals.map((signal) => signal.id)).toEqual(['sig-high', 'sig-low']);
+  });
+});
+
+describe('WeaknessesService.recordSignal (MOM-127)', () => {
+  it('creates a new signal when no live one matches', async () => {
+    const create = vi.fn().mockImplementation(({ data }) => signalRow({ ...data, id: 'sig-new', severity: 1, occurrences: 1 }));
+    const service = new WeaknessesService({
+      weaknessSignal: { findFirst: vi.fn().mockResolvedValue(null), create },
+    } as never);
+
+    const result = await service.recordSignal('user-1', {
+      signalType: 'area',
+      key: 'system_design',
+      label: 'System design',
+      source: 'debrief',
+      jobApplicationId: 'job-1',
+    });
+
+    expect(create).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ key: 'system_design', occurrences: 1 });
+  });
+
+  it('accrues onto an existing open signal instead of duplicating it', async () => {
+    const existing = signalRow({ severity: 2, occurrences: 2 });
+    const update = vi.fn().mockImplementation(({ data }) => signalRow({ ...existing, ...data }));
+    const service = new WeaknessesService({
+      weaknessSignal: { findFirst: vi.fn().mockResolvedValue(existing), update },
+    } as never);
+
+    await service.recordSignal('user-1', {
+      signalType: 'area',
+      key: 'system_design',
+      label: 'System design',
+      source: 'debrief',
+      jobApplicationId: 'job-1',
+    });
+
+    expect(update).toHaveBeenCalledOnce();
+    expect(update.mock.calls[0][0].data).toMatchObject({ occurrences: 3, severity: 3 });
+  });
+
+  it('caps accrued raw severity at 10', async () => {
+    const existing = signalRow({ severity: 10, occurrences: 10 });
+    const update = vi.fn().mockImplementation(({ data }) => signalRow({ ...existing, ...data }));
+    const service = new WeaknessesService({
+      weaknessSignal: { findFirst: vi.fn().mockResolvedValue(existing), update },
+    } as never);
+
+    await service.recordSignal('user-1', { signalType: 'area', key: 'system_design', label: 'x', source: 'debrief' });
+
+    expect(update.mock.calls[0][0].data.severity).toBe(10);
+  });
+});
+
+describe('WeaknessesService.resolveSignal / dismissSignal (MOM-127)', () => {
+  it('resolves an owned signal', async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const findUniqueOrThrow = vi.fn().mockResolvedValue(signalRow({ status: 'resolved' }));
+    const service = new WeaknessesService({ weaknessSignal: { updateMany, findUniqueOrThrow } } as never);
+
+    const result = await service.resolveSignal('sig-1', 'user-1');
+
+    expect(updateMany.mock.calls[0][0].data.status).toBe('resolved');
+    expect(result.status).toBe('resolved');
+  });
+
+  it('throws when the signal is not the user\'s', async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const service = new WeaknessesService({ weaknessSignal: { updateMany } } as never);
+
+    await expect(service.dismissSignal('sig-1', 'user-2')).rejects.toThrow('Weakness signal not found');
+  });
+});
+
+describe('WeaknessesService.creditRepairEvidence (MOM-166, D-023)', () => {
+  // Helper: a service whose weaknessSignal.findMany returns `signals` and captures updates.
+  function creditService(signals: unknown[]) {
+    const update = vi.fn().mockResolvedValue({});
+    const findMany = vi.fn().mockResolvedValue(signals);
+    const service = new WeaknessesService({ weaknessSignal: { findMany, update } } as never);
+    return { service, update, findMany };
+  }
+
+  it('marks an open area-signal `repairing` on one positive attempt', async () => {
+    const { service, update } = creditService([signalRow({ id: 'sig-1', area: 'system_design', status: 'open' })]);
+
+    const result = await service.creditRepairEvidence('user-1', [{ area: 'system_design', positive: true }]);
+
+    expect(result).toEqual({ repairing: 1, resolved: 0 });
+    expect(update).toHaveBeenCalledWith({ where: { id: 'sig-1' }, data: { status: 'repairing' } });
+  });
+
+  it('resolves an open area-signal on two positives in one batch', async () => {
+    const { service, update } = creditService([signalRow({ id: 'sig-1', area: 'system_design', status: 'open' })]);
+
+    const result = await service.creditRepairEvidence('user-1', [
+      { area: 'system_design', positive: true },
+      { area: 'system_design', positive: true },
+    ]);
+
+    expect(result).toEqual({ repairing: 0, resolved: 1 });
+    expect(update.mock.calls[0][0].data.status).toBe('resolved');
+    expect(update.mock.calls[0][0].data.resolvedAt).toBeInstanceOf(Date);
+  });
+
+  it('resolves an already-`repairing` signal on one more positive (evidence across sessions)', async () => {
+    const { service, update } = creditService([signalRow({ id: 'sig-1', area: 'dsa', status: 'repairing' })]);
+
+    const result = await service.creditRepairEvidence('user-1', [{ area: 'dsa', positive: true }]);
+
+    expect(result).toEqual({ repairing: 0, resolved: 1 });
+    expect(update.mock.calls[0][0].data.status).toBe('resolved');
+  });
+
+  it('credits nothing when the attempts are not positive', async () => {
+    const { service, update, findMany } = creditService([signalRow({ area: 'system_design', status: 'open' })]);
+
+    const result = await service.creditRepairEvidence('user-1', [{ area: 'system_design', positive: false }]);
+
+    expect(result).toEqual({ repairing: 0, resolved: 0 });
+    expect(findMany).not.toHaveBeenCalled(); // no positive areas → never even queries
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('never touches reason-type signals (the query filters to signalType area)', async () => {
+    const { service, findMany } = creditService([]);
+
+    await service.creditRepairEvidence('user-1', [{ area: 'dsa', positive: true }]);
+
+    expect(findMany.mock.calls[0][0].where).toMatchObject({ signalType: 'area', status: { in: ['open', 'repairing'] } });
+  });
+
+  it('only credits areas that actually saw a positive attempt', async () => {
+    // A positive in dsa; the signal is for system_design → no match, no write.
+    const { service, update } = creditService([signalRow({ id: 'sig-sd', area: 'system_design', status: 'open' })]);
+    // findMany is filtered by area IN [dsa]; system_design signal wouldn't be returned in reality,
+    // but even if it leaks through, positivesByArea has no entry for it → skipped.
+    const result = await service.creditRepairEvidence('user-1', [{ area: 'dsa', positive: true }]);
+
+    expect(result).toEqual({ repairing: 0, resolved: 0 });
+    expect(update).not.toHaveBeenCalled();
   });
 });
 

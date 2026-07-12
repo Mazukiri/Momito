@@ -2,13 +2,27 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { CAREER_ROLE_TRACKS, JOB_APPLICATION_STATUSES, type CareerRoleTrackId, type JobApplicationResponse } from '@momito/shared';
-import { jobsApi } from '../../lib/api-client';
+import { CAREER_ROLE_TRACKS, JOB_APPLICATION_STATUSES, JOB_FUNNEL_STAGES, type AtsCoverageResponse, type CareerRoleTrackId, type CompanyResponse, type JobApplicationResponse, type JobFunnelResponse, type VisaTag } from '@momito/shared';
+import { companiesApi, jobsApi, profileScoresApi } from '../../lib/api-client';
 import { Badge, Card, EmptyState, ErrorBanner, Spinner } from '../../components/ui';
+import { JobFunnelCard } from '../../components/JobFunnelCard';
+
+// MOM-124: a job's sponsorship signal prefers the linked catalog company, falling
+// back to the job's own visaTag; null/absent = 'unknown'. Sponsored sorts first.
+const jobSponsorship = (job: JobApplicationResponse): VisaTag =>
+  job.companyRef?.sponsorshipStatus ?? job.visaTag ?? 'unknown';
+const SPONSORSHIP_RANK: Record<VisaTag, number> = { sponsored: 0, unknown: 1, not_sponsoring: 2 };
+const SPONSORSHIP_FILTERS: { key: 'all' | VisaTag; label: string }[] = [
+  { key: 'all', label: 'All visas' },
+  { key: 'sponsored', label: 'Sponsors' },
+  { key: 'unknown', label: 'Unknown' },
+  { key: 'not_sponsoring', label: 'No sponsorship' },
+];
 
 export default function JobsPage() {
   const router = useRouter();
   const [jobs, setJobs] = useState<JobApplicationResponse[]>([]);
+  const [funnel, setFunnel] = useState<JobFunnelResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -20,12 +34,35 @@ export default function JobsPage() {
   const [deadline, setDeadline] = useState('');
   const [jdText, setJdText] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | JobApplicationResponse['status']>('all');
+  const [sponsorshipFilter, setSponsorshipFilter] = useState<'all' | VisaTag>('all');
+  const [view, setView] = useState<'list' | 'board'>('list');
+  const [dragJobId, setDragJobId] = useState<string | null>(null);
+  const [ats, setAts] = useState<AtsCoverageResponse | null>(null);
+  const [atsLoading, setAtsLoading] = useState(false);
+  // MOM-122: catalog for the company-link datalist. Typing a name that matches a
+  // catalog company (case-insensitive) links it; anything else stays free text.
+  const [companies, setCompanies] = useState<CompanyResponse[]>([]);
+
+  async function checkAts() {
+    if (!jdText.trim()) return;
+    setAtsLoading(true);
+    try {
+      setAts(await profileScoresApi.atsCoverage(jdText.trim()));
+    } catch {
+      setAts(null);
+    } finally {
+      setAtsLoading(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      setJobs(await jobsApi.list());
+      const [jobList, funnelData, companyList] = await Promise.all([jobsApi.list(), jobsApi.funnel(), companiesApi.list()]);
+      setJobs(jobList);
+      setFunnel(funnelData);
+      setCompanies(companyList);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load jobs');
     } finally {
@@ -43,8 +80,11 @@ export default function JobsPage() {
     setSaving(true);
     setError('');
     try {
+      // Link to the catalog when the typed name matches a company exactly (ci).
+      const match = companies.find((item) => item.name.trim().toLowerCase() === company.trim().toLowerCase());
       await jobsApi.create({
         company: company.trim(),
+        companyId: match?.id ?? null,
         roleTitle: roleTitle.trim(),
         url: url.trim() || null,
         roleTrackId,
@@ -66,6 +106,23 @@ export default function JobsPage() {
     }
   }
 
+  // MOM-107: move a card between kanban columns. Optimistic (update local state
+  // immediately) with revert-on-error; the API write also logs the MOM-102/104
+  // transition event. Funnel/counts refresh on the next load.
+  async function moveJob(jobId: string, newStatus: JobApplicationResponse['status']) {
+    const target = jobs.find((item) => item.id === jobId);
+    if (!target || target.status === newStatus) return;
+    const previous = jobs;
+    setJobs(jobs.map((item) => (item.id === jobId ? { ...item, status: newStatus } : item)));
+    setError('');
+    try {
+      await jobsApi.update(jobId, { status: newStatus });
+    } catch (err: unknown) {
+      setJobs(previous); // revert
+      setError(err instanceof Error ? err.message : 'Failed to move job');
+    }
+  }
+
   if (loading) return <div className="flex justify-center py-20"><Spinner className="h-8 w-8" /></div>;
 
   return (
@@ -75,17 +132,35 @@ export default function JobsPage() {
           <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Jobs</h1>
           <p className="mt-1 text-sm text-zinc-500">Track applications, deadlines, JD gaps, and prep work.</p>
         </div>
-        <button
-          onClick={() => setShowForm((value) => !value)}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          {showForm ? 'Close' : 'Add Job'}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* MOM-107: list ↔ board (kanban) view toggle. */}
+          <div className="flex rounded-lg border border-zinc-300 p-0.5 dark:border-zinc-700">
+            {(['list', 'board'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setView(mode)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize ${
+                  view === mode ? 'bg-indigo-600 text-white' : 'text-zinc-600 dark:text-zinc-300'
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowForm((value) => !value)}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
+          >
+            {showForm ? 'Close' : 'Add Job'}
+          </button>
+        </div>
       </div>
 
       {error && <ErrorBanner message={error} onRetry={load} />}
 
-      {jobs.length > 0 && (
+      {view === 'list' && funnel && funnel.total > 0 && <JobFunnelCard funnel={funnel} />}
+
+      {view === 'list' && jobs.length > 0 && (
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setStatusFilter('all')}
@@ -113,13 +188,39 @@ export default function JobsPage() {
         </div>
       )}
 
+      {view === 'list' && jobs.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {SPONSORSHIP_FILTERS.map(({ key, label }) => {
+            const count = key === 'all' ? jobs.length : jobs.filter((job) => jobSponsorship(job) === key).length;
+            if (key !== 'all' && count === 0) return null;
+            return (
+              <button
+                key={key}
+                onClick={() => setSponsorshipFilter(key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  sponsorshipFilter === key ? 'bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400'
+                }`}
+              >
+                {label} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {showForm && (
         <Card>
           <form onSubmit={createJob} className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Company</label>
-                <input value={company} onChange={(event) => setCompany(event.target.value)} required className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                <input value={company} onChange={(event) => setCompany(event.target.value)} required list="company-catalog" className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                <datalist id="company-catalog">
+                  {companies.map((item) => <option key={item.id} value={item.name} />)}
+                </datalist>
+                {companies.some((item) => item.name.trim().toLowerCase() === company.trim().toLowerCase()) && (
+                  <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">✓ Links to the catalog — sponsorship &amp; focus data will attach.</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Role</label>
@@ -142,7 +243,26 @@ export default function JobsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Job Description</label>
-              <textarea value={jdText} onChange={(event) => setJdText(event.target.value)} rows={6} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <textarea value={jdText} onChange={(event) => { setJdText(event.target.value); setAts(null); }} rows={6} placeholder="Paste the JD to check which keywords your profile is missing…" className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <div className="mt-2 flex items-center gap-3">
+                <button type="button" onClick={checkAts} disabled={atsLoading || !jdText.trim()} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                  {atsLoading ? 'Checking…' : 'Check ATS keyword coverage'}
+                </button>
+                {ats && (
+                  <span className="text-xs text-zinc-500">
+                    {Math.round(ats.coveragePct * 100)}% of {ats.jdKeywordCount} JD keyword{ats.jdKeywordCount === 1 ? '' : 's'} in your profile
+                  </span>
+                )}
+              </div>
+              {ats && ats.missing.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {ats.missing.slice(0, 20).map((keyword) => (
+                    <span key={keyword} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <button disabled={saving || !company.trim() || !roleTitle.trim()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
               {saving ? 'Saving...' : 'Save Job'}
@@ -153,10 +273,13 @@ export default function JobsPage() {
 
       {jobs.length === 0 ? (
         <EmptyState icon="JOB" title="No jobs yet" description="Add a target job to connect JD gaps, prep tasks, and reminders." />
-      ) : (
+      ) : view === 'list' ? (
         <div className="grid gap-3">
           {jobs
             .filter((job) => statusFilter === 'all' || job.status === statusFilter)
+            .filter((job) => sponsorshipFilter === 'all' || jobSponsorship(job) === sponsorshipFilter)
+            .slice()
+            .sort((a, b) => SPONSORSHIP_RANK[jobSponsorship(a)] - SPONSORSHIP_RANK[jobSponsorship(b)])
             .map((job) => (
             <Card key={job.id} onClick={() => router.push(`/jobs/${job.id}`)}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -167,6 +290,11 @@ export default function JobsPage() {
                     <Badge label={job.status} variant={job.status} />
                     {job.roleTrackId && <Badge label={CAREER_ROLE_TRACKS[job.roleTrackId].label} />}
                     {job.visaTag && <Badge label={`visa: ${job.visaTag}`} />}
+                    {job.isStalled && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400" title="No movement past this stage's threshold">
+                        ⏳ Stalled · {job.daysInStage}d
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="text-sm text-zinc-500">
@@ -175,6 +303,52 @@ export default function JobsPage() {
               </div>
             </Card>
           ))}
+        </div>
+      ) : (
+        // MOM-107: kanban board — one column per active funnel stage. Drag a card to
+        // another column to change its status (writes the transition event). Terminal
+        // outcomes (rejected/withdrawn) live in the list view, not on the board.
+        <div className="flex gap-3 overflow-x-auto pb-2">
+          {JOB_FUNNEL_STAGES.map((stage) => {
+            const columnJobs = jobs.filter((job) => job.status === stage);
+            return (
+              <div
+                key={stage}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => { event.preventDefault(); const id = event.dataTransfer.getData('text/plain') || dragJobId; if (id) moveJob(id, stage); setDragJobId(null); }}
+                className="flex w-64 shrink-0 flex-col rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900/50"
+              >
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide capitalize text-zinc-500">{stage}</span>
+                  <span className="text-xs text-zinc-400">{columnJobs.length}</span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {columnJobs.map((job) => (
+                    <div
+                      key={job.id}
+                      draggable
+                      onDragStart={(event) => { event.dataTransfer.setData('text/plain', job.id); event.dataTransfer.effectAllowed = 'move'; setDragJobId(job.id); }}
+                      onDragEnd={() => setDragJobId(null)}
+                      onClick={() => router.push(`/jobs/${job.id}`)}
+                      className={`cursor-grab rounded-lg border border-zinc-200 bg-white p-3 shadow-sm active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-800 ${dragJobId === job.id ? 'opacity-50' : ''}`}
+                    >
+                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{job.company}</p>
+                      <p className="truncate text-xs text-zinc-500">{job.roleTitle}</p>
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {job.isStalled && (
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400">⏳ {job.daysInStage}d</span>
+                        )}
+                        {job.deadline && (
+                          <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300">{new Date(job.deadline).toLocaleDateString()}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {columnJobs.length === 0 && <p className="px-1 py-3 text-center text-[11px] text-zinc-300 dark:text-zinc-600">Drop here</p>}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

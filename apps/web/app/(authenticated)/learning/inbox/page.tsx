@@ -56,7 +56,10 @@ export default function LearningInboxPage() {
         <div>
           <button onClick={() => router.push('/learning')} className="mb-3 text-sm font-medium text-indigo-600">Back to ledger</button>
           <h1 className="text-2xl font-bold text-zinc-800">Reading Inbox</h1>
-          <p className="mt-1 text-sm text-zinc-500">Map synced highlights into career evidence.</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            Tag a highlight, then <span className="font-medium text-zinc-700">Remember</span> it to drop it into
+            your spaced-repetition queue — it will resurface on Today until it sticks. Ignore just files it.
+          </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           <select value={roleTrackId} onChange={(event) => setRoleTrackId(event.target.value)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm">
@@ -86,9 +89,10 @@ export default function LearningInboxPage() {
                   <button
                     onClick={() => review(item.id, 'useful')}
                     disabled={workingId === item.id}
+                    title="File as evidence and add to your spaced-repetition review queue"
                     className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
                   >
-                    Review
+                    Remember
                   </button>
                   <button
                     onClick={() => review(item.id, 'ignored')}

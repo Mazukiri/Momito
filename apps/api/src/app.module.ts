@@ -14,9 +14,13 @@ import { ProfileModule } from './profile/profile.module';
 import { ProfileScoresModule } from './profile-scores/profile-scores.module';
 import { CareerModule } from './career/career.module';
 import { JobsModule } from './jobs/jobs.module';
+import { InterviewRoundsModule } from './interview-rounds/interview-rounds.module';
+import { ContactsModule } from './contacts/contacts.module';
+import { FollowUpModule } from './follow-up/follow-up.module';
+import { OffersModule } from './offers/offers.module';
+import { ResumesModule } from './resumes/resumes.module';
 import { TasksModule } from './tasks/tasks.module';
 import { LearningModule } from './learning/learning.module';
-import { MissionsModule } from './missions/missions.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { WeaknessesModule } from './weaknesses/weaknesses.module';
 import { HealthModule } from './health/health.module';
@@ -53,9 +57,13 @@ import { RequestLoggingMiddleware } from './common/request-logging.middleware';
     ProfileScoresModule,
     CareerModule,
     JobsModule,
+    InterviewRoundsModule,
+    ContactsModule,
+    FollowUpModule,
+    OffersModule,
+    ResumesModule,
     TasksModule,
     LearningModule,
-    MissionsModule,
     RecommendationsModule,
     WeaknessesModule,
     AiModule,

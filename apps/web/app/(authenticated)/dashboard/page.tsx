@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { dashboardApi } from '../../lib/api-client';
 import type { DashboardSummaryResponse, TopicProgress, WeakTopic } from '@momito/shared';
@@ -83,37 +82,6 @@ export default function DashboardPage() {
           </p>
         </Card>
       </div>
-
-      {summary.focusMission && (
-        <Card className="mt-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Focus Mission</p>
-              <h2 className="mt-2 text-xl font-semibold text-zinc-800 dark:text-zinc-100">{summary.focusMission.name}</h2>
-              <p className="mt-2 text-sm text-zinc-500">{summary.focusMission.diagnosisSummary || summary.focusMission.summary || 'No diagnosis yet.'}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Badge label={summary.focusMission.stage} />
-                <Badge label={summary.focusMission.roleTrack.label} />
-                <Badge label={`${summary.focusMission.weeklyHours}h/week`} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Link href={`/missions/${summary.focusMission.id}`} className="block text-sm font-medium text-indigo-600">Open mission</Link>
-              {summary.focusMission.jobApplicationId && <Link href={`/jobs/${summary.focusMission.jobApplicationId}`} className="block text-sm font-medium text-indigo-600">Open job</Link>}
-            </div>
-          </div>
-          {summary.todayPlanItems?.length ? (
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {summary.todayPlanItems.slice(0, 4).map((item) => (
-                <div key={item.id} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{item.title}</p>
-                  <p className="mt-1 text-xs text-zinc-500">{item.type} • {item.estimatedMinutes} min</p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </Card>
-      )}
 
       {Boolean(summary.roleReadiness?.length || summary.recommendations?.length || summary.dueTasks?.length) && (
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">

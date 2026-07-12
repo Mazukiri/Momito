@@ -42,4 +42,22 @@ export class CareerController {
   activeReadiness(@CurrentUser() user: AuthenticatedUser) {
     return this.career.listActiveReadiness(user.id);
   }
+
+  // MOM-125: "who should I apply to next?" — the ranked targeting shortlist.
+  @Get('target-shortlist')
+  targetShortlist(@CurrentUser() user: AuthenticatedUser) {
+    return this.career.getTargetShortlist(user.id);
+  }
+
+  // MOM-130: "am I ready for <company>?" for a specific application.
+  @Get('jobs/:jobId/readiness')
+  jobReadiness(@Param('jobId', ParseUUIDPipe) jobId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.career.getJobReadiness(jobId, user.id);
+  }
+
+  // MOM-131: this target's behavioral story gap map.
+  @Get('jobs/:jobId/story-gaps')
+  jobStoryGaps(@Param('jobId', ParseUUIDPipe) jobId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.career.getJobStoryGaps(jobId, user.id);
+  }
 }

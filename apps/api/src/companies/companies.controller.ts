@@ -7,6 +7,7 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 export class CompaniesController {
   constructor(private readonly companies: CompaniesService) {}
   @Get() list() { return this.companies.list(); }
+  @Get(':id') get(@Param('id', ParseUUIDPipe) id: string) { return this.companies.get(id); }
   @Post() create(@Body() dto: CreateCompanyDto) { return this.companies.create(dto); }
   @Patch(':id') update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCompanyDto) { return this.companies.update(id, dto); }
   @Delete(':id') @HttpCode(204) remove(@Param('id', ParseUUIDPipe) id: string) { return this.companies.remove(id); }

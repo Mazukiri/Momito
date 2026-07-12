@@ -152,3 +152,182 @@ untouched everywhere else; this mapping only applies inside the FSRS scheduler.
 **Consequences:** No schema change, no change to any existing selfRating consumer. If a
 future need arises to distinguish 3 from 4 for FSRS specifically, revisit here first
 rather than guessing again at the call site.
+
+---
+
+## CareerOS decisions (2026-07-08) — see docs/plans/MOMITO_CAREEROS_PLAN.md
+
+### D-011 — CareerOS pipeline is a stage machine with transition history
+**Context:** `JobApplication.status` is a flat string with no timestamps or history, so no funnel,
+time-in-stage, or conversion analytics are possible (the core absent CareerOS value).
+**Decision:** Record every status transition (from→to, when) — first as auto-created `JobEvent`s
+(MOM-102, no schema), then as per-stage timestamps / a `StatusTransition` table (SPIKE-009 / MOM-103-104).
+The 8-value `JOB_APPLICATION_STATUSES` const stays the source of truth for allowed stages.
+**Consequences:** Enables funnel, stall detection, rejection-reason analysis. **ADR-0009.**
+
+### D-012 — Company is a first-class catalog referenced by FK
+**Context:** `JobApplication.company` is free text disconnected from the curated `Company` catalog, and
+`Company` is `name/region/notes` only — no interview process, focus weights, comp, or sponsorship data.
+**Decision:** Add structured `Company` columns + a nullable `JobApplication.companyId` FK with a
+free-text fallback and name-match backfill (SPIKE-012 / MOM-120-122). Company context (questions,
+focus areas, sponsorship) then flows into the pipeline and target-scoped readiness.
+**Consequences:** Highest-risk migration (busiest table + seed). Free-text column retained as fallback.
+**ADR-0010.**
+
+### D-013 — One FSRS-grounded, target-scoped readiness engine (supersedes the dual engines)
+**Context:** Readiness is substring keyword-matching computed by TWO divergent engines
+(`career.service` binary-weighted vs `missions.service` leveled), so the "am I ready" number is
+untrustworthy and can contradict itself. `WeaknessSignal` (V2 §5.4) and `weakness_repair`/
+`mixed_interview` sessions (§7.1) were specced but never built.
+**Decision:** Build `WeaknessSignal` + target tags on attempts/reviews (MOM-126-128); ground readiness
+in FSRS retrievability + graded attempts and **collapse the two engines into one shared helper**
+(MOM-129); add a company-scoped rollup (MOM-130). Cross-links ADR-0003 (learning/mission coexistence).
+**Consequences:** Missions readiness becomes a view over the single engine, not a parallel computation.
+**ADR-0011.**
+
+### D-014 — Résumé is a versioned artifact decoupled from the unique Profile
+**Context:** `Profile.userId` is `@unique`; re-upload overwrites, so there is no per-target résumé, no
+record of which résumé was sent per application, no export, no tailoring.
+**Decision:** Add `ResumeVersion` (many per user/target, linkable to a `JobApplication`), deterministic
+ATS coverage + Markdown/PDF export, and AI tailoring/bullet-rewrite/cover-letter built dormant-until-key
+reusing `grading.service` (SPIKE-014 / MOM-132-139). AI stays VERIFICATION-BLOCKED until a real key.
+**Consequences:** The base `Profile` remains the master; versions derive from it. **ADR-0012.**
+
+### D-015 — Missions frozen; pipeline-driven loop is primary
+**Context:** The weekly-plan/competency/check-in mission engine (~774 lines) is heavy ceremony a solo
+job-seeker will not maintain, and it duplicates readiness computation.
+**Decision:** Freeze the mission engine — no new investment in weekly-plan ceremony. The new
+pipeline-driven career loop (target → prep → outcome → learn) is primary and self-running; readiness
+consolidates into the single engine (D-013). Missions keep working and remain optional/legacy. Synthesis
+tasks MOM-143 (mission auto-diagnose) and MOM-144 (mission-plan visa weighting) are dropped; their intent
+lives in the pipeline loop (MOM-141/142) and targeting score (MOM-125).
+**Consequences:** No mission schema/behavior changes; the recommendations service + weakness engine
+carry the outcome→prep reshaping that mission re-diagnosis would have.
+
+### D-016 — Interview is a first-class `InterviewRound`; prep/practice attach by back-reference
+**Context:** An interview could only be recorded as a free-form `JobEvent` note — no round type, date,
+outcome, or debrief — so interview outcomes fed nothing (the open half of the loop). ADR-0013 / SPIKE-010.
+**Decision:** Model `InterviewRound` as a child of `JobApplication` (roundType, scheduledAt, interviewer,
+outcome, debrief, areasWeak, missTags). It **owns no prep/practice rows** — a round's prep is an ordinary
+`Task` and a round's mock is an ordinary `InterviewSession`, each attributed to the round by a single
+nullable `interviewRoundId` back-reference FK added when needed (MOM-111/141), never a copy. This avoids
+the PlanItem/Task dual-write anti-pattern (cross-links D-015). `InterviewRound` coexists with `JobEvent`
+(no backfill); round outcome and pipeline `status` stay independent (no coupled state machines). A
+failed/mixed debrief emits `WeaknessSignal`/`LearningEvidence` (D-013), closing the loop.
+**Consequences:** Additive migration (D-004). Enables interview-date reminders (MOM-112), countdown
+(MOM-140-full), auto-prep (MOM-141), and the outcome→weakness edge (MOM-113).
+
+### D-017 — Structured `Company` columns as Json + name-match backfill for the job↔company FK
+**Context:** `JobApplication.company` is free text disconnected from the 20-company catalog; `Company`'s
+focus/track info is prose in `notes`; no structured sponsorship/comp. ADR-0010 / SPIKE-012. The FK
+migration is the plan's single highest-risk change (busiest table + seed).
+**Decision:** Store the new structured company fields as **Json** (`focusAreas` map `{area: 1–5}`,
+`roleTrackIds`, `interviewProcess`) plus scalar `sponsorshipStatus` (a `VISA_TAGS` value, null = no data)
+and free-text `compBand` — matching the Question tag convention, since the taxonomy is TS-owned and the
+query is always per-row (MOM-121). Add a **nullable `companyId` FK** with the free-text `company` column
+**kept** and `onDelete: SetNull` (MOM-122); backfill by **exact case-insensitive name match** against
+catalog names that are unique (`HAVING count(*)=1`) — no fuzzy matching, non-matches stay null and are
+user-linkable. SPIKE-012 measured 86% backfill on live data (only out-of-catalog names miss). Split into
+two independently-revertible additive migrations (columns, then FK).
+**Consequences:** Zero data loss (free text never touched; backfill fills only NULLs). Enables
+company-weighted readiness (MOM-130/131), sponsorship filter (MOM-124), targeting shortlist (MOM-125),
+company detail (MOM-123). DTO validates `focusAreas` keys against `CAREER_ROLE_AREA_IDS`. Trade-off:
+denormalized `company` text can drift after a rename — display prefers `companyRef.name` when linked.
+
+### D-018 — First-class `Contact` model with create-only `referralName` backfill
+**Context:** networking is invisible in the pipeline — a job's only contact signal is the free-text
+`JobApplication.referralName`. ADR-0014 / SPIKE-011. Referrers/recruiters need to be reusable records,
+attachable to jobs, and later listable as a network (MOM-119).
+**Decision:** New `Contact` model (`name`, `email?`, `linkedinUrl?`, `company?`, `relationship` ∈
+`CONTACT_RELATIONSHIPS`, `notes?`) with a **nullable `jobApplicationId` FK, `onDelete: SetNull`** so a
+contact survives its job's deletion and can be standalone. Keep `JobApplication.referralName` (D-004
+fallback, never dropped). **Backfill is create-only** (SPIKE-011 resolved): each job's non-empty
+`referralName` becomes a `Contact {relationship:'referrer', jobApplicationId}` — `DISTINCT ON (userId,
+lower(name))` collapses a repeated referral to one contact (earliest job wins), `NOT EXISTS` makes a
+re-run a no-op. No unique DB constraint on `(userId, name)` (users may legitimately have namesakes) — the
+idempotency lives in the migration SQL. CRUD mirrors `interview-rounds`, exposing both `/contacts` and
+`/jobs/:jobId/contacts`.
+**Consequences:** Zero data loss (referralName untouched; backfill only inserts). Enables the job-detail
+contacts card (MOM-117), follow-up cadence (MOM-118), and the referral-network view (MOM-119). Rollback =
+drop the table + FK (referralName still displays). Trade-off: referralName and its backfilled Contact can
+diverge after edits — the Contact is the source of truth going forward; referralName is legacy display.
+
+### D-019 — Minimal `Offer` model; normalized-total-at-read, single-currency v1
+**Context:** the pipeline reaches `offer` but can't record or compare what an offer *is*. ADR-0015 /
+SPIKE-015 flagged over-modeling (multi-currency FX, vesting schedules, tax) as the risk.
+**Decision:** New `Offer` model, **one per application** (`jobApplicationId @unique`, Cascade). Comp as
+`Decimal?` (`baseSalary`, `bonus`, `equityTotal`) + `equityYears Int @default(4)`, plus `currency`,
+`location?`, `visaSponsored Boolean?`, `deadline?`, `notes?`, `status` ∈ OFFER_STATUSES. **Normalized annual
+total = base + bonus + equityTotal/equityYears computed at read time** (null when no comp set). **No FX in v1**
+— the comparison shows each offer in its own currency and warns when they differ (the explicit SPIKE-015 scope
+cut). API: `GET /offers` (comparison) + per-job `GET/PUT/DELETE /jobs/:jobId/offer` (PUT upserts on the unique
+FK so the UI never handles an offer id). `compensationNotes` kept (D-004).
+**Consequences:** Enables offer comparison (MOM-115) + the job-page offer card (MOM-114). Rollback = drop the
+table. Accepted v1 trade-offs: no FX, flat equity amortization (no cliffs), no tax/COL adjustment. The one
+emigration-specific column is `visaSponsored` — it can override a higher headline number.
+
+### D-020 — `ResumeVersion` as Markdown artifacts derived from the master Profile
+**Context:** `Profile.userId` is `@unique` and re-upload overwrites — no way to keep tailored résumés, record
+which was sent per application, or export. ADR-0012 / SPIKE-014. The owner will add an AI key later.
+**Decision:** New `ResumeVersion` (many per user) decoupled from the master `Profile` (which stays the single
+source, D-014). Canonical content is **`contentMd` (Markdown)**, not per-section JSON — editable, diffable,
+exportable, AI-tailorable without a bespoke schema. On create without explicit `contentMd`, the server derives
+it from the Profile via a `profileToMarkdown` serializer and snapshots the source in `baseProfileSnapshot`.
+`jobApplicationId` FK is **SetNull** (records which version was sent; survives job deletion). `aiSuggestions
+Json` reserved for the dormant-until-key AI (MOM-137). CRUD at `/resumes`.
+**Consequences:** Enables the résumé versions page (MOM-133), ATS-vs-version coverage (MOM-134-full), export
+(MOM-139), AI tailoring (MOM-136–138), and which-résumé-converts analytics (MOM-145). Rollback = drop the
+table. Trade-off: a version's `contentMd` is a point-in-time derivation — later Profile edits don't propagate
+(intentional; the version is a tailored artifact, not a live view).
+
+### D-021 — Missions retired; the pipeline loop is the sole primary loop (supersedes D-015)
+**Context:** D-015 froze the mission engine but kept it "working and optional/legacy." A release later the
+pipeline-driven CareerOS loop is fully built and proven (Gate 1 met), and Missions still ships two web pages,
+a nav entry, a 775-line service, and — worst — its cards outrank *everything* on Today (priority 110, above
+interview countdowns). Frozen-but-shipping is a tax: dead tests, dual recommendation backends
+(RecommendationsService.list vs DashboardService.summary re-embedding it), and a confusing second "what to do
+next" surface. Owner decision (2026-07-12): retire it.
+**Decision:** Remove the Missions *surface* — the two web pages, the nav entry, the API module + controller +
+DTOs, the `missionsApi` client, the shared `Mission*` types, and both external couplings (recommendations'
+priority-110 cards + overdue-task deep-link; dashboard's focusMission/activeMissions/todayPlanItems). Keep the
+**database untouched**: all five tables (Mission, MissionCompetencyState, WeeklyPlan, PlanItem, MissionCheckIn)
+and every `missionId` FK column (on Task, InterviewSession, LearningEvidence) stay — this is additive-discipline
+in reverse (D-004): no data is destroyed and the feature is fully restorable from git if the decision is undone.
+`CreateSessionDto.missionId` stays accepted (harmless; sessions once created from a mission remain valid history).
+**Consequences:** Today has one authoritative queue. ~1000 lines of code + tests deleted. No migration. The
+mission tables become inert (no reader/writer) but preserved. Restoring = `git revert` the retirement PRs.
+
+### D-022 — Funnel conversion is ever-reached history, not a current-status snapshot
+**Context:** `jobs.service.funnel()` computed `reached[k]` from *currently-active* apps at stage ≥ k, so a
+rejected or withdrawn app vanished from every denominator. Conversion and responseRate were therefore inflated —
+a pipeline where 9 of 10 interviews are rejected showed the same interview→offer rate as one where all advanced,
+because the 9 losses were erased. That is exactly backwards for the decision the metric exists to inform ("where
+do my applications die?"). MOM-103/104 gave us structured `fromStatus/toStatus` transition history, making the
+true "ever reached" computable.
+**Decision:** `reached[k]` = count of apps whose **deepest-ever** funnel stage (max over current status ∪ all
+transition from/to statuses; pre-MOM-102 terminal apps fall back to `applied` if they have an appliedDate, else
+`saved`) is ≥ k. `conversionFromPrev`, `responseRate`, and the per-source/visa/résumé `offers`/`interviewing`
+breakdown counts all derive from ever-reached depth. `atStage` stays a **current-status snapshot** ("who is
+sitting here now"), and `active` is now computed independently (not-terminal count) since `reached[0]` now equals
+`total`. `JobFunnelResponse` shape is unchanged — the web renders it as-is.
+**Consequences:** Honest conversion numbers. A rejected app that reached an onsite now counts toward onsite and
+credits the résumé/source that got it there. No schema change, no web change. MOM-160.
+
+### D-023 — Demonstrated performance closes weakness signals (repair evidence)
+**Context:** The repair loop was half-closed. A bombed interview emits a `WeaknessSignal` → Today shows a "Repair:"
+card → the user runs the `weakness_repair`/`job_prep` session it drives → and *nothing happened to the signal*.
+`sessions.service` never touched signals; the `repairing` status in `WEAKNESS_SIGNAL_STATUSES` was set by no code;
+the only way a weakness left the board was the 21-day severity half-life (D-013/MOM-127) or a manual resolve/dismiss
+endpoint that had zero UI callers. So a user could repair a weakness perfectly and the app would keep nagging.
+**Decision:** Completing a `weakness_repair` or `job_prep` session credits its **positive attempts** (the one
+canonical `isPositiveAttempt` rule, D-013) against the OPEN **area-type** signals for those areas: one positive marks
+a signal `repairing`; two positives in one session — or one more on an already-`repairing` signal (evidence carried
+across sessions) — mark it `resolved`. `reason`-type signals (time_pressure, communication, …) are **untouched** —
+an attempt can't measure them, so they stay manual-resolve-only. Abandoned sessions credit nothing. The positive
+verdict is computed in `sessions.service` (which owns the attempt rows) and handed as plain `{area, positive}` data to
+`WeaknessesService.creditRepairEvidence`, which owns the status transitions — keeping the weakness engine
+persistence-only. Crediting never breaks session completion (try/warn, like the FSRS-schedule hook). Per ADR-0011 the
+derived struggle path is unchanged: practice still does not *create* stored signals; this only *closes* them.
+**Consequences:** The loop closes — repair a weakness and it visibly clears from Today and from the job-readiness
+penalty. Time-decay stays the fallback for anything never demonstrably repaired. No schema change (all four statuses
+already existed). MOM-166; the dead resolve/dismiss endpoints get their UI in MOM-167.

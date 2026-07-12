@@ -9,10 +9,10 @@ import { Card, Badge, ErrorBanner, ListSkeleton } from '../../components/ui';
 import { TodayReviewCard } from '../../components/TodayReviewCard';
 
 // MOM-032/033 (Today integration): a single priority-ranked queue (plan §6.1)
-// merging due FSRS reviews (MOM-027/029/030/031), real recommendations (active
-// missions, overdue tasks, career readiness gaps, job deadlines, reading inbox
-// — the same standardized-reason RecommendationsService the dashboard uses),
-// and reminders (MOM-080). Each source keeps its own specialized card UI
+// merging due FSRS reviews (MOM-027/029/030/031), real recommendations (interview
+// countdowns, weakness repair, overdue tasks, career readiness gaps, job deadlines,
+// résumé drift, reading inbox — the same standardized-reason RecommendationsService
+// the dashboard uses), and reminders (MOM-080). Each source keeps its own card UI
 // (inline re-rating for reviews, dismiss for reminders, navigate for
 // recommendations) but they're interleaved by one computed priority instead
 // of stacked in separate sections.
@@ -118,7 +118,7 @@ export default function TodayPage() {
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Today</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Your single priority queue: due reviews, missions, tasks, readiness gaps, career
+            Your single priority queue: due reviews, interview prep, tasks, readiness gaps, career
             deadlines, and reminders, ranked by urgency.
           </p>
         </div>

@@ -163,6 +163,33 @@ describe('ActiveSessionPage — answer → reveal → rate lifecycle (plan §7.2
     expect(await screen.findByText(/next review scheduled/)).toBeInTheDocument();
   });
 
+  // MOM-168: the AI grade becomes schedulable input — tapping its suggested rating drives the
+  // exact same PATCH /attempts/:id path as a manual rating (missTags/reflection included).
+  it('lets the AI grade drive the FSRS rating with one tap', async () => {
+    vi.spyOn(aiApi, 'usage').mockResolvedValue({ available: true } as never);
+    vi.spyOn(aiApi, 'grade').mockResolvedValue({
+      attemptId: 'attempt-1', aiScore: 0.6, aiFeedback: 'Solid but under-explained.', suggestedRating: 'good', cached: false,
+    } as never);
+    vi.spyOn(sessionsApi, 'get').mockResolvedValue(buildSession());
+    vi.spyOn(sessionsApi, 'answer').mockResolvedValue(buildAttempt() as never);
+    const updateSpy = vi.spyOn(attemptsApi, 'update').mockResolvedValue({ ...buildAttempt(), selfRating: 3 } as never);
+
+    render(<ActiveSessionPage />);
+
+    fireEvent.change(await screen.findByLabelText('Your Answer'), {
+      target: { value: 'I organized a cross-team migration without direct authority.' },
+    });
+    fireEvent.click(screen.getByText('Submit & reveal answer'));
+
+    // In the reveal, grade with AI, then accept its suggested rating.
+    fireEvent.click(await screen.findByText('Grade with AI'));
+    const suggestBtn = await screen.findByRole('button', { name: /the AI.s suggestion/i });
+    fireEvent.click(suggestBtn);
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+    expect(updateSpy.mock.calls[0][1]).toMatchObject({ selfRating: 3 }); // 'good' → 3
+  });
+
   it('resumes an answered question in the reveal phase instead of asking for a new answer', async () => {
     mockAiUnavailable();
     const session = buildSession();

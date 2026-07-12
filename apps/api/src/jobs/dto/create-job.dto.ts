@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsString, IsUrl, Max, MaxLength, Min, Matches } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUrl, IsUUID, MaxLength, Matches } from 'class-validator';
 import {
   CAREER_ROLE_TRACK_IDS,
   CareerRoleTrackId,
@@ -6,6 +6,8 @@ import {
   JOB_APPLICATION_STATUSES,
   JobApplicationSource,
   JobApplicationStatus,
+  REJECTION_REASONS,
+  RejectionReason,
   VISA_TAGS,
   VisaTag,
 } from '@momito/shared';
@@ -14,6 +16,11 @@ export class CreateJobDto {
   @IsString()
   @MaxLength(200)
   company!: string;
+
+  // MOM-122: optional link to the catalog. Free-text company stays required.
+  @IsOptional()
+  @IsUUID()
+  companyId?: string | null;
 
   @IsString()
   @MaxLength(200)
@@ -58,28 +65,20 @@ export class CreateJobDto {
   @IsIn(JOB_APPLICATION_SOURCES)
   source?: JobApplicationSource | null;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  referralName?: string | null;
+  // MOM-164 (D-021 spirit): referralName (→ Contacts), h1bCountLastYear, and compensationNotes
+  // were write-only — no UI ever set or read them. Removed from the DTO; the DB columns stay.
 
   @IsOptional()
   @IsIn(VISA_TAGS)
   visaTag?: VisaTag | null;
 
   @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(1_000_000)
-  h1bCountLastYear?: number | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(2000)
-  compensationNotes?: string | null;
-
-  @IsOptional()
   @IsString()
   @MaxLength(4000)
   notes?: string | null;
+
+  // MOM-106: the service enforces this is only accepted when status === 'rejected'.
+  @IsOptional()
+  @IsIn(REJECTION_REASONS)
+  rejectionReason?: RejectionReason | null;
 }

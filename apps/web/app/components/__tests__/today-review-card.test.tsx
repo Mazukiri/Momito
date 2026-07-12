@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TodayReviewCard } from '../TodayReviewCard';
-import { attemptsApi, questionsApi, reviewsApi } from '../../lib/api-client';
+import { attemptsApi, learningApi, questionsApi, reviewsApi } from '../../lib/api-client';
 import type { ReviewStateResponse } from '@momito/shared';
 
 const review: ReviewStateResponse = {
@@ -85,5 +85,42 @@ describe('TodayReviewCard — recall → reveal → grade (plan §12.1)', () => 
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
     expect(recordSpy).toHaveBeenCalledWith('question', 'q-1', 1);
     expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  // MOM-146: a due Readwise highlight rehearses the read→retain loop — the source
+  // is the recall cue, the highlight text is withheld until reveal, then graded.
+  it('cues by source, withholds the highlight text until reveal, then grades', async () => {
+    const highlightReview: ReviewStateResponse = {
+      ...review,
+      id: 'rs-h',
+      objectType: 'highlight',
+      objectId: 'hl-1',
+      title: 'Atomic Habits',
+    };
+    const getSpy = vi.spyOn(learningApi, 'getHighlight').mockResolvedValue({
+      id: 'hl-1',
+      text: 'You fall to the level of your systems.',
+      note: 'Cadence over motivation.',
+      source: { title: 'Atomic Habits' },
+    } as never);
+    const recordSpy = vi.spyOn(reviewsApi, 'record').mockResolvedValue({} as never);
+    const onDone = vi.fn();
+    render(<TodayReviewCard review={highlightReview} onDone={onDone} onError={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('Review now'));
+
+    // Recall phase: cue is shown, the highlighted text is not.
+    expect(await screen.findByText(/Recall the idea and why it mattered/)).toBeInTheDocument();
+    expect(screen.queryByText(/level of your systems/)).not.toBeInTheDocument();
+    expect(getSpy).toHaveBeenCalledWith('hl-1');
+
+    fireEvent.click(screen.getByText('Reveal highlight'));
+
+    expect(await screen.findByText(/level of your systems/)).toBeInTheDocument();
+    expect(screen.getByText(/Cadence over motivation/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Good'));
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    expect(recordSpy).toHaveBeenCalledWith('highlight', 'hl-1', 3);
   });
 });

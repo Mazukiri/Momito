@@ -60,6 +60,25 @@ export default function ProfileScoreDetailPage() {
   const [score, setScore] = useState<ProfileScoreResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [taskMsg, setTaskMsg] = useState('');
+
+  async function generateTasks() {
+    setGenerating(true);
+    setTaskMsg('');
+    try {
+      const { created } = await profileScoresApi.generateTasks(id);
+      setTaskMsg(
+        created > 0
+          ? `Added ${created} gap task${created === 1 ? '' : 's'} to your study plan.`
+          : 'No new tasks — these gaps are already tracked.',
+      );
+    } catch (err: unknown) {
+      setTaskMsg(err instanceof Error ? err.message : 'Could not create tasks');
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   const fetchScore = useCallback(async () => {
     setLoading(true);
@@ -129,17 +148,29 @@ export default function ProfileScoreDetailPage() {
         Back to scores
       </button>
 
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{score.targetLabel}</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Created {new Date(score.createdAt).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </p>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{score.targetLabel}</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Created {new Date(score.createdAt).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <button
+            onClick={generateTasks}
+            disabled={generating}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {generating ? 'Adding…' : 'Turn gaps into tasks'}
+          </button>
+          {taskMsg && <p className="mt-2 text-xs text-zinc-500">{taskMsg}</p>}
+        </div>
       </div>
 
       {score.suggestions.length > 0 && (

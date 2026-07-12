@@ -1,5 +1,1691 @@
 # LOG
 
+## 2026-07-12 - MOM-170: ATS matching understands lowercase + multi-word skills (Momito 1.1 PR 5) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 5 of Momito 1.1.
+
+`extractJdSkills` captured only `[A-Z]`-initial tokens, so a JD written in lowercase ("kubernetes", "golang") and
+every multi-word skill ("dynamic programming", "threat modeling") were **invisible** to ATS coverage and to the
+gap→task bridge — while `CAREER_ROLE_TRACKS` already carried a curated 143-phrase keyword lexicon that was never used
+for this. `extractJdSkills` now unions the capitalized-token pass with a **case-insensitive, word-boundary phrase
+scan** against that lexicon plus the user's own profile skill labels (threaded through — the résumé path now loads the
+profile too, for the lexicon, though its coverage have-set is still the résumé). Matching a covered keyword: single
+tokens keep exact set membership (so "go" doesn't fire inside "google"); multi-word phrases substring-match the
+artifact's full lowercased text (a token set can't hold "dynamic programming"). The MOM-159 trailing-dot strip and the
+`uniqueByNormalized` dedupe are preserved.
+
+**Verified.** 343 API tests (+3 counterfactual: lowercase "kubernetes" + multi-word "dynamic programming" now matched;
+a missing "threat modeling" flagged with a sane task title; a JD phrase reached only via the user's own "rust" skill
+extracted — plus the existing MOM-159 tests stay green after updating the resume-path fixtures, since atsCoverage now
+also reads the profile). Lint + typecheck clean. Live: an **all-lowercase** JD ("we use typescript and react with
+dynamic programming and binary search") extracted 3 keywords — `typescript` covered from the profile, the two
+multi-word phrases correctly missing — where the old capitalized-only pass would have extracted **zero**.
+
+## 2026-07-12 - MOM-169: readiness computed once per request (Momito 1.1 PR 4) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 4 of Momito 1.1 — a pure performance refactor,
+zero behavior change.
+
+`career.getReadiness` ran `readiness.areaMastery(userId)` — a full ReviewState scan + full attempt scan + question
+join — and `listActiveReadiness` called it once *per active goal*, `getTargetShortlist` once *per distinct track*.
+Since `areaMastery` is user-scoped, not track-scoped, that was the identical heavy sweep repeated N times. `getReadiness`
+now takes an optional `sharedMastery`; `listActiveReadiness` computes the sweep once and passes it to every goal, and
+`getTargetShortlist` computes it once and passes it to every track. The dashboard benefits automatically (it calls
+`listActiveReadiness` directly and again via `recommendations.list` — each is now a single sweep instead of one per
+goal; the two remaining sweeps aren't deduped because that would couple dashboard to recommendations' internals,
+deliberately not done). `loadEvidenceContext`'s per-track queries are left as-is — the mastery sweep is by far the
+heaviest and the 80/20.
+
+**Verified.** 340 API tests (+1: `areaMastery` mock called exactly once for a 3-goal `listActiveReadiness`, was 3×).
+Lint + typecheck clean. Live before/after against the demo (2 active goals → 2 sweeps before, 1 after): the
+`roleReadiness` payload is **byte-identical** — the change is invisible except in query count.
+
+## 2026-07-12 - MOM-168: the AI grade feeds FSRS (one-tap suggested rating) (Momito 1.1 PR 3) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 3 of Momito 1.1.
+
+`GradeResult.suggestedRating` ('again'|'hard'|'good'|'easy') was computed on every AI grade but only embedded as
+Markdown text in `aiFeedback` — the FSRS rating stayed purely manual, and the grade never became schedulable input.
+`gradeAttempt` now returns `suggestedRating` as a structured field (`null` on the cached path — it can't be recovered
+from the persisted Markdown, stated honestly). `AiFeedbackCard` renders a one-tap "Rate '<Good>' — the AI's
+suggestion" button (only on a fresh grade, only when the user hasn't already rated) that routes through
+`RevealPanel.rate()`, so the missTags/reflection/FSRS-schedule flow is identical to a manual tap. The suggestion→star
+map is the exact **inverse** of `fsrs-scheduler`'s `SELF_RATING_TO_GRADE` — again→1, hard→2, good→**3** (the
+representative middle, not 4), easy→5 — so a tap-through and a manual "Good" schedule identically. No schema change
+(no column added).
+
+**Verified.** 339 API tests (+1: fresh returns the rating, cached returns null), 35 web tests (+1: tapping the
+suggestion drives `PATCH /attempts/:id` with selfRating 3 for 'good'). Lint + typecheck clean. Live: a fresh grade
+returned `suggestedRating:'again'` (aiScore 0.46), the immediate re-grade (cached) returned `suggestedRating:null`.
+Throwaway attempt removed.
+
+## 2026-07-12 - MOM-167: wire the dead resolve/dismiss endpoints + surface repairing (Momito 1.1 PR 2) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 2 of Momito 1.1.
+
+The `POST /weaknesses/signals/:id/{resolve,dismiss}` endpoints and their `weaknessesApi` client methods existed but
+had **zero UI callers** — dead code. `JobReadinessCard`'s flagged-signal chips are now interactive: each carries ✓
+("mark repaired" → resolve) and ✕ ("not a real weakness" → dismiss), optimistically removed then reloaded so the
+score/penalty update. A `repairing` signal (partial repair evidence from MOM-166) renders amber with a "repairing"
+tag instead of rose, so in-progress repairs read differently from untouched ones. On Today, the repair recommendation
+now titles `Repairing:` (with a "one more strong rep clears it" nudge) when the signal is repairing — progress, not
+just a nag. **Judgment call:** the Today card is a full-width navigation `<button>`, so a nested dismiss button would
+be invalid HTML and require restructuring the generic card for every rec type; full resolve/dismiss control lives on
+the job card (where signals are naturally scoped), and Today shows repair *progress*. No API endpoint logic changed
+beyond the copy.
+
+**Verified.** 339 API tests (+1: repairing → "Repairing:" copy). Web lint + typecheck + 34 tests green. Live: a
+throwaway dsa signal resolved via the formerly-dead `POST …/resolve` endpoint returned `status:resolved` and dropped
+from the open list; throwaway removed, demo baseline (3 signals) intact. The JobReadinessCard buttons get an explicit
+test in PR 6.
+
+## 2026-07-12 - MOM-166: repair sessions actually repair (Momito 1.1 PR 1) (CLAUDE, no schema, D-023)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. First PR of the Momito 1.1 "close the half-closed
+loops" release.
+
+**The gap.** The repair loop was half-closed: a bombed interview emits a `WeaknessSignal`, Today shows a "Repair:"
+card, the user runs the `weak_area_review`/`job_prep` session it drives — and *nothing happened to the signal*. The
+`repairing` status was set by no code; the only exits were the 21-day half-life or the resolve/dismiss endpoints,
+which had zero UI callers. You could repair a weakness perfectly and the app kept nagging.
+
+**The fix.** Completing a `weak_area_review` or `job_prep` session now credits its **positive attempts** (the one
+canonical `isPositiveAttempt` rule — extracted to a pure exported function in `readiness.service.ts` so sessions
+reuses the exact D-013 definition without a service dependency) against the OPEN **area-type** signals for those
+areas: one positive → `repairing`; two in a session, or one more on an already-`repairing` signal (evidence across
+sessions) → `resolved`. `reason`-type signals stay manual-only (an attempt can't measure them). `sessions.service`
+computes the `{area, positive}` verdict and hands it to `WeaknessesService.creditRepairEvidence`, which owns the
+transitions (persistence-only). Crediting is gated to `status:'completed'` and wrapped in try/warn — an abandoned
+session credits nothing and a credit failure never breaks completion.
+
+**Live testing caught a real bug:** I first gated on `'weakness_repair'`, but the actual session-type enum value is
+**`weak_area_review`** — my gate would have never fired for repair sessions. Fixed and re-verified.
+
+**Verified.** 338 API tests (+10). Lint + typecheck clean. Live against local Postgres with the fixed build: bombed a
+Meta debrief (areasWeak dsa) → open dsa signal; completed a 1-positive `weak_area_review` session → dsa `repairing`;
+completed a second → `resolved` (gone from the open list). All test data (round, signal, 3 sessions, 4 attempts, 2
+review states, 1 evidence row) removed afterward; the demo's 3 baseline signals are intact.
+
+## 2026-07-12 - MOM-165: navigation restructure into sections (Momito 1.0 PR 6) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Final PR of Momito 1.0.
+
+The sidebar was a flat 17-entry list (16 after Missions left) that accreted rather than being designed. Added an
+optional `section` field to `NavItem` and grouped the 11 secondary items into **Pipeline** (Companies, Contacts,
+Offers), **Prep** (Questions, Story Bank, History, Study Plan), and **Insights** (Career, Dashboard, Calendar), with
+Settings as an un-sectioned tail. The 5 primary items (Today, Practice, Jobs, Learning, Profile) are unchanged and
+stay ungrouped at the top; `BottomTabs` reads `PRIMARY_NAV_ITEMS` only, so mobile is untouched, and the
+`PRIMARY_NAV_ITEMS.length > 5` guard stays. `Sidebar` now emits a small uppercase section header the first time each
+section appears (items sharing a section are contiguous in the list).
+
+**Verified:** web typecheck + lint + 34 tests green. (One résumé-page test flaked once under parallel load — it
+renders no Sidebar, so it is unrelated to this change; passes in isolation and on re-run. Flagged in NEXT.MD as a
+test-robustness follow-up.)
+
+## 2026-07-12 - MOM-164: strip vestigial write-only job fields (Momito 1.0 PR 5) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 5 of Momito 1.0.
+
+`JobApplication.referralName`, `h1bCountLastYear`, and `compensationNotes` were accepted, persisted, and serialized by
+the API but **no web UI ever set or read them** (confirmed by grep: the only web hit was a comment). referralName was
+superseded by the Contacts model (MOM-116); the other two never grew a UI. Removed all three from the create/update
+DTOs (and the now-unused `IsInt`/`Min`/`Max` imports), the create/update writes, the serializer, and the
+`JobApplicationResponse`/`CreateJobApplicationRequest` shared types. The **DB columns stay** (D-021 spirit — no data
+destroyed). The `forbidNonWhitelisted` validation pipe now cleanly 400s a request that includes a removed field,
+which no real client sends.
+
+**Verified:** shared builds; 328 API + 34 web tests green; lint + typecheck clean both apps. Live: a job response no
+longer carries the three fields; a create with `referralName` in the body → 400 "property referralName should not
+exist"; a normal create still works. Throwaway job removed; baseline restored.
+
+## 2026-07-12 - MOM-163: retire Missions — API half + shared types (Momito 1.0 PR 4) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 4 of Momito 1.0; completes D-021.
+
+**Removed:** the whole `apps/api/src/missions/` module (controller, 775-line service, module, 4 DTOs) + its spec;
+`MissionsModule` from `app.module.ts`; the `MissionsService` injection + priority-110 "Focus <mission>" cards +
+overdue-task `missionId` deep-link from `recommendations.service` (overdue tasks now link to `/calendar`
+unconditionally); the `MissionsService` injection + `focusMission`/`activeMissions`/`todayPlanItems` from
+`dashboard.service`; all `Mission*`/`WeeklyPlan*`/`PlanItem*`/`MissionCheckIn*` types + `MISSION_*`/`PLAN_ITEM_*`
+constants from `@momito/shared` (and the three mission fields on `DashboardSummaryResponse`). Also unwired the two
+consuming modules (`recommendations.module`, `dashboard.module`) and refreshed the Today page's descriptive copy.
+
+**Untouched (D-021):** the Prisma schema — all five mission tables and every `missionId` FK column (Task,
+InterviewSession, LearningEvidence) stay. `TaskResponse.missionId` and `CreateSessionDto.missionId` remain accepted.
+No data destroyed; the feature is restorable by reverting PRs 3+4.
+
+**Verified:** shared builds; 328 API tests (−1 file: the deleted missions spec) + 34 web tests green; lint +
+typecheck clean on both apps. Live against a rebuilt API: `GET /missions` → 404; `/practice/recommendations` → zero
+`mission:` cards (8 cards total), overdue tasks link to `/calendar`; `/dashboard/summary` → no
+focusMission/activeMissions/todayPlanItems, still carries recommendations + roleReadiness.
+
+## 2026-07-12 - MOM-162: retire Missions — web half (Momito 1.0 PR 3) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 3 of Momito 1.0; D-021. Web-first so no page
+can 404 against the API before PR 4 removes the routes (the API keeps serving `/missions` through this PR —
+harmless, since the web simply stops calling it).
+
+**Removed:** the two `missions/` pages, the `Mission` nav entry, the entire `missionsApi` client + its 7 shared-type
+imports, the "Open/Create Mission" button + `openMission`/`missionId` state on the job detail page, the "Focus
+Mission" card on the dashboard (and its now-orphaned `Link` import), and the `?missionId` filter handling on the
+calendar and learning pages (filter param, badge, create-task/create-evidence `missionId` writes) and the
+practice/new session-creation pass-through.
+
+**Kept deliberately (D-021):** `tasksApi.list`, `learningApi.ledger`, and session creation still accept a `missionId`
+param — the server columns stay, so this is harmless and lets any mission-linked history remain valid. The Today
+page's copy still lists "missions"; that line changes in PR 4 when the mission recommendation cards are actually
+removed from the backend.
+
+**Verified:** web lint + typecheck clean (cleared the stale `.next` type cache that still referenced the deleted
+pages), 34 web tests green. No API change, so the API suite is untouched.
+
+## 2026-07-12 - MOM-161: grading reaches résumé-AI hardening parity (Momito 1.0 PR 2) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 2 of the Momito 1.0 consolidation release.
+
+**The gap.** `grading.service.ts` was a near-clone of the résumé AI's model call but never got MOM-147/148's hardening:
+it still ran `MAX_TOKENS = 4096` (the exact value that truncated résumé output once adaptive thinking bills inside
+it), and had no completeness contract — so a cheap/gateway model could silently score 3 of 5 rubric criteria and the
+grade would be accepted whole, with no signal. Same coverage-not-quality trap the résumé work exposed.
+
+**The change.** `MAX_TOKENS` 4096 → 16000. Rubric criteria are now enumerated `0..n-1` in the prompt; the
+`GradeResultSchema` criteriaScores items carry an `index`; after the first parse, when a rubric was given, missing
+indexes trigger **one repair pass** for only the skipped criteria, merged (deduped, sorted) with both calls' tokens
+summed; a failed repair keeps the partial grade. No-rubric grading is exempt (nothing to enumerate → one call).
+`formatFeedback()` needed no change (renders `criterionTitle` in the now-guaranteed rubric order).
+
+**Verified.** 330 API tests (+4: max_tokens pin, criterion enumeration, repair-on-incomplete with summed tokens,
+keep-partial-on-repair-failure). Lint + typecheck clean. Live against the running API with the real key: created an
+attempt on a 4-criterion question, graded it — all 4 criteria scored (aiScore 0.41, correctly docking the missing
+edge-case analysis), one request, $0.0165 (the model covered all 4 in the first pass, so the repair path stayed idle
+— the happy path the headroom enables). Throwaway attempt deleted afterward.
+
+## 2026-07-12 - MOM-160: true ever-reached funnel conversion (Momito 1.0 PR 1) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. First PR of the Momito 1.0 consolidation release
+(plan approved this session; D-022).
+
+**The problem.** `funnel()` built `reached[k]` from currently-active apps at stage ≥ k. A rejected/withdrawn app was
+dropped from every denominator, so conversion and responseRate were systematically inflated — the losses the metric
+exists to surface were erased. MOM-103/104's `fromStatus/toStatus` transition history made the honest computation
+possible.
+
+**The change.** New `maxStageReached()` computes each app's deepest-ever funnel stage = max over {current status} ∪
+{every from/to status of its `status_change` transitions}; a pre-MOM-102 terminal app with no transitions falls back
+to `applied` (if it has an appliedDate) else `saved`. `reached[k]` = apps with depth ≥ k; `conversionFromPrev`,
+`responseRate`, and the `breakdown()` offers/interviewing counts all derive from that. `atStage` stays a
+current-status snapshot; `active` is now computed as the non-terminal count (it could no longer come from
+`reached[0]`, which now equals `total`). `JobFunnelResponse` shape unchanged → zero web changes.
+
+**Verified.** 326 API tests (+1 counterfactual: an app rejected out of an interview still counts at interview, in
+responseRate, and as `interviewing` in the source breakdown; a no-transition rejected app with an appliedDate counts
+only through applied). Lint + typecheck clean. Live: walked a throwaway job saved→applied→interview→rejected against
+the running localhost API — `interview.reached` went 3→4 (the rejected app still counts), then deleted the throwaway
+(no `@Delete` route exists on jobs, so removed it via a one-off Prisma script, since deleted) and confirmed the funnel
+returned to baseline (total 8, interview.reached 3).
+
+## 2026-07-12 - MOM-159: ATS coverage false-missed skills at sentence ends (CLAUDE, no schema, bug fix)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Found by careful reading of the ATS keyword matcher.
+
+**The bug.** `extractJdSkills` pulls capitalized tokens with `/[A-Z][A-Za-z+#.]{1,30}/` — the dot is in the class so
+"Node.js" survives intact. But that same dot **swallows the sentence-final period**: "…deep experience with
+Kubernetes." captures the token `Kubernetes.`, and the only normalization applied to JD keywords is
+`toLowerCase().trim()`, so it becomes `kubernetes.` — with the period. The résumé have-set (`resumeHaveSet`), meanwhile,
+strips trailing dots (`token.replace(/\.+$/, '')`), so it holds `kubernetes`. The two never match: a skill the résumé
+plainly lists gets reported **missing**, which deflates `coveragePct` and — via MOM-134's gap→task bridge — spawns a
+bogus "Add to résumé: Kubernetes." study task telling the user to add something they already have. This fires on the
+most ordinary JD phrasing there is: any skill at the end of a clause ("proficiency in Go.", "must have Kubernetes.").
+
+**The fix.** Strip trailing dots from JD tokens too, so both sides normalize identically. A bonus: it also stops a
+sentence-final stop-word like "We." (which kept its period and so slipped past the `{'We',…}` stop set) from being
+mistaken for a skill.
+
+**Verified.** A counterfactual unit test (constructed to fail on the old code, pass on the fix — confirmed by
+temporarily reverting the one-line change). 325 API tests, lint + typecheck clean. No live round-trip: the buggy path
+is pure string tokenization with no DB or network involved, so the counterfactual test is authoritative for it.
+
+## 2026-07-12 - MOM-158: the "am I ready?" verdict could report a false 0/100 (CLAUDE, no schema, bug fix)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Found by careful reading of the flagship readiness
+computation after the write-only-column sweep ran dry.
+
+**The bug.** `getJobReadiness` (the "am I ready for <company>?" verdict) weights the headline by the linked company's
+focus areas via `companyWeightedPercentage(areas, focusAreas)`. That function summed `focusAreas[area.area]` over the
+role track's areas and divided by it — but a company's `focusAreas` (MOM-121 seed) is validated against
+`CAREER_ROLE_AREA_IDS`, **not** against the chosen role track's checklist areas, so the two sets can be disjoint. When
+they are, `weightSum` is 0, and the old `if (weightSum <= 0) return 0` reported a **0/100, not_ready** verdict for a
+candidate who might be excellent — the emphasis simply didn't line up with the measured areas. The same false 0 fed
+`getTargetShortlist`, sinking such a company to the bottom of "where to apply next".
+
+**The fix.** `companyWeightedPercentage` now returns `null` for "no applicable weights", and both callers fall back to
+the flat overall percentage — exactly what the no-focus-areas path already did. The `weakestAreas` ordering had the
+same latent flaw (a disjoint emphasis makes every `focusDrag` 0, leaving the list unsorted), so it now keys off a
+`companyWeighted` flag and falls back to lowest-percentage ordering.
+
+**Reachability.** Not triggerable on pristine seed: every role track's areas include `dsa`, and every seed company's
+focus includes `dsa`, so there is always an intersection. It is a latent bug for **user-created** catalog data — a
+company a user adds with, say, `{cs_fundamentals: 5}` against a `big-tech-swe` job (no `cs_fundamentals` area).
+
+**Verified.** A counterfactual unit test (constructed to fail on the old `return 0` and pass on the fix — confirmed by
+temporarily reverting). 324 API tests, lint + typecheck clean. Live: forced the NVIDIA company's focus to `{behavioral:
+5}` (disjoint from its `hpc-gpu-engineer` track) → the NVIDIA job verdict was 34 (the flat mean) with sensible
+weakest-area fallback, not 0; restored the company's focus and confirmed the verdict returned to its baseline 50.
+
+## 2026-07-12 - MOM-157: résumé drift enters the Today loop (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration.
+
+MOM-155 gave drift a face — but on `/profile/resumes`, the one page a user opens only when they *already suspect* the
+résumé is behind. Drift is a before-you-send signal; the app's whole thesis is that such signals surface on **Today**.
+So `recommendations.service` now carries a résumé-drift card, fed by a new `ResumesService.driftSummary` (every stale
+version in one pass — one profile read, one versions read, diffed in memory; calling `drift()` per version would N+1 the
+one page that must stay fast).
+
+The ranking is the design. A stale version **linked to a job still in `saved`** is fixable before you apply — the exact
+moment the nudge earns an interruption — so it lands at **priority 74**, between application deadlines (90) and stalls
+(68), with copy that names the company. Any other drift is a background reminder at **45**, below routine study. Only the
+single most-drifted version surfaces; the rest would be noise. The card deep-links `?v=<id>` so tapping it lands on the
+exact stale version (the page reads the param on load, falling back to the first version if it is absent or stale).
+
+**Verified:** 323 API tests (+6, four of them the new drift cases: pre-send urgency, informational fallback, only-one-
+surfaces, none-when-clean), lint + typecheck clean. Live against local Postgres: a version linked to the saved NVIDIA
+job, with CUDA/OpenGL and a GPU Ray Tracer project added to the profile *after* the version was cut, returned
+`missingCount:3` through the live drift path and resolved to the pre-send branch. The card is priority 74; the demo
+account is saturated with ≥95 cards (an interview in 3 days, three repair signals from the bombed Meta round), so a 74
+card correctly does not reach the top-8 there — which is the ranking working, not a failure. Card construction (title,
+priority, reason, href) is pinned exactly by the unit tests. The demo profile was mutated to force drift and restored to
+its exact prior state afterwards; the test version was deleted.
+
+## 2026-07-12 - MOM-156: web tests for the résumé page — where the last two bugs actually lived (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Tests + one UI fix they caught.
+
+Both bugs fixed today (MOM-153's silent-no-op "Accept", MOM-154's write-only `aiSuggestions`) lived in **the web
+layer**, and `/profile/resumes` — by now the densest page in the app: editor, ATS panel, AI critique, rewrites,
+cover letter, drift, per-version conversion — had **zero tests**. The API suite would not have caught either. Six
+tests now pin the exact behaviours: rewrites stored on the version are restored on load (the MOM-154 bug); accepting
+patches the draft, retires the suggestion, and Save writes the applied text *and* the pruned list in one call;
+accepting a rewrite whose bullet has been edited away says so and **keeps** it; rejecting persists the dismissal;
+the drift panel names what is missing and stays quiet when it is not.
+
+**The tests immediately earned their keep.** Writing them surfaced a flaw in my own MOM-154 UI: the "Applied to the
+draft — press Save" confirmation was rendered *inside* the suggestions list, which unmounts the moment the last
+suggestion is accepted — so the confirmation was invisible in exactly the case where the user most needs it (you
+accepted the only rewrite; did anything happen?). Moved outside the list. That is a bug no API test could ever have
+seen, and I would not have found it by re-reading the diff.
+
+**Verified:** 32 web tests (+6), 319 API tests, lint + typecheck clean.
+
+## 2026-07-12 - MOM-155: résumé drift — the snapshot nobody read (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration.
+
+**How it was found.** MOM-154 ended with a hypothesis: a column that is *written and serialized but read by no
+client* is a dead loop by definition, so grep for more. Six candidates (`rawCvText`, `baseProfileSnapshot`,
+`compBand`, `interviewProcess`, `roleTrackIds`, `visaFramingParagraph`); five were read by the web. One was not.
+
+**`ResumeVersion.baseProfileSnapshot`** has recorded, since MOM-132, exactly what the `Profile` looked like when a
+version was cut. Nothing ever read it — it was not even on the response type. But that snapshot is precisely what is
+needed to answer a question a job seeker genuinely has and this app could not: *what have I done since I cut this
+résumé?* Without it, a version rots in silence. You ship a project, add a skill, land an internship — and the résumé
+you keep attaching to applications still predates all of it, with no signal anywhere in the product.
+
+`GET /resumes/:id/drift` diffs the current profile against the snapshot **by identity** — skill string, project name,
+company+role, case-insensitively — not by deep equality. That distinction is the whole design: an edited description
+is not something to nag about; a *missing project* is. A version whose `contentMd` was supplied by hand has no
+provenance to diff against, so it answers `hasSnapshot: false` rather than guessing or silently reporting "not
+stale", which would be a lie of omission. `/profile/resumes` renders an amber panel naming exactly what is missing.
+
+**Verified:** 319 API tests (+5), 26 web tests, lint + typecheck clean. Live: a version cut from the profile reported
+clean; adding CUDA, a "GPU Ray Tracer" project and an NVIDIA role to the profile flipped it to `isStale: true` naming
+all three; a hand-written version reported `hasSnapshot: false`. The demo profile was mutated to run this and was
+**restored to its exact prior state** afterwards (verified by re-reading it); the test versions were deleted.
+
+## 2026-07-12 - MOM-154: aiSuggestions was a write-only column (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Found while shipping MOM-153.
+
+**The bug.** MOM-137's own comment says rewrites are persisted to `ResumeVersion.aiSuggestions` "so the UI can
+accept/reject them across sessions". The orchestrator wrote them. The service serialized them. **The web page never
+read them.** So a page reload threw your suggestions away while they sat in the database, invisible — and nothing
+ever pruned an accepted one, so had anything loaded them, an applied rewrite would have come back from the dead.
+This is the same dead-end shape as the MOM-146 Readwise ledger: captured, stored, never resurfaced. The lesson keeps
+repeating — *persisting* something is not the same as *closing the loop on it*, and a comment saying "so the UI can…"
+is a claim, not a wire.
+
+**The fix.** Outstanding rewrites are restored with the résumé (on both the initial load and every version switch).
+Accepting one applies the text and prunes the list in a **single** `PATCH` — so the applied rewrite cannot resurface.
+Rejecting one persists immediately and sends *only* `aiSuggestions`, so an unsaved draft edit is left alone. The
+update DTO validates each rewrite (nested, max 50) instead of accepting an opaque Json blob, and the serializer
+filters malformed rows, because the response type promises `ResumeBulletRewrite[]` and the column is `Json` — a
+promise worth nothing unless something checks it.
+
+**Also closed the user-side half of MOM-153's silent-no-op.** MOM-153 fixed the *model-side* cause (a paraphrased
+`original` that `contentMd.replace()` could never match). The other cause is the user: accept a rewrite whose bullet
+you have since edited out of the draft, and the replace is still a no-op. It now says so and **keeps** the
+suggestion, rather than retiring a button press that changed nothing.
+
+**Verified:** 314 API tests (+4), 26 web tests, lint + typecheck clean. Live: a rewrite of a 2-bullet résumé returned
+2 suggestions, both survived a plain `GET` (both verbatim-applicable); accept → the rewritten text is in `contentMd`,
+the suggestion is gone and does not return on reload, the other is still waiting; reject → gone, `contentMd`
+untouched; a malformed rewrite row → 400 from the DTO. Test rows deleted afterwards.
+
+## 2026-07-12 - MOM-153: the rewrite catches up with the critique, and "Accept" stops lying (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Self-selected: the plan's backlog is closed, and this
+was the largest *inconsistency* left inside the feature the owner last asked me to improve.
+
+**The gap.** MOM-149/150 taught `analyze` to hold a target in mind (the application's JD + the company's focus areas)
+and to ground its suggestions in the user's profile. `rewrite` and `coverLetter` never got either. They took a
+hand-pasted `jdText` and nothing else — so the tool that *writes the words* was working from a strictly weaker brief
+than the tool that merely criticises them, on the very same bullets. Worse, the JD was usually already in the
+pipeline: the user had to re-paste, by hand, text the app was already storing on the application.
+
+All three now share one `TailorContext` and one `loadContext()`. `jdText` became optional: a pasted JD wins (it is what
+you are looking at right now), otherwise the JD stored on the targeted — or merely *linked* — application is used. With
+no JD anywhere the call returns `{ok:false}` **before the model call**, so the refusal is free (live: `ai/usage` sat at
+9 requests / $0.2318 across it). The `/profile/resumes` job select now drives all three tools instead of just the
+critique.
+
+**The bug this turned up.** The UI applies a rewrite with `contentMd.replace(original, rewritten)`. But we show the
+model *normalized* bullets (whitespace collapsed — a PDF-extracted résumé is full of double spaces), and a model
+returns what it was shown. So `original` was frequently **not a substring of the draft**, and `acceptRewrite`'s
+`includes(...) ? replace : current` quietly took the else branch: the suggestion vanished from the list and the résumé
+was unchanged. A button that reports success and does nothing. Rewrites are now snapped back to the verbatim source
+line by matching on the normalized form; a rewrite matching no bullet at all is **dropped** rather than offered as a
+dead Accept. Live proof on a deliberately double-spaced bullet: `original` came back with its irregular spacing intact
+and `in-source: True`, while the normalized form the model would otherwise have returned was `in-source: False`.
+
+**Sponsorship.** The cover letter's visa paragraph was being written blind, even though the pipeline knows the
+employer's posture (`Company.sponsorshipStatus`, falling back to the application's own `visaTag`). It now gets three
+distinct framings — and the `not_sponsoring` case is explicitly told not to paper over it, nor to claim work
+authorisation the résumé does not evidence. Also fixed a contradiction this exposed: the cover-letter system prompt
+said "ground every claim in the résumé" while we now feed it profile evidence the résumé omits; it says what it means
+now (résumé *or* supplied evidence, never outside both).
+
+**Verified:** 310 API tests (+8), 26 web tests, lint + typecheck clean on both apps. Live against local Postgres with
+a real key: `POST /resumes/:id/ai/rewrite` with a body of literally `{}` pulled the JD from the linked NVIDIA
+application and returned an applicable rewrite in 12s; the cover letter (21s) drew on profile evidence the 2-bullet
+test résumé never mentioned, and its visa paragraph was brief and matter-of-fact, as instructed for a known sponsor.
+All test rows deleted afterwards (résumé versions back to 0).
+
+## 2026-07-11 - MOM-151/152: résumé findings become actions, and get measured (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Completes the five improvements the owner asked for
+(148/149/150 shipped in the previous commit).
+
+**MOM-151 — the analysis was a dead end.** It produced `issue`/`suggestion`/`missingThemes` and then stopped; you read
+it and hand-edited. `POST /resumes/:id/ai/themes-to-tasks` now turns the themes into **study tasks**, reusing the
+existing gap→task bridge shape (`profile-scores.atsGenerateTasks`) rather than inventing a second pattern: capped at
+8, deduped by title so re-running an analysis cannot spam the plan, and **no model call** — the findings already
+exist, so the action costs nothing. Live: `{created:2}` then `{created:0}` on the repeat, with `ai/usage` unchanged
+at $0.2179 across both calls, proving the zero-spend claim rather than asserting it.
+
+*Noticed and kept:* the task titles share the `Résumé gap:` prefix with MOM-135's profile-score gap tasks. That is a
+feature, not a collision — an AI-found gap and a score-found gap for the same thing now **dedupe against each other**,
+and `notes` preserves which produced it.
+
+**MOM-152 — nothing measured whether the advice worked.** MOM-145 already computes conversion per résumé version
+(joined through `ResumeVersion.jobApplicationId`), but it only rendered on the dashboard funnel card. The `/profile/
+resumes` list now shows each version's real record — `N sent · N interviewing · N offers · N% conversion` — beside the
+version you are editing. That closes the loop the whole track exists for: **analyse → rewrite → send → measure**, and
+it is the only feedback in the feature that is not an opinion. Hidden when a version has no applications linked.
+
+**Verification:** 302 API tests (+1) · lint + typecheck clean (api + web) · live: themes→tasks created 2, deduped to
+0 on repeat, tasks landed on the study plan with the right type/status/priority, budget unmoved. All test rows deleted
+afterwards (one DELETE returned a curl `000`, so the cleanup was re-checked rather than assumed — one task had
+survived and was removed; the study plan is back to its 7-task demo baseline).
+
+**Why no model upgrade.** The owner asked whether to raise model capability. Everything in 147–152 says no: coverage
+was a contract bug, targeting was missing context, groundedness was missing data, and actionability and measurement
+were missing wiring. None of those are fixed by a smarter model, and Gemini 3.1 Pro now matches Opus 4.8 on this task
+at a third of the cost.
+
+## 2026-07-11 - MOM-148/149/150: complete, targeted, evidence-grounded résumé analysis (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. Owner asked "how do I make the AI feature better —
+should I raise the model?" Answer: **no.** MOM-147 already showed the binding constraint was our contract with the
+model, not the model's intelligence. These three tasks fix what was actually limiting it.
+
+**MOM-148 — check the completeness contract, don't just state it.** MOM-147 added "return one entry per bullet" to
+the prompt but never *verified* it, so a model returning 10 of 14 was still accepted silently — the exact failure
+that made a cheap model look like a bargain. `analyze()` now diffs the returned `index`es against the enumerated
+bullets and, on a gap, runs **one repair pass** for the missing indexes only, merges, and sorts. Both calls are
+billed (`inputTokens` summed) — the budget must not under-count a two-call audit. If the repair itself fails we keep
+the partial: half an audit beats no audit.
+
+**MOM-149 — judge the résumé against a real target.** `analyze()` took only a role-track label, so it could only give
+generic advice, while the DB already held `jdText` on every application and `focusAreas` on every company. Analysis
+now accepts an optional `jobApplicationId`; when omitted it falls back to **`ResumeVersion.jobApplicationId`** — the
+job the version was already sent to — so a targeted critique is the *default*, not an opt-in. The JD, the role, the
+company name, and the company's focus areas all enter the prompt with "judge every bullet against THIS job".
+
+**MOM-150 — ground suggestions in evidence the candidate actually has.** The model kept saying "add a metric" because
+it *cannot know* one. It now receives the `Profile` (skills, projects, experience — the master record, D-014) and is
+told to prefer a suggestion grounded in that evidence over a placeholder, and to invent nothing that appears in
+neither résumé nor profile.
+
+**Live proof (real 1-page CV, 14 bullets, Gemini 3.1 Pro).** Same CV, same model, only the target changed:
+- *Untargeted:* "an exceptionally strong résumé … deep understanding of distributed systems."
+- *Targeted at the NVIDIA GPU SWE role (real JD):* "heavily features Go, web backends and high-level NLP, **severely
+  lacking applied C++, CUDA, and graphics or hardware-parallelism experience**." `missingThemes` came back as CUDA /
+  GPU Architecture / Applied C++ / Hardware-Software Co-design, and per-bullet scores dropped (0,3,2 vs 1,4,5)
+  because relevance *to this job* now counts. Coverage held at **14/14** in 36s.
+
+That is the difference between a résumé linter and "am I ready for *this* job" — the same loop CareerOS already runs
+for interviews.
+
+**Verification:** 301 API tests (+5) · lint + typecheck clean (api + web) · live round-trip above; test résumé deleted.
+**Risk:** the repair pass can double the cost of one audit when a model under-delivers. It only fires on an actual
+gap, and both calls are recorded against the daily budget, so it cannot silently overspend.
+
+## 2026-07-11 - MOM-147: model-agnostic résumé analysis + gateway pricing (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration.
+
+**Why:** the owner asked for the cheapest model that is still good enough for a résumé audit. Measured six candidates
+through the real analyze prompt + schema on a **real 1-page CV** (14 bullets), and the price table turned out to be a
+trap — the cheap models are cheap partly because they **silently do less work**:
+
+| model | cost/audit | bullets critiqued | $/bullet |
+|---|---|---|---|
+| Opus 4.8 (was default) | $0.107 | 14/14 | $0.008 |
+| Sonnet 5 | $0.069 | 14/14 | $0.005 |
+| **Gemini 3.1 Pro** | **$0.037** | **3/14** ⚠️ | **$0.012** |
+| Gemini 3 Flash | $0.007 | 6/14 | $0.001 |
+| Gemini 3.1 Flash Lite | $0.0014 | 6/14 | $0.0002 |
+
+Gemini 3.1 Pro looked 3× cheaper than Opus while critiquing **3 of 14 bullets** — per bullet actually audited it was
+*more* expensive than Opus. Flash contradicted itself (`impactScore: 5` with `issue: "None. This is a perfect bullet
+point"`). The cheap tiers were not worse *judges* so much as **incomplete auditors**, and nothing in the response
+shape revealed it.
+
+**Root cause — ours, not the model's.** Nothing in the prompt or schema required completeness. Opus/Sonnet infer
+"critique every bullet"; other models don't. Gemini also spent feedback on *missing spaces* — PDF-extraction
+artifacts, not résumé flaws.
+
+**Fix (three changes, all in our code):**
+1. **`ResumeAiService.extractBullets()`** — bullets are now found deterministically **in code**, not left to the model
+   to decide what counts as one. They are passed back enumerated (`0.`, `1.`, …).
+2. **Completeness contract** in `ANALYZE_SYSTEM` — "exactly N entries, one per numbered bullet, never skip a strong
+   one" — plus a new `index` field on `ResumeBulletFeedback` so coverage is *checkable*, not hoped for.
+3. **Ignore-formatting instruction** — stops feedback being spent on PDF whitespace artifacts.
+
+Also `MAX_TOKENS` 4096 → 16000: adaptive thinking is billed **inside** `max_tokens`, so a full résumé at `effort:high`
+was being truncated once thinking took its share. And an empty-bullet résumé now returns `{ok:false}` **without
+calling the model** (no spend on an un-analysable input).
+
+**Result — Gemini 3.1 Pro went 3/14 → 14/14** and is now the best value of the three (measured, same CV):
+
+| model | coverage | cost/audit | latency |
+|---|---|---|---|
+| **Gemini 3.1 Pro (new default)** | 14/14 | **$0.041** | **29s** |
+| Sonnet 5 | 14/14 | $0.059 | 56s |
+| Opus 4.8 | 14/14 | $0.116 | 53s |
+
+~3× cheaper and ~2× faster than Opus at equal coverage. Quality is substantive, not cosmetic: it flags that
+*"Co-developed" obscures your specific contribution*, that *"co-architected" dilutes ownership*, and rates the
+pprof/concurrency bullet a **senior** signal.
+
+**Gateway pricing rows** added to `ai.config.ts`. The `opus-4-8` fallback silently mispriced every gateway slug —
+over-reporting Gemini (cheaper than Opus) and, more dangerously, **under-reporting a Fable-tier model by 2×**, which
+would have let the daily cap overspend. Live-verified: the analyze call billed **$0.0404**, matching Gemini's $2/$12.
+
+**Verification:** 296 API tests (+3) · 26 web · lint + typecheck clean · **live round-trip**: `POST
+/resumes/:id/ai/analyze` on the real CV returned 14/14 with indexes 0–13 complete in 26s. Test résumé deleted after.
+
+**Honest caveats:** (a) `google/gemini-3.1-pro-preview` is a **preview** slug and can move or be retired — the pricing
+row and `ANTHROPIC_MODEL` both need updating when the owner moves to Gemini 3.5 Pro, and that slug is **not on
+OpenRouter yet** (checked 2026-07-11). (b) Haiku 4.5 failed schema parsing on two of three runs and passed on the
+third — **intermittent**, cause not established; it is not recommended until that is understood.
+
+## 2026-07-11 - LIVE AI VERIFICATION: MOM-068–074 + MOM-136/137/138 unblocked (CLAUDE, no code change)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No schema, **no application code changed** — this was a
+verification pass, plus the doc fixes it forced.
+
+**Trigger:** the owner supplied an API key. It was an **OpenRouter** key (`sk-or-v1-…`), not an Anthropic
+`sk-ant-…` key, so it could not simply be dropped into `ANTHROPIC_API_KEY` — our code calls `api.anthropic.com`
+through the Anthropic SDK. Rather than assume it was unusable, I probed it: **OpenRouter serves the Anthropic
+`/v1/messages` shape *and* `output_config` structured outputs**, which is exactly what `messages.parse` +
+`zodOutputFormat` needs. So the live path was reachable with **zero code change** — only env:
+
+```
+ANTHROPIC_API_KEY="sk-or-v1-…"           # in apps/api/.env (gitignored)
+ANTHROPIC_BASE_URL="https://openrouter.ai/api"
+ANTHROPIC_MODEL="anthropic/claude-opus-4.8"
+```
+
+**The one real trap** (cost a failed first run): the SDK appends `/v1/messages` to `ANTHROPIC_BASE_URL`, so
+`https://openrouter.ai/api/v1` becomes `/api/v1/v1/messages` → OpenRouter's **HTML 404 page**, which surfaced as
+the deliberately-vague `{ok:false,"reason":"AI service returned an error."}`. The base URL must stop at `/api`.
+Now documented in `.env.example` and the README config table so nobody re-loses that hour.
+
+**Verified live (6 requests, $0.1237 of real spend, budget debited correctly to $0.876 remaining):**
+- `POST /attempts/:id/grade` — a real `messages.parse` succeeded (12.2s), returning a structured rubric that
+  **correctly caught a nonsense answer**: "two-pointer sweep" for binary-tree max-path-sum → `aiScore` 0.02,
+  suggested rating `again`. This is the MOM-068–074 gate that had been open since 2026-07-06.
+- `POST /resumes/:id/ai/analyze` — every filler bullet ("Worked on the API.") scored impactScore 0 / junior,
+  with 8 `missingThemes`.
+- `POST /resumes/:id/ai/rewrite` — 3 JD-targeted rewrites that **did not fabricate metrics**, and the rewrites
+  **persisted into `ResumeVersion.aiSuggestions`** (confirmed by re-fetching the version).
+- `POST /resumes/:id/ai/cover-letter` — a 218-word draft plus a standalone visa-framing paragraph that picked up
+  "sponsorship available" from the JD.
+
+**A false alarm, recorded because it nearly became a false bug report:** the analyze output looked like mojibake
+(`rÃ©sumÃ©`). Hexdumping the raw response showed `r\xc3\xa9sum\xc3\xa9` — **correct UTF-8**. The corruption was
+Windows Python decoding piped stdin as cp1252. Always check raw bytes before blaming the encoding.
+
+**Honest limits — what is still NOT verified:** (a) a native `sk-ant-` call against `api.anthropic.com` (the wire
+format and structured-output handling are identical, but it is technically un-run); (b) the **budget-exceeded**
+path, which would need ~$1 of real spend to trigger — the guard remains unit-tested only.
+
+**Docs corrected:** the "the live AI path has never been executed" note I had written into the README *earlier the
+same day* (MOM-089) was now false and was rewritten; MOM-068–074's status note and the MOM-136/137/138 rows were
+flipped from VERIFICATION-BLOCKED to LIVE-VERIFIED with the evidence above; `ANTHROPIC_BASE_URL` (previously
+undocumented anywhere) added to `.env.example` and the README config table.
+
+**Security:** the key was pasted into a chat transcript, so it is compromised and the owner has been told to
+rotate it. It lives only in `apps/api/.env`, which `apps/api/.gitignore` covers — confirmed via `git check-ignore`
+and a clean `git status` before committing. **No key value is committed.**
+
+## 2026-07-11 - MOM-089: README final polish (CLAUDE, docs only)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No schema, no code — `README.md` only.
+
+**Why now:** the handoff plan is complete, and every other open backlog row is credential-gated (MOM-021 deploy,
+MOM-088 Lighthouse, MOM-070–074 / MOM-136–138 live AI key) or needs an explicit owner go-ahead (MOM-049 LeetCode
+import). MOM-089 was the one genuinely unblocked item left. The README had drifted roughly twenty PRs behind the
+product: it described a practice app with a job list, and said nothing about interview rounds, debriefs, weakness
+signals, company intelligence, contacts, offers, or résumé versions — i.e. the entire reason CareerOS exists.
+
+**What:**
+- **Intro** now states the actual thesis: the job search and the study plan are one closed loop.
+- **Screens & Routes** — added `/companies`, `/companies/[id]`, `/contacts`, `/offers`, `/profile/resumes`; corrected
+  `/jobs` (list *or* kanban) and `/jobs/[id]` (rounds, debriefs, readiness, story gaps, prep queue, contacts, offer).
+- **API Overview** — the one thin "Career OS" block became four accurate sections (Career OS / Job Pipeline / Résumé
+  Versions / Tasks, Reminders & Learning). Every route was **read out of the controllers**, not recalled: funnel,
+  events, rounds + round prep, weaknesses, contacts, offers, resumes + export + the three AI routes, ats-coverage +
+  generate-tasks, target-shortlist, job readiness, story-gaps, and `GET /companies/:id`.
+- **Features** — Career OS rewritten around the loop; new **Résumé Studio** section (versions, ATS coverage, export,
+  dormant AI).
+- **Architecture Decisions** — the list stopped at ADR-0006; ADR-0007…0015 added (all nine exist on disk).
+- **QA & Known Notes** — new **"Verification-blocked, and not claimed to work"** block stating plainly that the live
+  AI path has never been executed, that Lighthouse needs a real deployment, and that `pg_dump`/`pg_restore` were
+  never run against a real Postgres. A reader should not have to dig through the backlog to learn what is scaffolding.
+- **Config reference** — `ANTHROPIC_API_KEY` now says it also gates résumé tailoring, sharing one daily budget pool.
+
+**Verification:** docs-only; no code changed since `85f3faf` (293 API + 26 web tests green there), so no suite was
+re-run and nothing new is claimed about them. Route/ADR accuracy was checked against the source: `find` over
+`apps/web/app/(authenticated)` for pages, the `@Controller`/`@Get`/`@Post` decorators for endpoints, `ls docs/adr/`
+for the ADR list. **Rollback:** revert the commit.
+
+## 2026-07-10 - MOM-145: conversion by résumé version (CLAUDE, no schema) — FINAL ITEM OF THE HANDOFF PLAN
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No migration. Closes the approved handoff plan
+(`~/.claude/plans/…mossy-moore.md`): Waves 1–4 are now complete.
+
+**What:** `jobs.service.funnel()` gains **`byResumeVersion`** — conversion per résumé, joined through
+`ResumeVersion.jobApplicationId` (the record of "this is the résumé I sent them"), keyed by the version's label and
+reusing the existing `breakdown()` shape (total / interviewing / offers / conversion). This finally answers *which
+résumé actually converts*, which is the whole point of having versions at all.
+
+**Design call:** `breakdown()` is now generic and a `null` key **drops** the job. Applications with no version linked
+carry zero signal about résumé performance, so including them as an "unlinked" bucket would only dilute the
+comparison — they are excluded, and the funnel-card row stays hidden until versions are actually linked to jobs.
+
+**Checks:** shared build; API + web lint/typecheck green; **293 API tests** (+2: the join/exclusion maths, and the
+empty case) + 26 web. **Live-verified**: linked "Big-tech tailored v2" to the Databricks (offer) + Meta (interview)
+apps and "Base résumé" to the rejected Airbnb app → tailored = 2 sent / 2 interviewing / 1 offer / **50% conversion**,
+base = 1 sent / 0 / 0 / **0%**, and the other 5 applications correctly uncounted; `bySource`, `byRejectionReason` and
+the MOM-104 `medianDaysInStage` all still intact. Demo state restored (versions deleted; the 8 jobs survived, which
+also re-confirms the `SetNull` FK).
+
+**Rollback:** revert code — no schema, no data.
+
+## 2026-07-10 - MOM-136/137/138: AI résumé analysis / bullet-rewrite / cover-letter (CLAUDE, dormant-until-key)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No migration. **VERIFICATION-BLOCKED on a live
+`ANTHROPIC_API_KEY`** — the same honest status as MOM-068–074. The no-key path is fully verified; **the live model
+path is not, and this entry does not claim it works.**
+
+**What:** `apps/api/src/ai/resume-ai.service.ts` mirrors `grading.service.ts` exactly — `isAvailable()` =
+`Boolean(getAnthropicApiKey())`, `client.messages.parse` + `zodOutputFormat`, adaptive thinking, and a structured
+`{ok:false,reason}` for *every* failure (no key, schema miss, rate limit, auth, connection) so the feature is
+**dormant, never broken**. `ResumeAiOrchestrator` mirrors `AiService.gradeAttempt`: availability → version lookup
+(404) → **the same shared daily `BudgetService` pool** (`checkAndReserve` / `record` with real token counts) → call
+→ record.
+
+- **MOM-136** `ResumeAnalysisSchema` — per-bullet `impactScore` 0–5, `senioritySignal`, the issue, a concrete fix,
+  plus `missingThemes`. `POST /resumes/:id/ai/analyze`.
+- **MOM-137** `BulletRewriteSchema` — `original → rewritten + rationale`, JD-tailored. `POST /resumes/:id/ai/rewrite`
+  persists the rewrites into `ResumeVersion.aiSuggestions` **on success only**. Web shows accept/reject; **accept is
+  deterministic** — it swaps `original`→`rewritten` in the draft `contentMd`, then Save persists.
+- **MOM-138** `CoverLetterDraftSchema` — `draftMarkdown` + a standalone `visaFramingParagraph` the candidate can slot
+  in or drop. `POST /resumes/:id/ai/cover-letter`.
+
+**Design note (deviation from the plan's letter, not its intent):** the plan said "zod schemas in shared". They live
+in `ai/dto/resume-ai.schema.ts` instead — exactly where `grade-result.schema.ts` lives — because `zodOutputFormat()`
+needs zod's **v4** API surface, which only the API depends on. The web consumes plain response interfaces
+(`ResumeAnalysisResult`, `ResumeBulletRewrite`, `CoverLetterDraftResult`, `ResumeAiEnvelope<T>`) from `@momito/shared`.
+
+**Checks:** shared build; API + web lint/typecheck green; **291 API tests** (+10, **all fully mocked, zero-network**:
+no-key dormancy across all three methods, successful parse of each schema, JD passthrough, schema-miss/rate-limit/auth
+→ structured failure, orchestrator dormancy touching neither DB nor budget nor model, budget `record` with real token
+counts, suggestions persisted only on success, 404 foreign version, 400 budget exhausted) + 26 web. **Live-verified
+(no-key path only)**: all three endpoints return `{"ok":false,"reason":"…no ANTHROPIC_API_KEY…"}`; `aiSuggestions`
+stayed `[]`; `ai/usage` still `available:false, requests:0, costUsd:0` — nothing written, nothing billed; DTO
+validation 400s on a missing `jdText`. Demo version deleted afterwards.
+
+**Rollback:** revert code — no schema, no dependency, no data.
+
+## 2026-07-10 - MOM-139: résumé export md|pdf (CLAUDE, no schema, no new dep)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No migration. Depends on ResumeVersion (MOM-133).
+
+**What:** `GET /resumes/:id/export?format=md|pdf` (declared before `:id` so it never shadows the plain GET).
+MD = `contentMd` as a `text/markdown` attachment. PDF = an ATS-safe single-column render.
+
+**Dependency decision (the plan flagged pdfkit vs puppeteer):** neither — **no new dependency**. An ATS parser
+reads a PDF's text from its content stream using a standard font's glyph widths, so the safest possible output is
+plain text, one column, in a built-in (non-embedded) font. That needs no library. `resume-pdf.util.ts` is a small,
+deterministic, dependency-free PDF writer: Markdown → styled/wrapped lines → paginated Helvetica content streams
+→ a correctly cross-referenced PDF. Accents/typographic symbols are transliterated to ASCII (ATS-preferred).
+Anything heavier would be strictly worse for ATS parsing, so there was nothing to gain from a binary dep — and it
+also sidesteps touching the (pre-existing, not-ours) `pnpm-lock.yaml`.
+
+**Web:** `/profile/resumes` gains "Export .md" / "Export .pdf" buttons — `resumesApi.download` fetches with the
+Bearer header (a plain `<a href>` can't authenticate) and triggers a blob download using the server's filename.
+
+**Checks:** API + web lint/typecheck green; **281 API tests** (+3: MD verbatim + slug filename, valid PDF
+header/xref/EOF + text op, 400 unknown format / 404 foreign version). **Live-verified** against local Postgres:
+MD round-trips; the PDF is byte-deterministic (1545B, identical across repeated requests) and — the real proof —
+**parses cleanly in `pypdf`**, extracting every résumé section (name, contact, Skills, Experience, Projects,
+Education) as readable text; 400 on `format=docx`, 404 on a foreign id; demo version deleted afterwards.
+
+**Rollback:** revert code — no schema, no dependency, no data.
+
+## 2026-07-10 - MOM-134-full: ATS coverage vs a ResumeVersion (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. No migration. Builds on MOM-134-lite
+(`AtsCoverageResponse` + coverage vs base profile) now that ResumeVersion (MOM-133) exists.
+
+**What:** `profileScores.atsCoverage(jdText, userId, resumeVersionId?)` — when `resumeVersionId` is supplied
+it measures the JD's keywords against that **`ResumeVersion.contentMd`** (every word token in the résumé, so a
+skill named in a bullet counts, not just a skills line), otherwise the base profile skills (lite behaviour
+preserved). The response gains `source: 'profile' | 'resume'` and `resumeVersionId` so the UI can label what was
+measured. New **`POST /profile-scores/ats-coverage/generate-tasks`** applies the MOM-135 gap→task bridge to ATS
+gaps: the JD keywords missing from the résumé become idempotent `Add to résumé: X` study tasks (cap 8,
+dedup-by-title). Web: the `/profile/resumes` editor gains an ATS panel per version — paste a JD, see
+covered/missing keyword chips + coverage %, and "Add missing to tasks".
+
+**Design note:** the tokenizer is deterministic (`extractJdSkills` unchanged); résumé tokens keep `+`/`#`/`.`
+so `c++`/`c#`/`node.js` survive, with trailing dots trimmed for membership. No AI, no persistence for the
+coverage read itself.
+
+**Checks:** shared build; API + web lint/typecheck green; **278 API tests** (+5: résumé-vs-profile coverage,
+404 on foreign version, source=profile null id, gap→task create + idempotency) + 26 web. **Live-verified**
+against local Postgres: created a version, coverage vs résumé = 0.25 vs profile = 0.125 (different artifacts),
+`generate-tasks` created 6 then 0 (idempotent), 404 on a bogus `resumeVersionId`; demo state restored (version
++ 6 tasks deleted).
+
+**Rollback:** revert code — no schema, no data.
+
+## 2026-07-10 - MOM-132+133: ResumeVersion (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration** `resume_versions` (new
+table). Opens Wave 4 — the app can finally keep tailored résumés, not just one overwrite-on-upload profile.
+
+**Design (SPIKE-014 resolved → ADR-0012 ACCEPTED, D-020):** new `ResumeVersion` (many per user) decoupled from
+the master `Profile` (D-014). `label`, `targetRoleTrackId?`, `jobApplicationId?` FK **SetNull** (records which
+version was sent), **`contentMd String` (canonical Markdown)**, `baseProfileSnapshot Json?` (provenance),
+`aiSuggestions Json` (reserved for MOM-137). On create without explicit `contentMd`, the server derives it from
+the Profile via a `profileToMarkdown` serializer (name/contact → Skills → Experience → Projects → Education)
+and snapshots the source. Markdown chosen over per-section JSON so the artifact is editable/diffable/exportable
+without a bespoke schema.
+
+**API:** `resumes` CRUD module (`/resumes`). **Web:** `/profile/resumes` page — "Duplicate from profile"
+(derives from the Profile), a version list, and a Markdown editor (label + contentMd) with save/delete; a
+"Résumé versions" button added to the profile header.
+
+**Checks:** shared build; API + web lint/typecheck green; **273 API tests** (+6: `profileToMarkdown` section
+rendering, derive-from-profile + snapshot, verbatim contentMd (no snapshot), missing-profile 400, foreign-job
+NotFound, update/remove NotFound) + 26 web tests. **Live:** POST derived contentMd from the demo profile
+("# Demo Candidate …"), linked to Meta; list/update/delete round-trip clean. Rollback: drop the table
+(Profile untouched).
+
+## 2026-07-10 - MOM-114+115: Offer model + comparison (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration** `offers` (new table).
+Gives the end of the pipeline a place to land — record and compare offers.
+
+**Design (SPIKE-015 resolved → ADR-0015, D-019):** new `Offer` model, **one per application**
+(`jobApplicationId @unique`, `onDelete: Cascade`; nullable so it can be standalone). Comp as `Decimal?`
+(`baseSalary`, `bonus`, `equityTotal`) + `equityYears Int @default(4)`, plus `currency`, `location?`,
+`visaSponsored Boolean?`, `deadline?`, `notes?`, `status` ∈ `OFFER_STATUSES`. **Normalized annual total =
+base + bonus + equityTotal/equityYears, computed at read time** (null when no comp figure set). **No FX in v1**
+— the comparison shows each offer in its own currency and warns on mixed currencies (the SPIKE-015 scope cut).
+
+**API:** `offers` module — `GET /offers` (comparison list) + per-job `GET/PUT/DELETE /jobs/:jobId/offer`; PUT
+upserts on the unique FK so the UI never handles an offer id. Decimal → number at the boundary; currency
+upper-cased. **Web:** `OfferCard` on the job detail page (edit comp + status, see the normalized total);
+`/offers` comparison table (sorted by normalized total desc, visa-sponsored column, mixed-currency warning);
+`💰 Offers` nav entry.
+
+**Checks:** shared build; API + web lint/typecheck green; **267 API tests** (+6: normalized-total math,
+null-total, upsert + ownership, currency upper-casing, NotFound on delete/foreign job) + 26 web tests. **Live:**
+a Meta offer (190k base + 25k bonus + 240k/4 equity) returned `normalizedAnnualTotal 275000`, `currency` `usd`
+→ `USD`; appeared in `/offers`; `status:'pending'` → 400; delete cleaned up to 0. Rollback: drop the table.
+
+## 2026-07-10 - MOM-119: referral network view (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema, web-only.** Completes the
+contacts triad (116/117/118/119) — the network is now browsable as a whole.
+
+**Web:** new `/contacts` page grouping the user's contacts by relationship (recruiters → referrers → hiring
+managers → peers → other → unspecified; empty groups hidden), each card showing name, company, email,
+LinkedIn, and a chip linking to the contact's job (company name resolved by joining `contactsApi.list()`
+with `jobsApi.list()` client-side — no backend change). `👥 Contacts` nav entry after Companies.
+
+**Today thank-you nudge:** intentionally *not* a new `recommendations.service` card — the MOM-118
+`thank_you` reminder already surfaces on Today via the reminder feed, so a second card would double-nudge.
+Noted here as a deliberate scoping call.
+
+**Checks:** web lint/typecheck green; **26 web tests** (unchanged — no API/shared change; API stays 261). The
+page renders over `contactsApi.list()`/`jobsApi.list()`, both live-verified in MOM-117. No Playwright binary
+for a screenshot. Rollback: delete the page + nav row.
+
+## 2026-07-10 - MOM-118: follow-up cadence (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Turns the pipeline + contacts
+into proactive reminders.
+
+**Service (`follow-up/FollowUpService.sweep`):** a daily idempotent sweep. (a) an `applied` app whose current
+stage entered ≥ 10 days ago (from the MOM-104 status_change timing, else createdAt) with **no open `follow_up`
+reminder** → creates "Follow up with {company}" (10d fires earlier than the MOM-105 stall threshold of 21d — a
+nudge before it's officially stale). (b) an `InterviewRound` decided within the last day (`outcome != pending`,
+`updatedAt ≥ now-1d`) that has a **contact on its job** and no existing `thank_you` reminder → creates "Send a
+thank-you note for your {company} interview". Both caps make a re-run a no-op. `FollowUpScheduler` fires it via
+`@Cron(EVERY_DAY_AT_7AM)`; new `FollowUpModule` (PrismaModule only — no cross-service deps).
+
+**Checks:** API lint/typecheck green; **261 API tests** (+4: stale-applied nudge, within-threshold/already-open
+skips, thank-you create, no-contact/duplicate skips). **Live:** a probe set a job to `applied` + backdated its
+stage 15d — sweep #1 created "Follow up with NVIDIA" (pending); sweep #2 created 0 (count stayed 1, idempotent);
+restored. Thank-you path is unit-verified. Rollback: delete the module (reminders are inert data).
+
+## 2026-07-10 - MOM-116+117: Contact model (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration** `contacts` (new table +
+FK + create-only backfill). Opens Wave 3 — networking becomes first-class.
+
+**Design (SPIKE-011 resolved → ADR-0014, D-018):** new `Contact` model (`name`, `email?`, `linkedinUrl?`,
+`company?`, `relationship` ∈ `CONTACT_RELATIONSHIPS` = recruiter|referrer|hiring_manager|peer|other, `notes?`)
+with a **nullable `jobApplicationId` FK, `onDelete: SetNull`** (standalone or job-attached; a job has many;
+survives the job's deletion). `JobApplication.referralName` kept (D-004 fallback). **Backfill is create-only,
+idempotent, dedup-safe**: `DISTINCT ON (userId, lower(name))` collapses a repeated referral to one contact
+(earliest job wins), `NOT EXISTS` makes a re-run a no-op; no unique DB constraint (namesakes are legal). Used
+`--create-only` → appended the backfill SQL → applied.
+
+**API:** `contacts` module mirrors `interview-rounds` but one controller carries **both** route groups —
+`/contacts` (standalone list/create/update/delete) and `/jobs/:jobId/contacts` (job-scoped list/create).
+DTOs validate relationship, email, URL; the service ownership-checks any job link. **Web:** `ContactsCard`
+on the job detail page (list + inline add + optimistic delete) fed by a new `contactsApi`.
+
+**Checks:** shared build; API + web lint/typecheck green; **257 API tests** (+6: serialize, standalone create
+with job validation, cross-user job rejection, nested create-from-path, update/remove NotFound) + 26 web tests.
+**Live:** the migration backfilled 0 (no demo job has a referralName) — proven correct by a probe that gave a
+job a referralName, ran the exact backfill SQL (inserted 1 `referrer` linked to the job, re-run inserted 0),
+then cleaned up. Full CRUD round-trip: create-on-job → list → update relationship → appears in `/contacts` →
+bad relationship 400 → delete 200. Rollback: drop the table + FK (referralName still displays).
+
+## 2026-07-10 - MOM-107: Kanban pipeline view (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema, web-only.** Completes Wave 2
+(pipeline truth).
+
+**Web (`jobs/page.tsx`):** a list ↔ board view toggle in the header. The board renders one column per active
+funnel stage (`JOB_FUNNEL_STAGES`: saved…offer; terminal outcomes stay in the list view). Cards are draggable
+via **native HTML5 drag events** (no new dependency); dropping a card in another column calls `moveJob`, which
+optimistically updates local state and calls the existing `jobsApi.update(id, {status})` — the same endpoint
+that already writes the MOM-102/104 transition event and MOM-106 reason handling — reverting on error. Cards
+show company/role, a compact stall pill, and a deadline chip; the funnel card + filter pills remain on the
+list view only. A `dragJobId` state dims the card in flight and provides a dataTransfer fallback.
+
+**Checks:** web lint/typecheck green; **26 web tests** (unchanged — no API/shared change; API stays 251). No
+Playwright binary in this checkout for a board screenshot; the drag path delegates to `jobsApi.update(status)`,
+which is live-verified end-to-end by MOM-102/104/106 (transition event + timing + reason). Rollback: revert the
+page (the board is purely presentational over the existing status-update API).
+
+## 2026-07-10 - MOM-106: rejection reasons (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration**
+`job_rejection_reason` (pure `ADD COLUMN`, no backfill). Turns "rejected" from a dead end into loss analysis.
+
+**Shared:** `REJECTION_REASONS` (`no_response`, `resume_screen`, `oa_failed`, `interview_technical`,
+`interview_behavioral`, `visa_sponsorship`, `position_closed`, `other`); `rejectionReason` on
+`JobApplicationResponse` + optional on the create/update requests; `byRejectionReason: JobRejectionBreakdownRow[]`
+on `JobFunnelResponse`.
+
+**Schema/service:** `JobApplication.rejectionReason String?` (a property of the terminal outcome —
+retroactively editable, aggregates via GROUP BY like source/visaTag — not on the event). DTO `@IsIn`;
+the **service** enforces it's only accepted when the resulting status is `rejected` (400 otherwise), **clears**
+it when the app is moved back out of rejected, and **copies** it onto the transition event's `notes` when the
+transition *is* the rejection. `funnel()` adds a count-per-reason breakdown (unset → `unspecified`, most common
+first). Web: a reason `<select>` appears on the job page when the status is rejected; the funnel card gains a
+"Why rejected" row.
+
+**Checks:** shared build; API + web lint/typecheck green; **251 API tests** (+6: create/update validation both
+ways, event-note copy, auto-clear on reopen, funnel breakdown). **Live:** setting a reason on a non-rejected
+app → 400; a `saved → rejected {visa_sponsorship}` transition stored the reason AND wrote
+`notes="Rejection reason: visa_sponsorship"` on the event; funnel `byRejectionReason` = visa_sponsorship 1 /
+unspecified 1; restoring the app to `saved` cleared the reason to null. Demo job restored. Rollback: drop 1 column.
+
+## 2026-07-10 - MOM-105: stall detection (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema** — builds directly on the
+MOM-104 transition timing. Surfaces applications that have gone quiet.
+
+**Shared:** `JOB_STAGE_STALL_THRESHOLDS` (days): saved 14, applied 21, oa 7, interview 14, onsite 14,
+offer 7 (terminal / unlisted stages never stall). `JobApplicationResponse` gains `daysInStage` (null for
+terminal) + `isStalled`.
+
+**Service (`jobs.service`):** `jobInclude` gains a `take:1` filtered `events` relation (latest
+`status_change`) so the list query dates the current stage cheaply; `get()` reconstructs that shape from the
+full timeline it already loads (the events key is overridden there). `serializeJob` computes
+`daysInStage = floor(now − (latestTransition.eventAt ?? createdAt))` and `isStalled = daysInStage ≥ threshold`.
+`recommendations.service` fetches the same `take:1` events for its active-job sample and, when a job is
+stalled, emits a **"Follow up on {company} — {N}d in {stage}"** card (priority 68 — below interview
+countdown 101+ and deadlines 90, above routine study) that *supersedes* the routine stage card for that job.
+
+**Web:** the jobs list renders a `⏳ Stalled · {N}d` amber badge.
+
+**Checks:** shared build; API + web lint/typecheck green; **245 API tests** (+4: stalled past threshold /
+within threshold / terminal-null on the serializer; stall card supersedes the stage card / within-threshold
+keeps it). **Live:** GET /jobs returns `daysInStage`/`isStalled` correctly (rejected → null); backdating a
+saved job's createdAt 30d flipped `isStalled` true (daysInStage 30 ≥ 14), restored after. The stall
+recommendation generates but sat below the top-8 slice on the busy demo board (8 items ≥95) — expected at
+priority 68; the card itself is unit-verified. Rollback: revert (fields are additive/inert).
+
+## 2026-07-10 - MOM-103+104: transition history + funnel timing (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **Additive migration**
+`job_event_transition_status`. Gives the pipeline a real sense of *time*, not just current position.
+
+**Schema (SPIKE-009 resolved → ADR-0009 ACCEPTED):** `JobEvent` gains `fromStatus`/`toStatus` (`String?`,
+set only on `status_change` events). Chose structured columns on the existing event row over (a) a separate
+`StatusTransition` table (would force a permanent dual-write with the MOM-102 audit trail) and (b) 8 per-stage
+timestamp columns on `JobApplication` (can't model stage revisits; bloats the busiest row). **Backfill** in the
+migration reconstructs the pair from the machine-written MOM-102 title via `split_part(title, ' → ', 1/2)`,
+guarded idempotent (`from_status IS NULL`) and safe (both endpoints must be known statuses). `--create-only`
+→ edited in the backfill → applied, so the checksum covers the final SQL.
+
+**Service:** `jobs.service.update()` writes the structured pair on each transition (keeps `title` for display);
+`serializeEvent` exposes them. `funnel()` now loads the ordered `status_change` events and diffs consecutive
+`eventAt`s per job to emit `medianDaysInStage` per stage (first stage entry approximated by `job.createdAt`;
+open current stage contributes no sample; revisits each sample → median, not a single span). Web: the funnel
+card renders a `~Nd` median-time column per stage.
+
+**Checks:** shared build; API + web lint/typecheck green; **241 API tests** (+2: median-days computed from
+transitions & ignores the open stage; `fromStatus`/`toStatus` written on the event). **Live** (existing DB):
+the 1 pre-existing `applied → oa` event backfilled correctly; a fresh `interview → onsite` transition landed
+`fromStatus=interview toStatus=onsite`; funnel returned `medianDaysInStage` interview 1.5, applied 0. Meta job
+restored to `interview`. Rollback: drop the 2 columns (free-text title untouched).
+
+## 2026-07-10 - MOM-125: targeting shortlist (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Answers "who should I apply
+to next?" by ranking the whole catalog with the same focus-weighted grounded readiness the "am I ready for
+Meta?" verdict uses per-job.
+
+**Logic (`career.service.getTargetShortlist`):** for each catalog company with a focus profile, fit =
+`companyWeightedPercentage(readiness.areas, focusAreas)` — the user's grounded (MOM-129 FSRS) readiness
+weighted by that company's 1–5 interview emphasis. Grounded readiness is computed once per **distinct role
+track** (memoized `readinessByTrack`), so ~20 companies cost a handful of evidence loads, not 20. Final
+`score = fit × sponsorshipMultiplier × regionMultiplier`, rounded. Sponsorship gate (emigration-critical):
+sponsored 1.0 / unknown 0.7 / not_sponsoring 0.2 (`null`→unknown). Region: inferred from the user's existing
+pipeline (regions of their linked companies); 'Global'/null and preferred regions stay at 1.0, a specific
+off-target region takes a 0.85 demerit — but with no pipeline signal nothing is penalized. Each item carries
+`topFocusAreas` (weight + the user's % in each) and a human `reason`. Route `GET /career/target-shortlist`
+(static, ordered before the `:jobId` routes). Web: a "Where to apply next" top-3 card on the career page,
+each row linking to the company detail.
+
+**Checks:** `pnpm --filter @momito/shared build`; API + web lint/typecheck green; **239 API tests** (+2:
+fit-ranking with sponsorship scaling + focus-less companies skipped; region demerit only once a pipeline
+preference exists) + 26 web tests. **Live:** the demo catalog ranks NVIDIA 51 → … → Amazon 15; ByteDance
+(the sole `unknown` pack) correctly drops to score 15 on a 0.7 multiplier despite fit 21. Rollback: drop the
+route + method + shared types (inert).
+
+## 2026-07-10 - MOM-124: visa/sponsorship filter + sort (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema, web-only.** Makes the
+sponsorship signal actionable on both the target catalog and the live pipeline.
+
+**Catalog (`companies/page.tsx`):** a filter-pill row (All / Sponsors visas / Unknown / No sponsorship),
+reusing the jobs-page status-pill pattern. `sponsorshipKey(status)` buckets `null` (no data) together with
+explicit `'unknown'` so the filter never hides a company. Pills with a zero count hide (except All).
+
+**Jobs list (`jobs/page.tsx`):** a parallel sponsorship-pill row (emerald active state to distinguish it
+from the status row) plus a **sponsored-first sort** on the rendered list. A job's sponsorship prefers its
+linked `companyRef.sponsorshipStatus`, falling back to the job's own `visaTag`, then `'unknown'`
+(`jobSponsorship`); sort uses `SPONSORSHIP_RANK` (sponsored 0 < unknown 1 < not_sponsoring 2), stable so
+same-bucket jobs keep their order. The status and sponsorship filters compose (AND).
+
+**Checks:** web lint/typecheck green; **26 web tests** (+1: catalog filter buckets null with unknown and
+narrows to each sponsorship class). No API/shared change → API stays 237. No Playwright in this checkout;
+the filter logic is client-side and unit-covered. Rollback: revert the two pages + delete the test.
+
+## 2026-07-10 - MOM-123: company detail + catalog pages (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Surfaces the structured
+company intelligence (MOM-121) as a browsable catalog + detail UI — the target side of the North-Star loop
+now has a face.
+
+**Web:** new `apps/web/app/(authenticated)/companies/page.tsx` (catalog grid — name, region badge,
+sponsorship badge, top-3 focus-area chips; click → detail) and `companies/[id]/page.tsx` (detail —
+focus-area weight bars, numbered interview process, notes, role tracks, linked question/story counts,
+sponsorship badge, comp band). Nav entry `🏢 Companies` added to `navigation.ts` before Questions.
+
+**API:** `CompaniesService.get(id)` now `include`s `_count: { questions, stories }` and returns
+`linkedQuestionCount`/`linkedStoryCount` (added to `CompanyResponse` in shared). `list()` unchanged.
+
+**Checks:** `pnpm --filter @momito/shared build`; API + web lint/typecheck green; **237 API tests** (+1:
+`get()` surfaces linked counts) + 25 web tests; web build clean. **Live:** `GET /companies/:id` for Meta
+returns `linkedQuestionCount: 4, linkedStoryCount: 0`. Playwright screenshot skipped — no Playwright binary
+in this checkout; pages are build/typecheck/lint clean and reuse the verified `Card`/`Badge`/`companiesApi`
+patterns, API data path live-verified. Rollback: delete the two pages + nav row + revert the `_count`
+include (inert).
+
+## 2026-07-10 - MOM-122-followup: company-weighted readiness (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Makes the MOM-122 FK pay
+off in the numbers: a job linked to a catalog company now gets a readiness verdict weighted by *that
+company's* focus areas, not the flat role checklist.
+
+**Logic (`career.service`):** `getJobReadiness` loads `companyRef.focusAreas`/`roleTrackIds`; when linked,
+the headline `base` becomes the **focus-weighted mean** of area percentages (`companyWeightedPercentage`)
+and `weakestAreas` is ordered by `focusDrag` = focus weight × (100 − percentage), so the areas the company
+actually drills surface first. Unlinked → the existing role-checklist mean + lowest-percentage ordering
+(unchanged). `getJobStoryGaps` falls back to `companyRef.roleTrackIds[0]` when the job has no explicit
+roleTrack. New helpers `companyWeightedPercentage`/`focusDrag`/`firstRoleTrack`/`asFocusAreas`.
+
+**Checks:** `pnpm -r lint/typecheck` green; **236 API tests** (+2: focus-weighted score math = 39 for a
+dsa-heavy company; weakest area = the hardest-drilled one; story-gap role-track fallback to the linked
+company). **Live**: the Meta job (focus dsa:5/system_design:4/behavioral:3) now returns a company-weighted
+verdict whose weakest areas are exactly Meta's three focus areas, ordered by Meta's emphasis (score 10,
+penalty 15 from the bombed system_design round).
+
+**Next:** MOM-123 (company detail + catalog pages), MOM-124 (sponsorship filter), MOM-125 (targeting
+shortlist) — the rest of Wave 1.
+
+## 2026-07-10 - MOM-122: JobApplication.companyId FK + name-match backfill + link UI (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. The plan's **single highest-risk change**
+(busiest table + seed). Additive migration `20260709190839_job_company_fk` under D-004.
+
+**Schema/migration (additive; rollback = drop column+index+FK):** `job_applications` gains
+`company_id UUID` + FK to `companies` (**`onDelete SetNull`** — pipeline survives catalog deletion) +
+`@@index`. Free-text `company` KEPT untouched. Generated with `--create-only` (verified NOT auto-applied
+via `migrate status`), then the **backfill UPDATE** was added to the SQL before applying (so the checksum
+covers final content — no hand-edit-after-apply): exact case-insensitive match `lower(trim(company)) =
+lower(trim(name))` against catalog names that are unique (`HAVING count(*)=1`, since `Company.name` has no
+unique constraint). Idempotent (fills only NULLs).
+
+**Service/DTO/shared:** Create/UpdateJobDto gain optional `companyId` (`@IsUUID`, null unlinks);
+`jobs.service` validates the company exists (`ensureCompanyExists` → 400 on unknown), keeps writing the
+free-text `company`, includes a slim `companyRef` (id/name/region/sponsorshipStatus/focusAreas) in
+`jobInclude`, and serializes `companyId` + `companyRef` (`JobCompanyRef` in shared) — malformed focusAreas
+Json coerced to `{}`. `updateData` switched to `UncheckedUpdateManyInput` to carry the scalar FK.
+
+**Web:** job list "Add Job" form gains a `<datalist>` of catalog names — typing an exact (ci) match links
+the company (green "links to the catalog" hint); job detail gains a **Company** card showing the linked
+company + sponsorship and a "Link/Unlink" select for fixing non-matches. `companiesApi` return types
+upgraded to `CompanyResponse` + a `get(id)`.
+
+**Checks:** `pnpm -r lint/typecheck` green (API + web); **234 API tests** (+3: create validates+stores
+companyId & serializes companyRef; unknown companyId → 400; update passes companyId/null through). Migration
+is pure ADD COLUMN + idempotent NULL-only backfill, so fresh-DB behavior is a strict subset of the verified
+existing-DB path. **Live** on :3001: backfill linked 6/7 demo jobs (Datadog, out-of-catalog, stays null);
+Meta job returns `companyRef {sponsorship: sponsored, focusAreas {dsa:5,…}}`; created a Stripe-linked job,
+unlinked it (companyRef→null, free-text "Stripe" kept), bad companyId → 400.
+
+**Next:** wire `career.service.getJobReadiness`/`getJobStoryGaps` to weight by `companyRef.focusAreas`/
+`roleTrackIds` when linked (deferred from this PR to keep the risky migration focused) — then company detail
+page (MOM-123), sponsorship filter (MOM-124), targeting shortlist (MOM-125).
+
+## 2026-07-10 - MOM-121: structured Company columns + seed enrichment (CLAUDE, additive migration)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. Additive migration under D-004 (standing
+blanket approval). Migration `20260709185922_company_intelligence`.
+
+**Schema (additive, rollback = drop 5 columns):** `companies` gains `focus_areas JSONB DEFAULT '{}'`
+(map `{[CareerRoleAreaId]: 1–5}`), `role_track_ids JSONB DEFAULT '[]'`, `interview_process JSONB DEFAULT '[]'`,
+`sponsorship_status TEXT` (a VISA_TAGS value; null = no data), `comp_band TEXT`. Pure `ADD COLUMN` — no
+data step in the SQL. Json (not relation tables) per D-017: the taxonomies are TS-owned and the query is
+always per-row.
+
+**Seed enrichment:** the 20 packs' focus/track prose (previously only in `notes`) is hand-mapped into the
+structured columns in `seed-data.ts` (tuples → objects; e.g. Meta → `focusAreas {dsa:5, system_design:4,
+behavioral:3}`, `roleTrackIds ['big-tech-swe','fullstack-swe']`, `sponsorshipStatus 'sponsored'`). `notes`
+kept verbatim as fallback. All sponsored except ByteDance (`unknown`). `seed.ts` upserts by fixed UUID so
+existing DBs enrich on re-seed; the question-company index reference switched from `companies[i][0]` to
+`companies[i].id`.
+
+**Service/DTO/shared:** `CompaniesService` now serializes rows to a typed `CompanyResponse` (new shared
+interface + `CompanyFocusAreas`/`CompanyInterviewStage`) and coerces malformed Json to safe empties; a new
+`get(id)` + `GET /companies/:id` route (for MOM-123). DTOs validate the Json shapes at the boundary via a
+new custom validator (`IsFocusAreas`/`IsRoleTrackIds`/`IsInterviewProcess` — keys ∈ `CAREER_ROLE_AREA_IDS`,
+weights 1–5, tracks ∈ `CAREER_ROLE_TRACK_IDS`, roundType ∈ `INTERVIEW_ROUND_TYPES`) + `@IsIn(VISA_TAGS)`.
+`toData` writes only the keys a PATCH provided (a notes-only update never clobbers focusAreas).
+
+**Checks:** `pnpm -r lint/typecheck` green; **231 API tests** (+8: serialization, malformed-Json coercion,
+partial-update, NotFound; DTO validation accept/reject for bad area key/weight/track/visa/roundType). Fixed
+one pre-existing content-service company test mock (serializer now needs timestamps). **Live** on :3001:
+`GET /companies` returns 20 enriched companies; `GET /companies/:id` (Meta) returns `focusAreas {dsa:5,…}`,
+tracks, `sponsorshipStatus 'sponsored'`.
+
+**Next:** MOM-122 — the `JobApplication.companyId` FK + name-match backfill + link UI (migration 2, the
+highest-risk change), then downstream company detail/filter/shortlist (MOM-123/124/125).
+
+## 2026-07-10 - MOM-120: DESIGN — company-as-FK + structured intelligence (CLAUDE, docs only)
+
+**Actor:** CLAUDE (planner). Branch `feat/careeros-phase-0`. **Docs only, no migration run** — the design
+gate for Phase 1D, the plan's highest-risk change (job↔company FK on the busiest table + 20 seed packs).
+
+**SPIKE-012 (read-only, live dev DB):** of 7 job applications, **6 backfill** by exact case-insensitive
+match to a unique catalog `Company.name`; the 1 miss ("Datadog") is out-of-catalog and correctly stays
+null. Zero duplicate company names, but users can create dupes via `POST /companies` → backfill guards
+with `HAVING count(*)=1`. Fuzzy matching rejected (a wrong link is worse than no link).
+
+**Design (ADR-0010 → ACCEPTED, D-017):** two additive migrations. **MOM-121** adds structured `Company`
+columns as **Json** (`focusAreas {area:1–5}`, `roleTrackIds`, `interviewProcess`) + scalar
+`sponsorshipStatus` (VISA_TAGS value, null=no data) + free-text `compBand`, and hand-maps the 20 packs'
+existing `notes` prose into them. **MOM-122** adds nullable `companyId` FK (`companyRef`, `onDelete:SetNull`)
+keeping the free-text `company` column, with a name-match backfill in the migration SQL. Json (not a
+relation table) matches the Question tag convention since the area taxonomy is TS-owned and queries are
+per-row; DTO validates `focusAreas` keys against `CAREER_ROLE_AREA_IDS`.
+
+**Files:** `docs/adr/0010-company-as-fk-structured-intelligence.md` (PROPOSED→ACCEPTED, full design),
+`docs/agent/DECISIONS.MD` (D-017), BACKLOG/NEXT/LOG.
+
+**Next:** MOM-121 — implement the structured Company columns + seed enrichment (additive migration 1).
+
+## 2026-07-09 - MOM-131: story coverage → target-scoped behavioral gap map (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Closes the last Gate-1 spine
+item: a specific interview now gets a concrete behavioral **gap map** ("you have ownership but no ambiguity
+story for Meta") instead of a generic "practice behavioral".
+
+**Logic (`CareerService.getJobStoryGaps`, `GET /career/jobs/:jobId/story-gaps`):** the target role's
+**expected** behavioral competencies = the concrete `STORY_COMPETENCIES` ids named in that track's
+`behavioral`-area checklist keywords (big-tech-swe → ownership/conflict/ambiguity/failure), falling back to
+the universal ownership/conflict/ambiguity/failure set when a track names none (e.g. infra's
+incident/postmortem keywords aren't competency ids). Coverage = the user's `Story.competencyTags` matched
+case-insensitively; each competency reports `covered` + `storyCount`, plus `coveredCount`/`missingCount`/
+`totalStories`. Role-scoped now; company-specific weighting enriches when the structured Company FK (MOM-121)
+lands.
+
+**Web:** `StoryGapCard` (new) renders under `JobReadinessCard` on the job page — covered vs missing
+competency chips, a plain-language "N of M covered, missing X, Y" line, and a "write a story for the gaps"
+link (empty-bank state points to `/stories`). `careerApi.jobStoryGaps` added.
+
+**Checks:** `pnpm -r lint/typecheck` green; **223 API tests** (+3: covered/missing with case-insensitive
+tags + declaration-order competencies; all-missing on an empty bank; not-owned throws) + 25 web tests.
+**Live** on :3001: Meta job (defaults big-tech-swe) → 4 competencies, `ownership` covered (1 story),
+conflict/failure/ambiguity missing. **★ CareerOS Gate 1 spine (outcome→prep→verdict→gap) is complete.**
+
+**Next:** Phase 1D — company-FK migration (MOM-120→121→122), the highest-risk migration (busiest table +
+seed); SPIKE-012 + DESIGN-doc PR before the implementer PR, keeping the free-text `company` fallback.
+
+## 2026-07-09 - MOM-146: Readwise highlight → FSRS spaced-repetition review — the read→retain loop (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Net-new task (not in the
+CareerOS plan) taken on the owner's explicit ask to "really think hard about how the Readwise features can
+be improved to truly help the learner."
+
+**The diagnosis.** The Readwise feature *captured* highlights (sync) and let you *tag* them (role/area), then
+a reviewed highlight was filed into a write-only `LearningEvidence` ledger — and never seen again. But the
+learner highlighted it *because they want to remember it*, and Momito's entire edge over plain Readwise is
+**FSRS spaced repetition tied to a concrete target**. The highlight dead-ended exactly one step before the
+app's core value: nothing made you *retain* it. Meanwhile the review engine (`ReviewState`) is already
+polymorphic (`objectType/objectId`, ADR-0002) — highlights just weren't wired to it.
+
+**The fix — highlights that stick.** A reviewed highlight now enters the same FSRS queue as questions and
+stories. `REVIEWABLE_OBJECT_TYPES` gains `'highlight'` (a string-union add — `ReviewState.objectType` is a
+plain `String` column and `objectId` is `@db.Uuid`, matching `LearningHighlight.id`, so **zero migration**).
+- `reviews.service`: `'highlight'` supported; ownership-checked like Story (per-user private, ADR-0003);
+  `listDue` titles a due highlight by its **source** ("you highlighted something in *Atomic Habits* — what
+  was it?"), the text being the reveal.
+- `learning.service.updateHighlight`: reviewing a highlight as anything but "ignored" seeds a `ReviewState`
+  via `reviews.record(userId,'highlight',id,3)` (Good — you just read+understood it; FSRS picks the first
+  interval). Best-effort (a scheduling hiccup can't fail the review). Ignored = filed to ledger only. Added
+  `getHighlight` for the review card's reveal path (`GET /learning/highlights/:id`). A highlight deleted
+  upstream in Readwise **suspends** its review state on the next sync so it stops resurfacing.
+- Web: `TodayReviewCard` gains a highlight branch (cue → recall → reveal text+note → grade); inbox primary
+  action relabeled **"Review" → "Remember"** with copy explaining it drops into the spaced-repetition queue.
+
+**Checks:** `pnpm -r lint/typecheck` green; **220 API tests** (+11: highlight schedule/ownership/title-cue/
+fallback in reviews; review-seeding on useful, not on ignored, not on retag, best-effort, getHighlight in
+learning) + **25 web tests** (+1: highlight card cues by source, withholds text until reveal, grades
+`('highlight','hl-1',3)`). **Live** on :3001 (seeded a real highlight for the demo user): review "useful" →
+200 → `ReviewState` created (`objectType:highlight`, reps 1); `GET /learning/highlights/:id` returns text;
+backdated its due → appears in `/reviews/due` titled **"Atomic Habits"**, type `highlight`; marked deleted →
+suspended → gone from due. Cleaned up the seeded rows.
+
+**Next:** back to the CareerOS Phase-1 plan — **MOM-131** (story coverage → behavioral gap map, role-scoped),
+then Phase 1D company-FK migration (MOM-120→121→122, highest-risk, DESIGN PR first).
+
+## 2026-07-09 - MOM-141: auto-assembled round-scoped prep queue + interview countdown on Today (CLAUDE, no schema)
+
+**Actor:** CLAUDE (implementer). Branch `feat/careeros-phase-0`. **No schema.** Two parts, both riding
+existing infrastructure: (1) a daily cron that fires MOM-111's `generatePrep` for imminent rounds, and (2)
+an interview **countdown** card injected into the existing `recommendations.service` Today brain.
+
+**Part 1 — auto-assemble (`InterviewRoundsService.autoAssembleUpcomingPrep(withinDays=7)` + `InterviewPrepScheduler`):**
+finds `pending` rounds scheduled within the window that have **zero** tasks (`_count.tasks === 0`) and fires
+`generatePrep` for each, returning `{ roundsPrepared, tasksCreated }`. Rounds that already have a prep queue
+are skipped (idempotent — safe to run daily). `InterviewPrepScheduler.tick()` runs `@Cron(EVERY_DAY_AT_6AM)`
+and logs only when it prepared something. Registered in `InterviewRoundsModule` providers.
+
+**Part 2 — countdown card (`recommendations.service.list`):** queries `interviewRound.findMany` for `pending`
+rounds with `scheduledAt` in `[now, now+14d]`, top 3 by soonest, and emits a `type:'job'` card
+*"Prep your \<company\> \<RoundType\> \<today|tomorrow|in N days\>"* linking to `/jobs/:id`. Priority
+`101 + (14 − daysUntil)` (101–115) so it sits **above overdue tasks (100)** and scales with proximity — a
+nearer round outranks a farther one. Reason speaks the urgency ("in 3 days — build your prep queue now").
+
+**Checks:** `pnpm -r lint/typecheck` green; **209 API tests** (+4: countdown ranks/copies by proximity for
+3-days and tomorrow; autoAssemble preps only task-less rounds and no-ops on an empty window). **Live** on
+:3001: created a `coding` round 3 days out → Today's top card became *"Prep your Meta Coding in 3 days"*
+(priority 112), above a pre-existing Behavioral round 6 days out (109) and overdue tasks (100). Recommendations-
+only injection (no new UI component, like MOM-142) → no screenshot.
+
+**Next:** MOM-131 — story coverage → interview behavioral gap map (role-scoped version doable now). Then
+Phase 1D company-FK migration (MOM-120→121→122, highest-risk, DESIGN PR first).
+
+## 2026-07-09 - MOM-112: per-round interview-date reminder automation (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Additive migration under the D-004 gate (blanket approval). Branch
+`feat/careeros-phase-0`. A scheduled round now auto-lands a countdown reminder on Today/calendar —
+reusing the existing `ensureDeadlineReminder` sentinel-upsert idea, keyed per round.
+
+**Schema (additive migration `20260708202903_reminder_interview_round`, rollback = drop):** `reminders`
+gains a nullable `interview_round_id` UUID + index + FK to `interview_rounds` (`ON DELETE CASCADE` — a
+deleted round takes its reminder with it). Back-relation `reminders Reminder[]` on `InterviewRound`.
+
+**Logic (`InterviewRoundsService.ensureRoundReminder`):** idempotent upsert of one `type:'interview_round'`
+reminder per round, found by `interviewRoundId`, due **09:00 UTC the day before** the round's `scheduledAt`,
+titled *"Prep for your \<company\> \<RoundType\> on \<date\>"*. Called from `create()` (always) and from
+`update()` when `scheduledAt` or `roundType` changed. No `scheduledAt` → no reminder, and any stale one is
+deleted (so clearing the date cleans up). Surfaces through the existing reminders UI (job detail, Today,
+calendar) with **no web change**.
+
+**Checks:** `pnpm -r lint/typecheck/test` green — **205 API tests** (+3: scheduled create makes a reminder
+due the day before; a dateless round makes none; clearing the date deletes the stale reminder). **Live**:
+creating an onsite scheduled 2026-08-15 produced reminder *"Prep for your Meta Onsite on 2026-08-15"* due
+2026-08-14; PATCH `scheduledAt:null` removed it; deleting the round cleaned up. Migration applied to the
+running DB; client regenerated after killing the API node process (Windows DLL lock).
+
+**Next:** MOM-141 — auto-assemble the round-scoped prep queue on an approaching date (fire MOM-111's
+`generatePrep` for imminent rounds) + surface the interview countdown on Today (recommendations). Deps
+111 ✓ / 128 ✓ / 131 (story gap — role-scoped version doable now).
+
+## 2026-07-09 - MOM-111: round-scoped prep task generation + Task.interviewRoundId (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Additive migration under the D-004 gate (blanket approval). Branch
+`feat/careeros-phase-0`. Delivers SPIKE-010's planned Task↔round back-ref and the round-typed prep it
+enables — the input MOM-141 (auto prep queue) will fire on an approaching date.
+
+**Schema (additive migration `20260708202012_task_interview_round`, rollback = drop):** `tasks` gains a
+nullable `interview_round_id` UUID + index + FK to `interview_rounds` (`ON DELETE SET NULL` — deleting a
+round detaches its tasks, doesn't delete them). Back-relation `tasks Task[]` on `InterviewRound`. No
+backfill; purely additive on the busy `tasks` table.
+
+**Round-typed prep (`InterviewRoundsService.generatePrep(jobId, roundId, userId)`, route `POST
+/jobs/:jobId/rounds/:roundId/prep`):** a new `ROUND_TYPE_FOCUS` map says which competency areas each round
+type tests (system_design → `[system_design]`, onsite → `[dsa, system_design, behavioral]`,
+recruiter_screen → `[behavioral, profile]`, …). Prep pulls the role-track checklist filtered to those
+areas (falls back to the full list if the filter is empty — never dead-ends), caps at 5, and creates
+`Task`s back-referenced to the round (`interviewRoundId`), staggered to come due *before* the round's
+`scheduledAt` (or the job deadline, or a week out). Reuses the existing `generatePrep` checklist→Task
+pattern.
+
+**Web:** `interviewRoundsApi.generatePrep` + a per-round **Prep** button in `InterviewRoundsCard` with a
+confirmation toast ("Added N prep tasks — see the calendar.").
+
+**Checks:** `pnpm -r lint/typecheck/test` green (api + web + shared) — **202 API tests** (+2: system_design
+round creates system_design-scoped tasks back-referenced + due before the round; not-found round throws).
+**Live**: `POST /jobs/<Meta>/rounds/<system_design>/prep` → `{created:1}`; a direct DB read confirms the
+task carries `interviewRoundId`, `area=system_design`, due 2026-07-05 (one day before the 07-06 round).
+Migration applied to the running DB; client regenerated after killing the API node process (Windows DLL
+lock).
+
+**Next:** MOM-112 (interview-date reminder automation — reuse `ensureDeadlineReminder`'s sentinel upsert,
+keyed per round), then MOM-141 (auto-assemble the round-scoped prep queue + surface the countdown on Today).
+
+## 2026-07-09 - MOM-130: "am I ready for <company>?" job readiness verdict (CLAUDE)
+
+**Actor:** CLAUDE (implementer). No schema change. Branch `feat/careeros-phase-0`. The Gate-1 verdict:
+a single go/no-go for one application that a bombed round visibly lowers.
+
+**`career.getJobReadiness(jobId, userId)`** (route `GET /career/jobs/:jobId/readiness`) composes the two
+loop halves: the target's **grounded role readiness** (MOM-129 `getReadiness` for the job's `roleTrackId`,
+default `big-tech-swe`) minus a **penalty** from that job's **open weakness signals** (MOM-113 debrief
+output, fetched via the new `weaknesses.listOpenSignals(userId, jobId)`, decayed). `penalty =
+min(30, Σ severity·5)`; `score = clamp(overall − penalty, 0, 100)`; status `ready ≥75 / almost ≥50 /
+not_ready`. Returns the 3 weakest grounded areas + the blocking signals. Company focus-area weighting is
+derived from the role-track checklist for now; when the structured-`Company` migration (MOM-121) lands it
+can weight by real company focus — additive.
+
+**Shared:** `JOB_READINESS_STATUSES`, `JobReadinessResponse` (+ `JobReadinessWeakArea`). **Weaknesses:**
+`openSignals` → public `listOpenSignals(userId, jobApplicationId?)`. **Web:** `careerApi.jobReadiness` +
+a new `JobReadinessCard` at the top of the job detail aside — the score, status, `−penalty` explainer,
+weakest-area bars, and the flagged-in-interviews chips.
+
+**Checks:** `pnpm -r lint/typecheck/test` green (api + web + shared) — **200 API tests** (+3: penalty
+docking, penalty cap + non-negative clamp, ownership 404). **Live**: `GET /career/jobs/<Meta>/readiness`
+returns **score 2/100, not_ready, penalty 15** with `blockingSignals` = `[concept_gap, time_pressure,
+system_design]` and weakest areas `projects/lld_oop/behavioral` — the bombed system-design round
+demonstrably drags the Meta verdict down. Playwright screenshot shows the Interview Readiness card on the
+job page.
+
+**★ CareerOS Gate 1 loop is complete:** save a losing debrief → a target-scoped weakness is stored →
+it appears on Today (MOM-142), leads the next `job_prep` (MOM-128), and lowers the FSRS-grounded
+"am I ready for Meta?" verdict (MOM-129/130). Bombing a round provably reshapes prep *and* the go/no-go.
+(Remaining Gate-1 polish: auto prep-queue countdown MOM-141, and the deferred structured-company context
+MOM-120→122.)
+
+**Next:** MOM-111 (round-scoped prep generation) + MOM-112 (interview-date reminders) — small, READY,
+unblock MOM-141 (auto-assembled prep queue on an approaching date).
+
+## 2026-07-09 - MOM-129: one FSRS-grounded readiness engine (consolidates the two) (CLAUDE)
+
+**Actor:** CLAUDE (implementer). The plan's *large* task and its riskiest non-migration change — it
+touches the two most-used services. No schema change; response shapes preserved (two additive fields).
+Branch `feat/careeros-phase-0`. Implements ADR-0011 / D-013 ("single engine; supersedes the dual
+readiness engines").
+
+**Problem:** readiness was computed two divergent ways over the same checklist — `career.service`
+(binary keyword *coverage*) and `missions.service.diagnose` (count-based *level 0–3*) — with **two
+different `isPositiveAttempt` definitions**, so identical history produced different numbers. Neither
+used FSRS; readiness never decayed and was gameable by keyword presence.
+
+**New `ReadinessService` (`readiness` module)** is the single engine:
+- `isPositiveAttempt()` — the one canonical rule (union of the old two: `rubricScore≥0.6 ||
+  aiScore≥0.6 || selfRating≥3 || correctness∈{correct,strong}`; 'partial' excluded).
+- `areaMastery(userId)` → per-area `{ retrievability, reviewedCount, gradedAttempts, positiveAttempts,
+  score }`. Retention half = average **FSRS retrievability** (via `ts-fsrs` `get_retrievability`) over
+  the user's question `ReviewState`s, mapped to areas by `Question.areaTags` — the bounded in-memory
+  join ADR-0011 Q2 specced, no `ReviewState` denormalization. Performance half = graded attempts grouped
+  by the MOM-128 `area` tag. `score = 0.6·retention + 0.4·min(1, positives/5)`; a New/zero-stability card
+  contributes no retrievability signal.
+
+**Consumers routed through it:** `career.service` injects it, drops its private `isPositiveAttempt`, and
+in `getReadiness` blends each area's keyword coverage 50/50 with `masteryScore` **when the area has
+review/attempt history** (else coverage-only, so profile/project areas aren't zeroed). Adds
+`masteryScore`/`retrievability` to `RoleAreaReadiness`; `overallPercentage` is now the weight-weighted
+mean of grounded area percentages. **`gapItems`/`topGaps`/`completedItems` logic is unchanged**, so the
+recommendations that depend on them (MOM-142) are unaffected. `missions.service` injects it and replaces
+its duplicated positive-attempt expression with the shared rule (missions stays frozen otherwise — D-015).
+
+**Scoring formula note:** the 0.6/0.4 retention/volume split and the 50/50 coverage/mastery blend are
+implementation choices under the ADR-0011 decision (single FSRS-grounded engine); recorded here rather
+than a new ADR since the architectural decision was already ACCEPTED in ADR-0011.
+
+**Checks:** `pnpm -r lint/typecheck/test` green (API + web + shared) — **197 API tests** (+7: readiness
+`isPositiveAttempt` matrix, `areaMastery` grounding/partial-credit/New-card-skip; career grounding blend +
+no-history fallback). **Live**: `GET /career/readiness` shows `dsa` and `language_runtime` (which have
+review history) carrying real retrievability (0.955, 0.947) and blended percentages, while
+`domain_knowledge`/`projects` (no history) stay coverage-only with `masteryScore: null`; `topGaps`
+unchanged. `GET /dashboard/summary` (200) returns the same grounded areas incl. `masteryScore`. A mission
+`diagnose` (200) still computes competency levels through the shared rule. No regression.
+
+**Next:** MOM-130 — company-scoped readiness rollup ("am I ready for Meta?" go/no-go), reusing
+`areaMastery` weighted by the target's focus areas + open weakness signals.
+
+## 2026-07-09 - MOM-142: open WeaknessSignals as ranked Today items — Gate 1 loop visible (CLAUDE)
+
+**Actor:** CLAUDE (implementer). No schema change. Branch `feat/careeros-phase-0`. The last Gate-1 wire:
+the debrief-emitted weaknesses now **appear on Today** with a repair action, so the loop is visible to
+the user, not just present in the database.
+
+**Change (`recommendations.service.list`):** the service already fetched `weaknesses.summary()`, which
+since MOM-127 carries `openSignals` — but only the *derived* struggle patterns/topics/reasons were
+surfaced; the *stored* interview-grounded signals were dropped. Now the top 3 open signals (by decayed
+severity) become first-class `type:'practice'` cards titled `Repair: {label}` (the label already carries
+area + company, e.g. *"System design — weak at Meta"*), with a provenance-aware reason ("An interview
+debrief flagged this weakness."). Area signals link to a `weak_area_review` filtered to that area; others
+to a generic repair. Priority `94 + clamp(round(severity),1,5)` = **95–99**, i.e. at/above derived
+weakness (95), below overdue tasks (100) and missions (110). The surfaced signal keys are recorded and
+the derived weakness/reason paths skip them, so a stored signal never double-counts with its derived echo.
+
+**Checks:** `pnpm --filter @momito/api lint/typecheck/test` green — **190 API tests** (+3: a debrief area
+signal becomes a ranked repair card with the right href/priority/reason; a severe recurring signal caps at
+99 and names its count; a stored reason signal suppresses the derived reason card). **Live**: `GET
+/practice/recommendations` for the demo user returns the three Meta debrief signals
+(`signal:area:system_design:…`, `signal:reason:time_pressure:…`, `signal:reason:concept_gap:…`) at
+priority 95, above the NVIDIA apply card. **Playwright** screenshot of `/today` shows all three "Repair:
+… at Meta" cards rendered in the priority queue.
+
+**★ CareerOS Gate 1 core behavior is now demonstrable end-to-end:** save a losing debrief on an interview
+round (MOM-110/113) → a target-scoped `WeaknessSignal` is stored (MOM-127) → it appears on Today as a
+ranked repair card (MOM-142) **and** the next `job_prep` session for that job leads with that weak area
+(MOM-128). Bombing a round provably reshapes tomorrow's prep. Remaining for the full gate: the FSRS-
+grounded "am I ready for Meta?" verdict (MOM-129 → 130).
+
+**Next:** MOM-129 — consolidate `career.service` + `missions.service` readiness into one FSRS-grounded
+helper (missions-frozen consolidation), grounding per-area readiness in retrievability + graded attempts
+(now tagged by area via MOM-128).
+
+## 2026-07-09 - MOM-128: tag attempts with target dimension + the job_prep session branch (CLAUDE)
+
+**Actor:** CLAUDE (implementer). No schema change (the `AnswerAttempt.roleTrackId`/`area` columns
+landed in MOM-127). Branch `feat/careeros-phase-0`. Two loop wires: study signals now carry the target
+dimension the readiness rollup (MOM-129/130) needs, and a target-scoped mock session type exists.
+
+**Part 1 — tag attempts on create (`sessions.service.answer()`):** every graded attempt is now
+attributed — `area` from the *question actually practiced* (its first `areaTags` entry that is a known
+`CAREER_ROLE_AREA_ID`, falling back to the session's `area`), `roleTrackId` from the session's declared
+target. Both stay `null` for untargeted global practice, which is correct — a random quick-practice
+attempt isn't attributable to a specific target. The question's `areaTags` are read via the existing
+session lookup (added to the `sessionQuestions` select), so no extra query.
+
+**Part 2 — the `job_prep` session branch (`selectJobPrepQuestions`):** `job_prep` was in `SESSION_TYPES`
+but silently fell through to a plain filtered draw. It now assembles *this application's* mock: candidates
+are the target company's linked question bank (company matched by name until the MOM-122 FK lands) and,
+leading the set, questions in the target's **exposed weak areas** — the open `WeaknessSignal`s scoped to
+that `jobApplicationId`, i.e. what the MOM-113 debrief edge recorded. Weak-area questions sort first, so a
+bombed round demonstrably reshapes the next prep set. Degrades to the job's role-track filtered draw, then
+a plain draw (never dead-ends).
+
+**Checks:** `pnpm --filter @momito/api lint/typecheck/test` green — **187 API tests** (+5: job_prep
+weak-area-first from the company bank, role-track filtering when the company isn't catalogued, no-job
+degradation; attempt tagging from session+question, and the untargeted-null fallback). **Live round-trip**:
+a `job_prep` session scoped to the Meta job (whose only open weakness is `system_design`, from MOM-113's
+bombed round) returned **4 questions, all `system_design`, from Meta's bank** — the debrief visibly
+reshaped the prep set. Answering one produced an attempt tagged `area=system_design` (roleTrackId null —
+Meta has no role track); a `role_drill` attempt scoped to `big-tech-swe` was tagged
+`roleTrackId=big-tech-swe`, `area=dsa`.
+
+**Loop status:** OUTCOME → PREP now closes end-to-end through study sessions too (not just the signal
+store): bomb a round → its area becomes an open signal → the next `job_prep` for that target leads with
+that area. Remaining Gate-1 wires: surface signals on Today (MOM-142), one grounded readiness engine +
+"am I ready for Meta?" verdict (MOM-129/130).
+
+**Next:** MOM-142 (register open weakness signals + pipeline stalls as first-class ranked
+`recommendations` items on Today), then MOM-129 (consolidate the two readiness engines into one
+FSRS-grounded helper) → MOM-130 (company-scoped readiness verdict).
+
+## 2026-07-09 - MOM-113: debrief → WeaknessSignal + LearningEvidence — THE LOOP-CLOSING EDGE (CLAUDE)
+
+**Actor:** CLAUDE (implementer). The single most important PR of Phase 1: the edge that makes an
+interview OUTCOME reshape future PREP. No schema change (uses the MOM-127 `weakness_signals` store +
+the existing `learning_evidence` ledger). Branch `feat/careeros-phase-0`. **CareerOS Gate 1 core
+behavior now demonstrably works.**
+
+**The edge:** `InterviewRoundsService.update()` now, *after* the write and *only* when the update
+carried debrief content (`dto.debrief`/`areasWeak`/`missTags` defined — i.e. the "Save debrief"
+action, not a bare outcome-toggle), calls a new private `emitDebriefSignals(round, userId)`:
+- For each `areasWeak` entry → `weaknesses.recordSignal({signalType:'area', key:area, source:'debrief',
+  area, jobApplicationId})` labelled e.g. *"System design — weak at Meta"*.
+- For each valid `missTags` entry → a `signalType:'reason'` signal labelled e.g. *"Ran out of time —
+  System design at Meta"*.
+- Writes/updates one `LearningEvidence` row of type `interview_debrief` per round — the OUTCOME record
+  **and** the idempotency ledger.
+
+**Idempotency (the subtle part):** the weakness store *accrues* severity per event, so naive
+re-emission on every save would inflate a weakness every time the user edits a typo. Each round keeps
+exactly one `interview_debrief` evidence row whose `metadata.emittedKeys` records which signal keys it
+has already fired; on re-save only *new* keys emit. This makes a round's contribution idempotent while
+still letting two *different* rounds on the same job both accrue onto the shared job-scoped signal
+(correct cross-round behavior). Removing an area does not retract its earlier signal — read-time decay
+(21-day half-life, MOM-127) handles that. Emission is best-effort (wrapped; a failure logs a warning
+and never fails the user's debrief save). Wired via `WeaknessesModule` import into
+`InterviewRoundsModule` (no circular dep — Weaknesses depends only on Prisma).
+
+**Checks:** `pnpm --filter @momito/api lint/typecheck/test` green — **182 API tests** (+3 new edge specs:
+fresh emit fires area+reason signals and writes the ledger; identical re-save emits nothing and updates
+the ledger; a re-save that adds an area emits only the delta). **Live round-trip** against local Postgres
+on the Meta demo job (re-saving its bombed system_design round, which pre-dated the edge): baseline 0
+open signals → PATCH #1 → 3 open signals (`area:system_design` + `reason:time_pressure` +
+`reason:concept_gap`, all `src=debrief`, scoped to the Meta job, sev 1.00/occ 1) → PATCH #2 identical →
+still 3, severities/occurrences unchanged (idempotent) → PATCH #3 adding `behavioral` → 4 (only the delta
+fired) → `GET /learning/ledger` shows exactly **one** `interview_debrief` row despite 3 PATCHes. Test-only
+`behavioral` reverted + its signal resolved; demo left in an accurate 3-signal state.
+
+**Loop status:** bombing a round now provably lands a target-scoped weakness that the weakness engine
+holds and decays. Surfacing these on Today (MOM-142) and letting them drive weakness-repair /
+company-scoped readiness (MOM-129/130) are the remaining Gate-1 wires.
+
+**Next:** MOM-128 (tag `AnswerAttempt.roleTrackId/area` on create + the missing `job_prep` session
+branch), then MOM-142 (rank openSignals on Today), then MOM-129 (one FSRS-grounded readiness engine).
+
+## 2026-07-09 - MOM-110: InterviewRound model + CRUD + job-detail timeline UI (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). Third PR of Phase 1, implementing the ADR-0013 design under the
+D-004 human-approval gate (standing blanket approval for Phase 1 migrations). Branch
+`feat/careeros-phase-0`. This lands the **OUTCOME source** the loop needs: a first-class interview
+round with a debrief that carries `areasWeak`/`missTags` — the raw material MOM-113 will convert
+into `WeaknessSignal`s.
+
+**Schema (additive migration `20260708173028_interview_rounds`):** new `interview_rounds` table only —
+no ALTER on existing tables, so rollback = drop. Columns: `roundType`, `sequence`, `scheduledAt?`,
+`durationMinutes?`, `interviewer?`, `outcome` (default `pending`), `debrief?`, `areasWeak text[]`,
+`missTags text[]`, timestamps. FKs to `User` and `JobApplication` (both `onDelete: Cascade`); indexed
+on `userId`, `jobApplicationId`, `scheduledAt`. Per ADR-0013/SPIKE-010 the round owns no prep/practice
+rows — Task/Session will back-ref it via a nullable `interviewRoundId` in MOM-111/141 (no dual-write).
+
+**API:** new `interview-rounds` module — `InterviewRoundsService` (`listForJob`/`create`/`update`/
+`remove`, all ownership-scoped through a private `ensureJob` findFirst; `update`/`remove` via
+`updateMany`/`deleteMany` on `{id, jobApplicationId, userId}` → `NotFoundException` on count 0). Nested
+controller `jobs/:jobId/rounds` with `ParseUUIDPipe`. DTOs validate `roundType`/`outcome` against the
+shared enums, `areasWeak` against `CAREER_ROLE_AREA_IDS`, `missTags` against `MISS_TAG_REASONS`. A
+comment marks where MOM-113 hooks the debrief→`WeaknessSignal` edge in `update()`.
+
+**Shared:** `INTERVIEW_ROUND_TYPES` (+labels), `INTERVIEW_ROUND_OUTCOMES`, `InterviewRoundResponse`,
+`Create/UpdateInterviewRoundRequest`.
+
+**Web:** `interviewRoundsApi` client + new `InterviewRoundsCard` on the job detail page (between JD
+Notes and Timeline): add-round form (type/date/interviewer), per-round inline outcome `<select>` with a
+color-coded badge, and a `DebriefEditor` (free-text + area chips + miss-tag chips → single PATCH).
+
+**Checks:** `pnpm -r lint/typecheck/test` green — **179 API tests** (+8 new interview-rounds specs) +
+24 web. Live CRUD round-trip against local Postgres on the Meta demo job: create → PATCH debrief
+(outcome `failed`, areasWeak `[system_design]`, missTags `[time_pressure, concept_gap]`) → list → delete
+→ empty, all correct. Playwright screenshot confirms the card renders both a failed round (badge +
+debrief + chips) and an upcoming pending round. Migration applied to the running DB; client regenerated
+after killing the `nest start` node process to avoid the Windows Prisma DLL lock.
+
+**Next:** MOM-113 (debrief → `recordSignal` + `LearningEvidence` — the loop-closing edge), then MOM-128
+(tag attempts + `job_prep` branch), MOM-129 (grounded readiness).
+
+## 2026-07-09 - MOM-109 DESIGN + SPIKE-010 resolved: InterviewRound + the outcome→weakness edge (CLAUDE)
+
+**Actor:** CLAUDE (planner — design only, no migration). Second design PR of Phase 1. Produces
+**ADR-0013** (new) + **D-016**; the model lands in MOM-110 under D-004. Branch `feat/careeros-phase-0`.
+
+**Grounding:** an interview can currently only be a free-form `JobEvent` note — no roundType, date,
+outcome, or debrief — so outcomes feed nothing. MOM-127 just landed the `WeaknessSignal` store
+(`recordSignal`) the debrief needs; the missing piece is the first-class interview object.
+
+**SPIKE-010 resolved (ADR-0013):**
+1. *No dual-write.* `InterviewRound` owns no prep/practice rows — a round's prep is an ordinary `Task`,
+   its mock an ordinary `InterviewSession`, each attributed by a single nullable `interviewRoundId`
+   back-reference FK **added when needed** (MOM-111 / MOM-141), never a copy. Avoids the PlanItem/Task
+   anti-pattern that motivated the missions freeze (D-015).
+2. *Reminder idempotency* keys the `ensureDeadlineReminder` sentinel **per round** (a job has many
+   rounds), so each round's `scheduledAt` gets its own reminder (MOM-112).
+3. *`JobEvent` coexists* — no backfill; the upgraded timeline (MOM-110) merges structured rounds with
+   free-form events chronologically.
+4. *Round outcome ⟂ pipeline status* — no coupled state machines in MOM-110.
+
+**Finalized schema (for MOM-110):** `interview_rounds` table (roundType, sequence, scheduledAt,
+durationMinutes, interviewer, outcome, debrief, areasWeak[], missTags[]) off `JobApplication` (cascade)
++ `User`; shared `INTERVIEW_ROUND_TYPES` / `INTERVIEW_ROUND_OUTCOMES`; `areasWeak`/`missTags` reuse
+`CAREER_ROLE_AREA_IDS` / `MISS_TAG_REASONS`. Migration is additive; rollback = drop. The debrief→weakness
+edge itself is MOM-113 (calls MOM-127's `recordSignal` + emits `LearningEvidence`).
+
+**Files:** `docs/adr/0013-interview-rounds-debriefs.md` (new), `docs/agent/DECISIONS.MD` (D-016),
+`BACKLOG.md` (SPIKE-010 RESOLVED, MOM-109 DESIGN DONE, MOM-110 READY), `NEXT.MD`. No app code, no schema,
+no migrate. **Next:** MOM-110 implementer PR (the additive migration + CRUD + timeline UI).
+
+## 2026-07-09 - MOM-127: WeaknessSignal store + mixed_interview session type (CLAUDE, migration)
+
+**Actor:** CLAUDE (implementer). **Migration** — crossed the D-004 gate under the owner's standing
+blanket approval; owner said "Yes" to proceeding this turn. Branch `feat/careeros-phase-0`.
+
+**What shipped (the store that lets interview outcomes become weaknesses):**
+- **Additive migration** `20260708170956_weakness_signals`: new `weakness_signals` table + nullable
+  `role_track_id`/`area` on `answer_attempts` + 5 indexes + 2 FKs. Verified purely additive (no ALTER
+  of existing data, no backfill); rollback = drop. Applied cleanly on the existing dev DB; Prisma
+  client regenerated (killed the API node processes first to dodge the Windows engine-DLL EPERM lock).
+- **`weaknesses.service` store:** `recordSignal` (service-to-service upsert-by-find — accrues
+  occurrences +1 and raw severity +1 capped at 10 onto a live signal for the same target+key, else
+  creates; a resolved/dismissed match stays closed and a recurrence opens a fresh row), `resolveSignal`
+  / `dismissSignal` (ownership-checked lifecycle), and `openSignals` — merged into `summary()` as the
+  new additive `openSignals` field. **Severity decays at read time** (`severity·2^(-ageDays/21)`),
+  dropping below a 0.15 floor — no cron. The derived practice-struggle path is untouched (SPIKE-013
+  Q1: store only what can't be re-derived).
+- **`POST /weaknesses/signals/:id/resolve|dismiss`** endpoints; web `weaknessesApi.resolveSignal/
+  dismissSignal`.
+- **`mixed_interview` session type** (SESSION_TYPES + `sessions.service` dispatch): interleaves
+  recently-struggled questions with a fresh cross-area draw, degrading to a filtered draw with no
+  history. Reconciliation recorded in ADR-0011 §3: `weak_area_review` already **is** "weakness_repair",
+  so no duplicate type was added — it now also repairs debrief-derived weaknesses via the merged summary.
+
+**Verification:** 171 API tests green (+10: 3 openSignals decay/sort, 3 recordSignal upsert/accrual/cap,
+2 resolve/dismiss, 2 mixed_interview). API + web typecheck + lint clean; shared rebuilt. **Live
+round-trip on local Postgres:** seeded a fresh (sev 3, debrief, linked to the NVIDIA job) and a
+1-year-old signal → `GET /weaknesses` returned only the fresh one, decayed, with the stale one filtered
+below the floor → `POST .../resolve` → re-GET showed `openSignals: []`. Also live-created a
+`mixed_interview` session (4 questions). Test signals + temp scripts cleaned up.
+
+**Boundary (honest):** the store is written by the debrief edge (MOM-113) and surfaced on Today by
+recommendations (MOM-142) — both later PRs. MOM-127 delivers the foundation + the `weaknesses` API
+surface + the summary field; the full "bomb a round → Today changes" demo lights up at MOM-113+142.
+**Next:** MOM-109 DESIGN (InterviewRound), then MOM-113 (debrief → recordSignal, the loop-closing edge).
+
+## 2026-07-08 - MOM-126 DESIGN + SPIKE-013 resolved: WeaknessSignal + FSRS-grounded readiness (CLAUDE)
+
+**Actor:** CLAUDE (planner — design only, no migration run per D-004)
+**Scope:** First PR of CareerOS Phase 1, loop-first ordering (owner decision 2026-07-08: close the
+study↔target loop scoped to a `JobApplication` first, defer the highest-risk company-FK migration to
+last). This is a **design-doc PR** — it finalizes ADR-0011 and resolves SPIKE-013; the migration and
+service code are MOM-127 and await the D-004 human-approval gate.
+
+**Grounding (read the real code first):** confirmed by direct read that readiness is computed by
+**two divergent keyword-matching engines** — `career.service.getReadiness` (binary has-evidence,
+weighted, never decays) and `missions.service.diagnose` (count-based `currentLevel` 0–3, persisted to
+`MissionCompetencyState`) — producing different "am I ready" numbers for the same user. `AnswerAttempt`
+carries `missTags`/`reflectionNote` but no `roleTrackId`/`area`, so nothing is target-scoped.
+`weaknesses.service` derives signals on-demand with no table and is fed **only** by practice attempts —
+interview outcomes feed nothing (the open loop). `ReviewState` holds the FSRS fields that a real
+readiness engine should lean on, indexed `[userId, due]`.
+
+**SPIKE-013 resolved (ADR-0011 §SPIKE-013 findings):**
+1. *Keep the derived weakness path; add a table only for what can't be re-derived* — interview
+   debriefs + manual signals + decay/repair-lifecycle/dismissal state. `summary()` merges derived ∪
+   stored. Keeps MOM-127 small; preserves the working engine.
+2. *FSRS-per-area is cheaply queryable without denormalizing `ReviewState`* — a user's review states
+   are a single indexed scan; area resolves via an in-memory `objectId → Question.areaTags` map. Keeps
+   `ReviewState` polymorphically pure (ADR-0002).
+3. *Target tags go on `AnswerAttempt`* (`roleTrackId` + `area`), not `ReviewState` — a standalone
+   attempt has no session to inherit from, and this also gives graded-attempt-per-area cheaply.
+   `companyId` deferred (no `Company` FK yet); `WeaknessSignal.jobApplicationId` carries target scope
+   until the MOM-122 FK lands — additive, no rework.
+
+**Finalized schema (in ADR-0011, for MOM-127):** new `weakness_signals` table (signalType/key/label,
+nullable roleTrackId/area/jobApplicationId, severity+occurrences with read-time exponential decay,
+source, status lifecycle); `roleTrackId`/`area` nullable columns on `answer_attempts`. Migration is
+**additive** (1 table + 2 nullable columns + indexes, no ALTER of data, no backfill); rollback = drop.
+
+**Files:** `docs/adr/0011-*.md` (PROPOSED → ACCEPTED design), `docs/agent/BACKLOG.md` (SPIKE-013
+RESOLVED, MOM-126 DESIGN DONE, MOM-127 READY, MOM-128 unblocked from MOM-122), `docs/agent/NEXT.MD`
+(Phase 1 loop-first sub-phases; active task = MOM-127). No app code, no schema.prisma change, no
+`prisma migrate` — that is MOM-127 under D-004.
+
+**Next:** MOM-127 implementer PR (the additive migration + WeaknessSignal service + new session types),
+then MOM-109 DESIGN (InterviewRound), then MOM-113 (debrief→WeaknessSignal — the loop-closing edge).
+
+## 2026-07-08 - MOM-140-lite: stage-aware Today copy for pipeline items (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Final Phase 0 quick win (`docs/plans/MOMITO_CAREEROS_PLAN.md`, Track S). Schema-free,
+API-only. Branch `feat/careeros-phase-0`.
+
+**Change:** `recommendations.service.list()` previously emitted one generic "Prepare {company}
+{roleTitle}" card for every pipeline job regardless of stage. A new `JOB_STAGE_CARD` map gives
+each stage its own voice and ranking: `saved` → "Apply to {company} — {role}" (55), `applied` →
+"Follow up with {company} — {role}" (62), `oa` → "Prep the {company} online assessment" (85),
+`interview` → "Prep for your {company} interview" (88), `onsite` → "Prep for your {company}
+onsite — the sharp end of the pipeline" (92). An application deadline is treated as apply-by
+urgency (priority 90 + deadline reason) **only** while the job is still a `saved` lead — once
+applied the deadline is moot, so from then on the stage governs both copy and ranking. Unknown
+statuses fall back to the old generic copy at priority 60. No shared-type or schema change; the
+Today page renders the existing `title`/`reason` fields, so no web edit needed.
+
+**Checks:** 161 API tests green (3 new stage-aware job-card tests: onsite copy+ranking, saved
+deadline-vs-no-deadline, post-application deadline is not apply-by urgency). API typecheck + lint
+clean. Live round-trip against local Postgres confirmed the demo seed's `saved` NVIDIA (deadline)
+rendered "Apply to NVIDIA — GPU Software Engineer" at 90, and two `oa` jobs (Stripe, Datadog)
+rendered "Prep the {company} online assessment" at 85.
+
+**Known limitation (deferred, not a regression):** the recommendations query still fetches only
+the top 3 pipeline jobs ordered by deadline-asc/updatedAt-desc (`take: 3`), so a deadline-less
+late-stage job (Jane Street onsite, Meta interview) can be crowded out of Today by earlier-stage
+jobs that were updated more recently. The stage-aware *copy* is correct for whatever surfaces;
+making the right stage-aware cards reliably *surface* (interview countdown + first-class ranked
+career items) is MOM-140-full / MOM-142, deliberately out of the -lite copy scope.
+
+**Phase 0 complete.** Next: Phase 1 loop-closure (migration-gated, D-004 human-approval per
+migration): company context (MOM-120→121→122) · weakness spine (126→127→128) · outcome source
+(109→110→113) · grounded readiness + company rollup (129→130) · story gap map (131) · auto prep
+queue + recommendations wiring (141, 142).
+
+## 2026-07-08 - CareerOS Phase 0: schema-free quick wins (MOM-101/102/135/108/134-lite) (CLAUDE)
+
+**Actor:** CLAUDE (implementer)
+**Scope:** Phase 0 of the CareerOS transformation (`docs/plans/MOMITO_CAREEROS_PLAN.md`,
+Tracks M–S). All six quick wins are schema-free — no migration, no D-004 gate — and were
+built to make Momito feel like a CareerOS in a handful of small PRs before the migration-gated
+loop-closure work begins. Branch `feat/careeros-phase-0`.
+
+**MOM-101 — funnel & conversion analytics** (commit daf5cd1): `jobs.service.funnel(userId)`
+computes cumulative reached-counts across the saved→applied→oa→interview→onsite→offer stage
+ladder, per-stage conversion, response rate, and source/visaTag breakdowns; `ratio()` returns
+null when the denominator is 0 so the UI never renders NaN. New `@Get('funnel')` route ordered
+*before* `@Get(':id')` to dodge `ParseUUIDPipe`. `JobFunnelCard` renders the bars, conversion
+%, response rate, and by-source breakdown on the jobs page.
+
+**MOM-102 — auto-log a JobEvent on status transition** (commit 897df85): `jobs.service.update()`
+reads `previousStatus` only when `dto.status` is present, and after the write creates a
+`jobEvent` of type `status_change` titled `${from} → ${to}` only when the status genuinely
+changed — a free timeline of pipeline movement with no schema change.
+
+**MOM-135 — gaps → executable tasks** (commit b79cde5): `profile-scores.service.generateTasks()`
+converts a résumé score's four gap categories into `Task` rows (skills high×3, experience×2,
+project×2, presentation low×1, capped at 6), idempotent by title (queries existing task titles,
+filters). `@Post(':id/generate-tasks')` + a "Turn gaps into tasks" button on the score page.
+
+**MOM-108 + MOM-134-lite — paste-JD quick capture + deterministic ATS coverage** (this commit):
+`profile-scores.service.atsCoverage(jdText, userId)` reuses `extractJdSkills` to tokenize a
+pasted JD, normalizes against `profile.skills`, and returns `{jdKeywordCount, covered, missing,
+coveragePct}`; `@Post('ats-coverage')` ordered before `@Get(':id')`. On the jobs Add form a
+"Check ATS keyword coverage" button surfaces the coverage % and amber missing-keyword chips
+while you paste, so a gap is visible at capture time. Honestly labeled **-lite**: the tokenizer
+inherits the existing scorer's capitalized-noise limitation (grabs Backend/Engineer/Experience);
+it is superseded by the AI résumé track (MOM-136) once the Anthropic key lands.
+
+**Checks:** `pnpm -r lint && typecheck && test` green — **158 API tests** (7 new: 4 funnel,
+3 status-transition, 2 atsCoverage, 3 generateTasks). API + web typecheck + lint clean. Live
+round-trip against local Postgres confirmed the funnel aggregates and an ATS check (JD with 10
+keywords → coveragePct 0.1, covered [PostgreSQL], missing [Backend, Engineer, Kubernetes, Go,
+RPC, Python, Experience, Terraform, Kafka]). Playwright screenshot confirmed the Add-form ATS
+UI renders the coverage line + amber chips with zero console errors.
+
+**Deliberately not done:** no stage-timestamps or transition-history table (that's the
+migration-gated MOM-103/104); the `-lite` ATS tokenizer is not being hardened (AI supersedes it).
+Next: MOM-140-lite (stage-aware Today copy), then Phase 1 loop-closure (migration-gated).
+
 ## 2026-07-06 - MOM-087: weekly encrypted backup workflow, design + implementation (CLAUDE)
 
 **Actor:** CLAUDE (implementer)

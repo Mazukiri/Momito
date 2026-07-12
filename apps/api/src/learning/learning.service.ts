@@ -8,6 +8,7 @@ import {
   ReadwiseSyncRunResponse,
 } from '@momito/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { ReviewsService } from '../reviews/reviews.service';
 import { ConnectReadwiseDto } from './dto/connect-readwise.dto';
 import { CreateEvidenceDto } from './dto/create-evidence.dto';
 import { UpdateHighlightDto } from './dto/update-highlight.dto';
@@ -49,9 +50,17 @@ type ReadwiseExportResponse = {
 
 const READWISE_API = 'https://readwise.io/api/v2';
 
+// MOM-146: reviewing a highlight in the inbox IS its first spaced-repetition
+// review, so we seed the FSRS state with a "Good" grade — the learner just
+// read and understood it. FSRS then schedules the first real interval.
+const HIGHLIGHT_SEED_RATING = 3;
+
 @Injectable()
 export class LearningService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reviews: ReviewsService,
+  ) {}
 
   async getReadwiseConnection(userId: string): Promise<ReadwiseConnectionResponse | null> {
     const connection = await this.prisma.readwiseConnection.findUnique({ where: { userId } });
@@ -141,7 +150,29 @@ export class LearningService {
       },
       include: this.highlightInclude(),
     });
-    if (dto.reviewed) await this.ensureHighlightEvidence(highlight);
+    if (dto.reviewed) {
+      await this.ensureHighlightEvidence(highlight);
+      // MOM-146: a highlight the learner kept (reviewed as anything but "ignored")
+      // enters the FSRS queue so the insight actually resurfaces and sticks. An
+      // ignored highlight is filed to the ledger only. Best-effort — a scheduling
+      // hiccup must not fail the review itself.
+      if (highlight.usefulness !== 'ignored') {
+        try {
+          await this.reviews.record(userId, 'highlight', highlight.id, HIGHLIGHT_SEED_RATING);
+        } catch {
+          // swallow: the highlight is still reviewed + in the ledger
+        }
+      }
+    }
+    return this.serializeHighlight(highlight);
+  }
+
+  async getHighlight(id: string, userId: string): Promise<LearningHighlightResponse> {
+    const highlight = await this.prisma.learningHighlight.findFirst({
+      where: { id, userId },
+      include: this.highlightInclude(),
+    });
+    if (!highlight) throw new NotFoundException('Highlight not found');
     return this.serializeHighlight(highlight);
   }
 
@@ -239,15 +270,21 @@ export class LearningService {
       readwiseUpdatedAt: highlight.updated_at ? new Date(highlight.updated_at) : null,
       isDeleted: deleted,
     };
-    if (readwiseHighlightId === null) {
-      await this.prisma.learningHighlight.create({ data });
-      return { deleted };
+    const row = readwiseHighlightId === null
+      ? await this.prisma.learningHighlight.create({ data })
+      : await this.prisma.learningHighlight.upsert({
+          where: { userId_readwiseHighlightId: { userId, readwiseHighlightId } },
+          update: data,
+          create: data,
+        });
+    // MOM-146: a highlight deleted upstream in Readwise must stop resurfacing in
+    // the FSRS queue — suspend its review state (no-op if it was never reviewed).
+    if (deleted) {
+      await this.prisma.reviewState.updateMany({
+        where: { userId, objectType: 'highlight', objectId: row.id, suspended: false },
+        data: { suspended: true },
+      });
     }
-    await this.prisma.learningHighlight.upsert({
-      where: { userId_readwiseHighlightId: { userId, readwiseHighlightId } },
-      update: data,
-      create: data,
-    });
     return { deleted };
   }
 

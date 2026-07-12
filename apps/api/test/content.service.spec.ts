@@ -25,11 +25,14 @@ describe('content services', () => {
   });
 
   it('creates, updates, and deletes a company', async () => {
+    // MOM-121: CompaniesService now serializes rows, so mocks must carry the
+    // structured columns + timestamps the serializer reads.
+    const row = { id: 'company-1', name: 'Example Co', region: null, notes: null, focusAreas: {}, roleTrackIds: [], interviewProcess: [], sponsorshipStatus: null, compBand: null, createdAt: new Date(), updatedAt: new Date() };
     const company = {
-      create: vi.fn().mockResolvedValue({ id: 'company-1' }),
-      findUnique: vi.fn().mockResolvedValue({ id: 'company-1' }),
-      update: vi.fn().mockResolvedValue({ id: 'company-1', name: 'Example Co' }),
-      delete: vi.fn().mockResolvedValue({ id: 'company-1' }),
+      create: vi.fn().mockResolvedValue(row),
+      findUnique: vi.fn().mockResolvedValue(row),
+      update: vi.fn().mockResolvedValue(row),
+      delete: vi.fn().mockResolvedValue(row),
     };
     const service = new CompaniesService({ company } as never);
 

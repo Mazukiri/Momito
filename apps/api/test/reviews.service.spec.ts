@@ -54,6 +54,77 @@ describe('ReviewsService', () => {
     expect(result[0].title).toBe('Led a zero-downtime migration');
   });
 
+  it('MOM-146: schedules a review for a highlight the user owns', async () => {
+    const upsert = vi.fn().mockImplementation(({ create }) => ({ id: 'rs-h', ...create }));
+    const prisma = {
+      learningHighlight: { findFirst: vi.fn().mockResolvedValue({ id: 'hl-1' }) },
+      reviewState: { findUnique: vi.fn().mockResolvedValue(null), upsert },
+    };
+    const service = new ReviewsService(prisma as never);
+
+    const result = await service.record('user-1', 'highlight', 'hl-1', 3, new Date('2026-07-05T00:00:00.000Z'));
+
+    expect(prisma.learningHighlight.findFirst).toHaveBeenCalledWith({
+      where: { id: 'hl-1', userId: 'user-1', isDeleted: false },
+      select: { id: true },
+    });
+    expect(result.objectType).toBe('highlight');
+    expect(upsert.mock.calls[0][0].create).toEqual(
+      expect.objectContaining({ objectType: 'highlight', objectId: 'hl-1' }),
+    );
+  });
+
+  it('MOM-146: rejects scheduling a review for a highlight the user does not own', async () => {
+    const prisma = {
+      learningHighlight: { findFirst: vi.fn().mockResolvedValue(null) },
+      reviewState: { findUnique: vi.fn(), upsert: vi.fn() },
+    };
+    const service = new ReviewsService(prisma as never);
+
+    await expect(service.record('user-2', 'highlight', 'hl-1', 3)).rejects.toEqual(new NotFoundException('Highlight not found'));
+    expect(prisma.reviewState.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('MOM-146: enriches due highlight reviews with the source title as the recall cue', async () => {
+    const prisma = {
+      reviewState: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'rs-h', objectType: 'highlight', objectId: 'hl-1', stability: 1, difficulty: 1, due: new Date(), state: 2, reps: 1, lapses: 0, suspended: false, lastReviewedAt: null },
+        ]),
+      },
+      question: { findMany: vi.fn().mockResolvedValue([]) },
+      story: { findMany: vi.fn().mockResolvedValue([]) },
+      learningHighlight: { findMany: vi.fn().mockResolvedValue([{ id: 'hl-1', source: { title: 'Atomic Habits' } }]) },
+    };
+    const service = new ReviewsService(prisma as never);
+
+    const result = await service.listDue('user-1');
+
+    expect(prisma.learningHighlight.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ['hl-1'] } },
+      select: { id: true, source: { select: { title: true } } },
+    });
+    expect(result[0].title).toBe('Atomic Habits');
+  });
+
+  it('MOM-146: falls back to a generic title when a due highlight has no source', async () => {
+    const prisma = {
+      reviewState: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'rs-h', objectType: 'highlight', objectId: 'hl-2', stability: 1, difficulty: 1, due: new Date(), state: 2, reps: 1, lapses: 0, suspended: false, lastReviewedAt: null },
+        ]),
+      },
+      question: { findMany: vi.fn().mockResolvedValue([]) },
+      story: { findMany: vi.fn().mockResolvedValue([]) },
+      learningHighlight: { findMany: vi.fn().mockResolvedValue([{ id: 'hl-2', source: null }]) },
+    };
+    const service = new ReviewsService(prisma as never);
+
+    const result = await service.listDue('user-1');
+
+    expect(result[0].title).toBe('Reading highlight');
+  });
+
   it('creates a new review state with FSRS defaults on first review', async () => {
     const upsert = vi.fn().mockImplementation(({ create }) => ({ id: 'rs-1', ...create }));
     const prisma = {

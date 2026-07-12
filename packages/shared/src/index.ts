@@ -186,6 +186,34 @@ export interface CompanySummary {
   name: string;
 }
 
+// MOM-121 (ADR-0010 / D-017): structured company intelligence. `focusAreas` maps
+// a CareerRoleAreaId to a 1–5 interview-weight; `interviewProcess` is the ordered
+// round sequence (roundType aligns with INTERVIEW_ROUND_TYPES).
+export type CompanyFocusAreas = Partial<Record<CareerRoleAreaId, number>>;
+
+export interface CompanyInterviewStage {
+  roundType: string;
+  label: string;
+  notes?: string;
+}
+
+export interface CompanyResponse {
+  id: string;
+  name: string;
+  region: string | null;
+  notes: string | null;
+  focusAreas: CompanyFocusAreas;
+  roleTrackIds: CareerRoleTrackId[];
+  interviewProcess: CompanyInterviewStage[];
+  sponsorshipStatus: VisaTag | null;
+  compBand: string | null;
+  // MOM-123: populated by GET /companies/:id (detail), omitted from the list.
+  linkedQuestionCount?: number;
+  linkedStoryCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface QuestionResponse {
   id: string;
   title: string;
@@ -223,6 +251,9 @@ export const SESSION_TYPES = [
   'mixed_mock',
   'role_drill',
   'weak_area_review',
+  // MOM-127: a mock-interview draw weighted toward your weak spots — interleaves
+  // recently-struggled questions with fresh ones across areas, simulating a loop.
+  'mixed_interview',
   'daily_mixed_set',
   'job_prep',
   'spaced_review',
@@ -319,9 +350,6 @@ export interface DashboardSummaryResponse {
   weakTopics: WeakTopic[];
   suggestedNextTopics: TopicSummary[];
   activeGoals?: CareerGoalResponse[];
-  activeMissions?: MissionResponse[];
-  focusMission?: MissionResponse | null;
-  todayPlanItems?: PlanItemResponse[];
   roleReadiness?: RoleReadinessResponse[];
   dueTasks?: TaskResponse[];
   reminders?: ReminderResponse[];
@@ -550,6 +578,11 @@ export interface RoleAreaReadiness {
   percentage: number;
   completedItems: string[];
   gapItems: RoleChecklistItem[];
+  // MOM-129: FSRS-grounded signals. `masteryScore` (0–100) blends average
+  // retrievability with graded-attempt volume for the area; `retrievability`
+  // (0–1) is the raw average, null when the area has no review history.
+  masteryScore: number | null;
+  retrievability: number | null;
 }
 
 export interface RoleReadinessResponse {
@@ -561,144 +594,98 @@ export interface RoleReadinessResponse {
   nextActions: string[];
 }
 
-export const MISSION_SOURCE_TYPES = ['manual', 'career_goal', 'job_application'] as const;
-export type MissionSourceType = (typeof MISSION_SOURCE_TYPES)[number];
+// MOM-130: the "am I ready for <company>?" go/no-go for one JobApplication —
+// the role-track's grounded readiness docked by that target's open weakness
+// signals (the MOM-113 debrief output).
+export const JOB_READINESS_STATUSES = ['ready', 'almost', 'not_ready'] as const;
+export type JobReadinessStatus = (typeof JOB_READINESS_STATUSES)[number];
 
-export const MISSION_STAGES = [
-  'diagnose',
-  'weekly_plan',
-  'execute',
-  'interview',
-  'retrospective',
-  'archived',
-] as const;
-export type MissionStage = (typeof MISSION_STAGES)[number];
-
-export const MISSION_COMPETENCY_STATUSES = ['missing', 'building', 'ready'] as const;
-export type MissionCompetencyStatus = (typeof MISSION_COMPETENCY_STATUSES)[number];
-
-export const PLAN_ITEM_TYPES = ['learn', 'practice', 'build', 'apply', 'review'] as const;
-export type PlanItemType = (typeof PLAN_ITEM_TYPES)[number];
-
-export const PLAN_ITEM_STATUSES = ['todo', 'in_progress', 'done', 'skipped'] as const;
-export type PlanItemStatus = (typeof PLAN_ITEM_STATUSES)[number];
-
-export interface MissionCompetencyStateResponse {
-  id: string;
-  missionId: string;
-  checklistItemId: string;
-  roleTrackId: CareerRoleTrackId;
+export interface JobReadinessWeakArea {
   area: CareerRoleAreaId;
-  title: string;
-  description: string;
-  evidenceType: RoleChecklistItem['evidenceType'];
-  weight: number;
-  targetLevel: number;
-  currentLevel: number;
-  confidence: number;
-  status: MissionCompetencyStatus;
-  rationale: string | null;
-  evidenceCount: number;
-  lastEvidenceAt: string | null;
-  createdAt: string;
-  updatedAt: string;
+  percentage: number;
 }
 
-export interface MissionResponse {
-  id: string;
-  userId: string;
-  name: string;
-  summary: string | null;
-  sourceType: MissionSourceType;
-  stage: MissionStage;
+export interface JobReadinessResponse {
+  jobApplicationId: string;
+  company: string;
+  roleTitle: string;
   roleTrackId: CareerRoleTrackId;
   roleTrack: CareerRoleTrack;
-  careerGoalId: string | null;
-  jobApplicationId: string | null;
-  jobApplication?: Pick<JobApplicationResponse, 'id' | 'company' | 'roleTitle' | 'status' | 'deadline'> | null;
-  targetDate: string | null;
-  weeklyHours: number;
-  successDefinition: string | null;
-  diagnosisSummary: string | null;
-  activePlanId: string | null;
-  createdAt: string;
-  updatedAt: string;
+  /** 0–100 verdict = grounded role readiness minus the weakness-signal penalty. */
+  score: number;
+  status: JobReadinessStatus;
+  /** Points docked for this job's open weakness signals. */
+  penalty: number;
+  areas: RoleAreaReadiness[];
+  weakestAreas: JobReadinessWeakArea[];
+  blockingSignals: WeaknessSignalResponse[];
+  nextActions: string[];
 }
 
-export interface PlanItemResponse {
+// MOM-131: the behavioral gap map for a specific target. Which STAR competencies
+// this role's behavioral loop expects, and which the user's story bank actually
+// covers — so "you have ownership + conflict but no ambiguity story for Meta"
+// becomes a concrete, closeable gap instead of a vague worry.
+export interface StoryGapCompetency {
+  /** A STORY_COMPETENCIES id (e.g. 'ambiguity'). */
   id: string;
-  planId: string;
-  missionId: string;
-  taskId: string | null;
-  title: string;
-  description: string | null;
-  type: PlanItemType;
-  status: PlanItemStatus;
-  roleTrackId: CareerRoleTrackId | null;
-  area: CareerRoleAreaId | null;
-  estimatedMinutes: number;
-  expectedArtifact: string | null;
-  scheduledFor: string | null;
-  completedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface WeeklyPlanResponse {
-  id: string;
-  missionId: string;
-  weekStart: string;
-  weekEnd: string;
-  status: 'active' | 'completed' | 'archived';
-  focusSummary: string | null;
-  generatedFromDiagnosis: string | null;
-  totalPlannedHours: number;
-  createdAt: string;
-  updatedAt: string;
-  items: PlanItemResponse[];
-}
-
-export interface MissionCheckInResponse {
-  id: string;
-  missionId: string;
-  summary: string;
-  wins: string | null;
-  blockers: string | null;
-  adjustments: string | null;
-  checkInAt: string;
-  createdAt: string;
-}
-
-export interface MissionDetailResponse extends MissionResponse {
-  competencyStates: MissionCompetencyStateResponse[];
-  plans: WeeklyPlanResponse[];
-  recentCheckIns: MissionCheckInResponse[];
-}
-
-export interface CreateMissionRequest {
   name: string;
-  summary?: string | null;
-  sourceType?: MissionSourceType;
+  covered: boolean;
+  /** How many of the user's stories are tagged with this competency. */
+  storyCount: number;
+}
+
+export interface JobStoryGapResponse {
+  jobApplicationId: string;
+  company: string;
+  roleTitle: string;
   roleTrackId: CareerRoleTrackId;
-  careerGoalId?: string | null;
-  jobApplicationId?: string | null;
-  targetDate?: string | null;
-  weeklyHours?: number;
-  successDefinition?: string | null;
+  competencies: StoryGapCompetency[];
+  coveredCount: number;
+  missingCount: number;
+  /** Total stories in the user's bank (context for an empty gap map). */
+  totalStories: number;
 }
 
-export type UpdateMissionRequest = Partial<CreateMissionRequest> & {
-  stage?: MissionStage;
-  diagnosisSummary?: string | null;
-};
-
-export interface MissionTodayResponse {
-  mission: MissionResponse;
-  activePlan: WeeklyPlanResponse | null;
-  dueTasks: TaskResponse[];
-  recentEvidence: LearningEvidenceResponse[];
-  topCompetencies: MissionCompetencyStateResponse[];
+// MOM-125: the targeting shortlist — catalog companies ranked by how well the
+// user's grounded readiness matches what each company drills, weighted by whether
+// it sponsors visas and by region preference. Answers "who should I apply to next?".
+export interface TargetShortlistFocusArea {
+  area: CareerRoleAreaId;
+  /** The company's 1–5 interview weight for this area. */
+  weight: number;
+  /** The user's current grounded readiness (0–100) in this area. */
+  percentage: number;
 }
+
+export interface TargetShortlistItem {
+  companyId: string;
+  name: string;
+  region: string | null;
+  sponsorshipStatus: VisaTag | null;
+  roleTrackId: CareerRoleTrackId;
+  /** Focus-weighted grounded readiness for this company's emphasis (0–100). */
+  fitScore: number;
+  /** Sponsored 1.0 / unknown 0.7 / not_sponsoring 0.2. */
+  sponsorshipMultiplier: number;
+  /** 1.0 for Global/preferred regions, discounted otherwise. */
+  regionMultiplier: number;
+  /** fitScore × sponsorshipMultiplier × regionMultiplier, 0–100. The ranking key. */
+  score: number;
+  /** The company's top-weighted focus areas with the user's readiness in each. */
+  topFocusAreas: TargetShortlistFocusArea[];
+  reason: string;
+}
+
+export interface TargetShortlistResponse {
+  items: TargetShortlistItem[];
+  /** Regions inferred as preferred from the user's existing pipeline (empty = no signal). */
+  preferredRegions: string[];
+}
+
+// MOM-163 (D-021): the Missions engine is retired. Its types (Mission*, WeeklyPlan*, PlanItem*,
+// MissionCheckIn*, the MISSION_*/PLAN_ITEM_* constants) were removed here. The database tables and
+// missionId FK columns are preserved — see D-021 — so this is a surface removal, not a data one.
 
 export interface ProfileExperienceItem {
   company: string;
@@ -737,6 +724,57 @@ export interface ProfileResponse {
   rawCvText: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// MOM-132/133 (ADR-0012): a tailored résumé derived from the master Profile.
+// `contentMd` is the canonical editable Markdown; `aiSuggestions` is where the
+// (dormant-until-key) AI writes per-bullet suggestions (MOM-137).
+export interface ResumeVersionResponse {
+  id: string;
+  userId: string;
+  jobApplicationId: string | null;
+  /** The linked job's company, for display (null if standalone). */
+  company: string | null;
+  label: string;
+  targetRoleTrackId: CareerRoleTrackId | null;
+  contentMd: string;
+  /** MOM-137/154: the AI's outstanding bullet rewrites — what the user has not yet accepted or dismissed. */
+  aiSuggestions: ResumeBulletRewrite[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateResumeVersionRequest {
+  label: string;
+  targetRoleTrackId?: CareerRoleTrackId | null;
+  jobApplicationId?: string | null;
+  /** When omitted, the server derives contentMd from the current Profile. */
+  contentMd?: string;
+}
+
+// MOM-155 — résumé drift. `ResumeVersion.baseProfileSnapshot` records the Profile the version was
+// derived from (MOM-132), which is exactly what is needed to answer "what have I done since I cut
+// this résumé?" — a question nobody was asking, so versions rotted silently as the profile grew.
+// `hasSnapshot: false` = the version's content was supplied by hand, so there is no provenance to
+// diff against; that is stated, not guessed at.
+export interface ResumeDriftResponse {
+  resumeVersionId: string;
+  hasSnapshot: boolean;
+  /** In the profile now, absent from the snapshot this version was cut from. */
+  newSkills: string[];
+  newProjects: string[];
+  newExperience: string[];
+  /** True when the profile has moved on at all — the résumé is behind. */
+  isStale: boolean;
+}
+
+export interface UpdateResumeVersionRequest {
+  label?: string;
+  targetRoleTrackId?: CareerRoleTrackId | null;
+  jobApplicationId?: string | null;
+  contentMd?: string;
+  /** MOM-154: the rewrites still outstanding — sent when the user accepts or rejects one. */
+  aiSuggestions?: ResumeBulletRewrite[];
 }
 
 export interface UpdateProfileRequest {
@@ -847,6 +885,74 @@ export interface ProfileScoreResponse {
   createdAt: string;
 }
 
+// MOM-134 (CareerOS Track Q): deterministic ATS keyword coverage against a pasted
+// JD. MOM-134-lite checks the base profile skills; MOM-134-full checks a specific
+// ResumeVersion's contentMd when `resumeVersionId` is supplied. `source` says which
+// artifact was measured so the UI can label the result.
+export interface AtsCoverageResponse {
+  jdKeywordCount: number;
+  covered: string[];
+  missing: string[];
+  coveragePct: number; // 0-1
+  source: 'profile' | 'resume'; // MOM-134-full
+  resumeVersionId: string | null; // MOM-134-full — set when source==='resume'
+}
+
+// MOM-136/137/138 (CareerOS Track Q): résumé AI, dormant-until-key. Every AI
+// endpoint returns this envelope — `ok:false` with a reason when no
+// ANTHROPIC_API_KEY is configured (the feature is dormant, not broken), so the
+// UI shows a banner rather than an error. Mirrors `grading.service`'s outcome
+// shape. The zod schemas that constrain the model live in the API
+// (`ai/dto/resume-ai.schema.ts`); these are the plain shapes the web renders.
+export type ResumeAiEnvelope<T> = { ok: true; result: T } | { ok: false; reason: string };
+
+export const RESUME_SENIORITY_SIGNALS = ['junior', 'mid', 'senior', 'staff'] as const;
+export type ResumeSenioritySignal = (typeof RESUME_SENIORITY_SIGNALS)[number];
+
+// MOM-136 — per-bullet impact/seniority analysis.
+export interface ResumeBulletFeedback {
+  index: number; // 0-based position of the bullet this entry critiques
+  original: string;
+  impactScore: number; // 0-5
+  senioritySignal: ResumeSenioritySignal;
+  issue: string;
+  suggestion: string;
+}
+export interface ResumeAnalysisResult {
+  overallImpression: string;
+  bulletFeedback: ResumeBulletFeedback[];
+  missingThemes: string[];
+}
+
+// MOM-137 — JD-tailored bullet rewrites. Persisted to `ResumeVersion.aiSuggestions`;
+// "accept" = replace `original` with `rewritten` in the version's contentMd.
+export interface ResumeBulletRewrite {
+  original: string;
+  rewritten: string;
+  rationale: string;
+}
+export interface ResumeRewriteResult {
+  rewrites: ResumeBulletRewrite[];
+}
+
+// MOM-138 — cover-letter draft with an optional visa-framing paragraph.
+export interface CoverLetterDraftResult {
+  draftMarkdown: string;
+  visaFramingParagraph: string;
+  wordCount: number;
+}
+
+export interface ResumeAiJdRequest {
+  jdText: string;
+}
+
+// MOM-134-full: request shape for ATS coverage (optional résumé version) and the
+// gap→task bridge (MOM-135 pattern) that turns missing keywords into study tasks.
+export interface AtsCoverageRequest {
+  jdText: string;
+  resumeVersionId?: string | null;
+}
+
 export const JOB_APPLICATION_STATUSES = [
   'saved',
   'applied',
@@ -862,13 +968,40 @@ export type JobApplicationStatus = (typeof JOB_APPLICATION_STATUSES)[number];
 export const JOB_APPLICATION_SOURCES = ['referral', 'online', 'linkedin', 'cold_email', 'recruiter', 'other'] as const;
 export type JobApplicationSource = (typeof JOB_APPLICATION_SOURCES)[number];
 
+// MOM-106: why an application was rejected — loss analysis. A property of the
+// terminal outcome (settable only when the status is/becomes `rejected`), so it
+// aggregates via GROUP BY like source/visaTag.
+export const REJECTION_REASONS = [
+  'no_response',
+  'resume_screen',
+  'oa_failed',
+  'interview_technical',
+  'interview_behavioral',
+  'visa_sponsorship',
+  'position_closed',
+  'other',
+] as const;
+export type RejectionReason = (typeof REJECTION_REASONS)[number];
+
 export const VISA_TAGS = ['sponsored', 'unknown', 'not_sponsoring'] as const;
 export type VisaTag = (typeof VISA_TAGS)[number];
+
+// MOM-122: the catalog company a job is linked to (a slim projection of
+// CompanyResponse), so the pipeline can show sponsorship/focus without a second fetch.
+export interface JobCompanyRef {
+  id: string;
+  name: string;
+  region: string | null;
+  sponsorshipStatus: VisaTag | null;
+  focusAreas: CompanyFocusAreas;
+}
 
 export interface JobApplicationResponse {
   id: string;
   userId: string;
   company: string;
+  companyId: string | null;
+  companyRef: JobCompanyRef | null;
   roleTitle: string;
   url: string | null;
   location: string | null;
@@ -878,11 +1011,17 @@ export interface JobApplicationResponse {
   appliedDate: string | null;
   deadline: string | null;
   source: JobApplicationSource | null;
-  referralName: string | null;
   visaTag: VisaTag | null;
-  h1bCountLastYear: number | null;
-  compensationNotes: string | null;
+  // MOM-164: referralName (→ Contacts), h1bCountLastYear, compensationNotes were write-only with
+  // no UI — removed from the API surface. The DB columns are preserved (D-021 spirit).
   notes: string | null;
+  // MOM-106: set only on a rejected application (loss analysis); null otherwise.
+  rejectionReason: RejectionReason | null;
+  // MOM-105: days in the current stage (since the latest status_change, or
+  // createdAt); null for terminal statuses. `isStalled` = daysInStage exceeds the
+  // stage's JOB_STAGE_STALL_THRESHOLD.
+  daysInStage: number | null;
+  isStalled: boolean;
   createdAt: string;
   updatedAt: string;
   _count?: { events: number; tasks: number; reminders: number };
@@ -890,6 +1029,7 @@ export interface JobApplicationResponse {
 
 export interface CreateJobApplicationRequest {
   company: string;
+  companyId?: string | null;
   roleTitle: string;
   url?: string | null;
   location?: string | null;
@@ -899,14 +1039,86 @@ export interface CreateJobApplicationRequest {
   appliedDate?: string | null;
   deadline?: string | null;
   source?: JobApplicationSource | null;
-  referralName?: string | null;
   visaTag?: VisaTag | null;
-  h1bCountLastYear?: number | null;
-  compensationNotes?: string | null;
   notes?: string | null;
+  // MOM-106: accepted only when the (resulting) status is `rejected`.
+  rejectionReason?: RejectionReason | null;
 }
 
 export type UpdateJobApplicationRequest = Partial<CreateJobApplicationRequest>;
+
+// MOM-116/117 (ADR-0014): a networking contact — recruiter, referrer, etc. Can be
+// standalone or attached to a job. Supersedes JobApplication.referralName.
+export const CONTACT_RELATIONSHIPS = ['recruiter', 'referrer', 'hiring_manager', 'peer', 'other'] as const;
+export type ContactRelationship = (typeof CONTACT_RELATIONSHIPS)[number];
+
+export interface ContactResponse {
+  id: string;
+  userId: string;
+  jobApplicationId: string | null;
+  name: string;
+  email: string | null;
+  linkedinUrl: string | null;
+  company: string | null;
+  relationship: ContactRelationship | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateContactRequest {
+  name: string;
+  email?: string | null;
+  linkedinUrl?: string | null;
+  company?: string | null;
+  relationship?: ContactRelationship | null;
+  notes?: string | null;
+  // Only honored on the standalone POST /contacts route (attach at creation).
+  jobApplicationId?: string | null;
+}
+
+export type UpdateContactRequest = Partial<CreateContactRequest>;
+
+// MOM-114/115 (ADR-0015): a job offer, kept minimal (SPIKE-015). Money as numbers;
+// `normalizedAnnualTotal` = base + bonus + equityTotal/equityYears, single-currency
+// v1 (no FX — the UI notes the assumption).
+export const OFFER_STATUSES = ['received', 'negotiating', 'accepted', 'declined', 'expired'] as const;
+export type OfferStatus = (typeof OFFER_STATUSES)[number];
+
+export interface OfferResponse {
+  id: string;
+  userId: string;
+  jobApplicationId: string | null;
+  /** The linked job's company, for the comparison view (null if standalone). */
+  company: string | null;
+  baseSalary: number | null;
+  bonus: number | null;
+  equityTotal: number | null;
+  equityYears: number;
+  currency: string;
+  location: string | null;
+  visaSponsored: boolean | null;
+  deadline: string | null;
+  notes: string | null;
+  status: OfferStatus;
+  /** base + bonus + equityTotal/equityYears; null when no comp figures are set. */
+  normalizedAnnualTotal: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertOfferRequest {
+  baseSalary?: number | null;
+  bonus?: number | null;
+  equityTotal?: number | null;
+  equityYears?: number;
+  currency?: string;
+  location?: string | null;
+  visaSponsored?: boolean | null;
+  deadline?: string | null;
+  notes?: string | null;
+  status?: OfferStatus;
+}
 
 export interface JobEventResponse {
   id: string;
@@ -915,8 +1127,149 @@ export interface JobEventResponse {
   type: string;
   title: string;
   notes: string | null;
+  // MOM-103: structured transition endpoints on a `status_change` event; null on
+  // other event types (and on pre-MOM-102 rows).
+  fromStatus: string | null;
+  toStatus: string | null;
   eventAt: string;
   createdAt: string;
+}
+
+// MOM-109/110 (CareerOS Track N, ADR-0013): a first-class interview round.
+// Replaces the JobEvent-as-interview hack — carries the schedule and the
+// outcome+debrief that MOM-113 turns into WeaknessSignals (the loop-closing edge).
+export const INTERVIEW_ROUND_TYPES = [
+  'recruiter_screen',
+  'phone_screen',
+  'online_assessment',
+  'technical',
+  'coding',
+  'system_design',
+  'behavioral',
+  'hiring_manager',
+  'onsite',
+  'final',
+  'other',
+] as const;
+export type InterviewRoundType = (typeof INTERVIEW_ROUND_TYPES)[number];
+
+export const INTERVIEW_ROUND_TYPE_LABELS: Record<InterviewRoundType, string> = {
+  recruiter_screen: 'Recruiter screen',
+  phone_screen: 'Phone screen',
+  online_assessment: 'Online assessment',
+  technical: 'Technical',
+  coding: 'Coding',
+  system_design: 'System design',
+  behavioral: 'Behavioral',
+  hiring_manager: 'Hiring manager',
+  onsite: 'Onsite',
+  final: 'Final',
+  other: 'Other',
+};
+
+export const INTERVIEW_ROUND_OUTCOMES = ['pending', 'passed', 'failed', 'mixed', 'withdrawn', 'unknown'] as const;
+export type InterviewRoundOutcome = (typeof INTERVIEW_ROUND_OUTCOMES)[number];
+
+export interface InterviewRoundResponse {
+  id: string;
+  userId: string;
+  jobApplicationId: string;
+  roundType: InterviewRoundType;
+  sequence: number;
+  scheduledAt: string | null;
+  durationMinutes: number | null;
+  interviewer: string | null;
+  outcome: InterviewRoundOutcome;
+  debrief: string | null;
+  areasWeak: string[];
+  missTags: MissTagReason[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateInterviewRoundRequest {
+  roundType: InterviewRoundType;
+  sequence?: number;
+  scheduledAt?: string | null;
+  durationMinutes?: number | null;
+  interviewer?: string | null;
+}
+
+export interface UpdateInterviewRoundRequest {
+  roundType?: InterviewRoundType;
+  sequence?: number;
+  scheduledAt?: string | null;
+  durationMinutes?: number | null;
+  interviewer?: string | null;
+  outcome?: InterviewRoundOutcome;
+  debrief?: string | null;
+  areasWeak?: CareerRoleAreaId[];
+  missTags?: MissTagReason[];
+}
+
+// MOM-101 (CareerOS Track M): the job-hunt funnel. The progression stages a
+// live application moves through, in order; `rejected`/`withdrawn` are terminal
+// outcomes reported separately, not funnel positions.
+export const JOB_FUNNEL_STAGES = ['saved', 'applied', 'oa', 'interview', 'onsite', 'offer'] as const;
+export type JobFunnelStage = (typeof JOB_FUNNEL_STAGES)[number];
+
+// MOM-105: how many days an application can sit in each stage before it's
+// "stalled" and worth a nudge (follow up / mark no-response). Terminal statuses
+// (rejected/withdrawn) and stages absent here never stall.
+export const JOB_STAGE_STALL_THRESHOLDS: Partial<Record<string, number>> = {
+  saved: 14,
+  applied: 21,
+  oa: 7,
+  interview: 14,
+  onsite: 14,
+  offer: 7,
+};
+
+export interface JobFunnelStageRow {
+  stage: JobFunnelStage;
+  atStage: number; // active apps whose current status is exactly this stage
+  reached: number; // active apps currently at this stage or deeper (cumulative)
+  conversionFromPrev: number | null; // reached[i] / reached[i-1]; null for the first stage
+  // MOM-104: median days apps historically spent in this stage before moving on,
+  // from `status_change` transition timing. null when no completed occupancy exists.
+  medianDaysInStage: number | null;
+}
+
+export interface JobFunnelBreakdownRow {
+  key: string; // a source or visaTag value
+  total: number;
+  offers: number;
+  interviewing: number; // reached interview or deeper
+  conversion: number; // offers / total
+}
+
+// MOM-106: rejected-application loss analysis. A plain count per reason (offers/
+// conversion are meaningless here — these are all terminal losses).
+export interface JobRejectionBreakdownRow {
+  key: string; // a REJECTION_REASONS value, or 'unspecified'
+  count: number;
+}
+
+// Honest v1: computed from CURRENT status only — an app that was rejected after
+// an onsite is counted as an outcome, not as having reached onsite, because the
+// cumulative `reached` counts use current status. Per-stage *timing* is grounded
+// in real transition history (MOM-104 `medianDaysInStage`).
+export interface JobFunnelResponse {
+  total: number;
+  active: number; // not rejected/withdrawn
+  offers: number;
+  rejected: number;
+  withdrawn: number;
+  responseRate: number; // of active apps that reached `applied`, the share that reached `oa` or deeper
+  stages: JobFunnelStageRow[];
+  bySource: JobFunnelBreakdownRow[];
+  byVisaTag: JobFunnelBreakdownRow[];
+  // MOM-106: reason breakdown over the rejected applications (empty if none).
+  byRejectionReason: JobRejectionBreakdownRow[];
+  // MOM-145: conversion per résumé version — keyed by the version's label, over
+  // the applications that version was actually sent to (`ResumeVersion.jobApplicationId`).
+  // Apps with no version linked are excluded, so this is empty until versions are linked.
+  byResumeVersion: JobFunnelBreakdownRow[];
 }
 
 export const TASK_TYPES = [
@@ -1148,6 +1501,10 @@ export const REVIEWABLE_OBJECT_TYPES = [
   'system_design_case',
   'behavioral_prompt',
   'cs_card',
+  // MOM-146: a synced Readwise highlight the learner chose to remember. Enters
+  // the same FSRS queue as questions/stories so a saved insight actually
+  // resurfaces and sticks, instead of dead-ending in a write-only ledger.
+  'highlight',
 ] as const;
 export type ReviewableObjectType = (typeof REVIEWABLE_OBJECT_TYPES)[number];
 
@@ -1235,6 +1592,35 @@ export interface WeaknessAreaSummary {
   questionIds: string[];
 }
 
+// MOM-127 (ADR-0011 / D-013): persisted weakness signals. The derived engine
+// above still handles practice struggles on the fly; these rows store only the
+// signals that can't be re-derived — interview debriefs and manual entries —
+// with severity accrual, read-time decay, and a repair/dismiss lifecycle.
+export const WEAKNESS_SIGNAL_TYPES = ['reason', 'pattern', 'topic', 'area', 'round'] as const;
+export type WeaknessSignalType = (typeof WEAKNESS_SIGNAL_TYPES)[number];
+
+export const WEAKNESS_SIGNAL_SOURCES = ['attempt', 'debrief', 'manual'] as const;
+export type WeaknessSignalSource = (typeof WEAKNESS_SIGNAL_SOURCES)[number];
+
+export const WEAKNESS_SIGNAL_STATUSES = ['open', 'repairing', 'resolved', 'dismissed'] as const;
+export type WeaknessSignalStatus = (typeof WEAKNESS_SIGNAL_STATUSES)[number];
+
+export interface WeaknessSignalResponse {
+  id: string;
+  signalType: WeaknessSignalType;
+  key: string;
+  label: string;
+  roleTrackId: string | null;
+  area: string | null;
+  jobApplicationId: string | null;
+  /** Effective (decayed) severity at read time, not the stored raw value. */
+  severity: number;
+  occurrences: number;
+  source: WeaknessSignalSource;
+  status: WeaknessSignalStatus;
+  lastSignalAt: string;
+}
+
 export interface WeaknessSummaryResponse {
   windowDays: number;
   totalAttempts: number;
@@ -1242,6 +1628,8 @@ export interface WeaknessSummaryResponse {
   reasons: WeaknessReasonSummary[];
   patterns: WeaknessAreaSummary[];
   topics: WeaknessAreaSummary[];
+  /** MOM-127: open, above-the-decay-floor persisted signals, most-severe first. */
+  openSignals: WeaknessSignalResponse[];
 }
 
 // ── Rubric (MOM-023) ────────────────────────────────────────────────────────

@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { PracticeRecommendationResponse } from '@momito/shared';
+import { INTERVIEW_ROUND_TYPE_LABELS, JOB_STAGE_STALL_THRESHOLDS, PracticeRecommendationResponse } from '@momito/shared';
 import { CareerService } from '../career/career.service';
-import { MissionsService } from '../missions/missions.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ResumesService } from '../resumes/resumes.service';
 import { WeaknessesService } from '../weaknesses/weaknesses.service';
 
 // MOM-033: standardized reason taxonomy (plan §6.2 wants every recommendation to
@@ -10,7 +10,6 @@ import { WeaknessesService } from '../weaknesses/weaknesses.service';
 // interpolated fragments). This module already had a `reason` field; this only
 // normalizes the text it's populated with.
 const RECOMMENDATION_REASONS = {
-  activeMission: (name: string) => `"${name}" is an active mission that needs weekly execution.`,
   overdueTask: () => 'This task is overdue.',
   readinessGap: (roleTrackLabel: string) => `This closes a readiness gap for ${roleTrackLabel}.`,
   jobDeadline: () => 'This job application has an upcoming deadline.',
@@ -23,40 +22,185 @@ const RECOMMENDATION_REASONS = {
     `You logged "${label}" on ${count} recent attempt${count === 1 ? '' : 's'}.`,
   weakArea: (label: string, struggles: number) =>
     `You struggled with ${struggles} ${label} question${struggles === 1 ? '' : 's'} recently.`,
+  // MOM-142: an interview-grounded signal (a debrief / manual entry) explains its
+  // provenance so the user trusts why it outranks derived struggle patterns.
+  weaknessSignal: (source: string, occurrences: number) => {
+    const times = occurrences > 1 ? ` (flagged ${occurrences}×)` : '';
+    if (source === 'debrief') return `An interview debrief flagged this weakness${times}.`;
+    if (source === 'manual') return `You flagged this weakness to repair${times}.`;
+    return `A recurring weakness surfaced from your recent attempts${times}.`;
+  },
+  // MOM-141: a scheduled interview round counts down toward its date so the
+  // sharpest prep floats to the top of Today as the interview approaches.
+  interviewCountdown: (roundLabel: string, days: number) => {
+    if (days <= 0) return `Your ${roundLabel} round is today — do a final review.`;
+    if (days === 1) return `Your ${roundLabel} round is tomorrow — lock in your prep.`;
+    return `Your ${roundLabel} round is in ${days} days — build your prep queue now.`;
+  },
+  // MOM-105: an application that has sat in one stage past its stall threshold —
+  // the nudge is to act (follow up) or close it out (mark no-response).
+  stalledJob: (stage: string, days: number) =>
+    `This application has sat in ${stage} for ${days} days without moving. Follow up or mark it no-response.`,
+  // MOM-157: the profile has gained things this résumé version predates. Urgent while the
+  // linked job is still a lead you can fix before sending; informational once already sent.
+  resumeDriftPreSend: (label: string, count: number, company: string) =>
+    `Your "${label}" résumé is missing ${count} thing${count === 1 ? '' : 's'} you have added since — and it is the résumé linked to ${company}, which you have not applied to yet. Refresh it before you send.`,
+  resumeDrift: (label: string, count: number) =>
+    `Your "${label}" résumé predates ${count} thing${count === 1 ? '' : 's'} now on your profile. Refresh it or cut a new version.`,
 };
+
+// MOM-141: how far ahead an interview round starts appearing on Today. Rounds
+// further out than this aren't urgent enough to outrank day-to-day study.
+const INTERVIEW_COUNTDOWN_WINDOW_DAYS = 14;
 
 // A weak signal needs at least this many struggles before it drives a
 // recommendation — one bad attempt is noise, not a pattern.
 const WEAKNESS_MIN_COUNT = 2;
+
+// MOM-140-lite: a pipeline item's Today card should speak to the stage it's in.
+// A saved lead reads "apply", an onsite reads "prep your onsite" with real
+// urgency — instead of one generic "Prepare X" for every stage. This is copy +
+// light stage-ranking only; the full interview-date countdown and auto-assembled
+// prep queue are MOM-140/141 (migration-gated interview-round modeling).
+const JOB_STAGE_CARD: Record<
+  string,
+  { title: (company: string, role: string) => string; reason: string; priority: number }
+> = {
+  saved: {
+    title: (company, role) => `Apply to ${company} — ${role}`,
+    reason: 'You saved this role but have not applied yet.',
+    priority: 55,
+  },
+  applied: {
+    title: (company, role) => `Follow up with ${company} — ${role}`,
+    reason: 'Your application is in review — keep it warm.',
+    priority: 62,
+  },
+  oa: {
+    title: (company) => `Prep the ${company} online assessment`,
+    reason: 'You are at the online-assessment stage — practice before it expires.',
+    priority: 85,
+  },
+  interview: {
+    title: (company) => `Prep for your ${company} interview`,
+    reason: 'You are actively interviewing here.',
+    priority: 88,
+  },
+  onsite: {
+    title: (company) => `Prep for your ${company} onsite`,
+    reason: 'You have an onsite for this role — the sharp end of the pipeline.',
+    priority: 92,
+  },
+};
 
 @Injectable()
 export class RecommendationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly career: CareerService,
-    private readonly missions: MissionsService,
     private readonly weaknesses: WeaknessesService,
+    private readonly resumes: ResumesService,
   ) {}
 
   async list(userId: string): Promise<PracticeRecommendationResponse[]> {
-    const [readiness, activeMissions, overdueTasks, jobs, inboxCount, weaknessSummary] = await Promise.all([
-      this.career.listActiveReadiness(userId),
-      this.missions.list(userId),
-      this.prisma.task.findMany({
-        where: { userId, status: { not: 'done' }, dueDate: { lt: new Date() } },
-        orderBy: { dueDate: 'asc' },
-        take: 3,
-      }),
-      this.prisma.jobApplication.findMany({
-        where: { userId, status: { in: ['saved', 'applied', 'oa', 'interview', 'onsite'] } },
-        orderBy: [{ deadline: 'asc' }, { updatedAt: 'desc' }],
-        take: 3,
-      }),
-      this.prisma.learningHighlight.count({ where: { userId, isDeleted: false, reviewedAt: null } }),
-      this.weaknesses.summary(userId),
-    ]);
+    const now = new Date();
+    const countdownHorizon = new Date(now.getTime() + INTERVIEW_COUNTDOWN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const [readiness, overdueTasks, jobs, inboxCount, weaknessSummary, upcomingRounds, driftSummaries, savedJobs] =
+      await Promise.all([
+        this.career.listActiveReadiness(userId),
+        this.prisma.task.findMany({
+          where: { userId, status: { not: 'done' }, dueDate: { lt: new Date() } },
+          orderBy: { dueDate: 'asc' },
+          take: 3,
+        }),
+        this.prisma.jobApplication.findMany({
+          where: { userId, status: { in: ['saved', 'applied', 'oa', 'interview', 'onsite'] } },
+          orderBy: [{ deadline: 'asc' }, { updatedAt: 'desc' }],
+          take: 3,
+          // MOM-105: the latest status_change dates the current stage, for stall detection.
+          include: { events: { where: { type: 'status_change' }, orderBy: { eventAt: 'desc' }, take: 1, select: { eventAt: true } } },
+        }),
+        this.prisma.learningHighlight.count({ where: { userId, isDeleted: false, reviewedAt: null } }),
+        this.weaknesses.summary(userId),
+        // MOM-141: interview rounds still ahead of us, scheduled within the countdown
+        // window and not yet decided — these become the top-ranked Today cards.
+        this.prisma.interviewRound.findMany({
+          where: {
+            userId,
+            outcome: 'pending',
+            scheduledAt: { gte: now, lte: countdownHorizon },
+          },
+          orderBy: { scheduledAt: 'asc' },
+          take: 3,
+          include: { jobApplication: { select: { id: true, company: true } } },
+        }),
+        // MOM-157: résumé versions the profile has outgrown (one profile + one versions read).
+        this.resumes.driftSummary(userId),
+        // MOM-157: the still-a-lead jobs — a stale résumé linked to one of these is fixable
+        // before you send, which is exactly when the nudge is worth interrupting Today for.
+        this.prisma.jobApplication.findMany({ where: { userId, status: 'saved' }, select: { id: true, company: true } }),
+      ]);
 
     const recommendations: PracticeRecommendationResponse[] = [];
+
+    // MOM-141: a scheduled interview is the single most time-critical thing on the
+    // board — an onsite in 3 days outranks every study card. Priority scales with
+    // proximity (sooner = higher), landing at/above overdue tasks (100) so the
+    // countdown always leads Today, and the card links to the job so tapping it
+    // reaches the round + its auto-assembled prep queue.
+    for (const round of upcomingRounds) {
+      const scheduledAt = round.scheduledAt;
+      if (!scheduledAt) continue;
+      const daysUntil = Math.max(0, Math.ceil((scheduledAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+      const roundLabel = INTERVIEW_ROUND_TYPE_LABELS[round.roundType as keyof typeof INTERVIEW_ROUND_TYPE_LABELS];
+      const company = round.jobApplication?.company ?? 'your interview';
+      const whenText = daysUntil <= 0 ? 'today' : daysUntil === 1 ? 'tomorrow' : `in ${daysUntil} days`;
+      recommendations.push({
+        id: `round:${round.id}`,
+        type: 'job',
+        title: `Prep your ${company} ${roundLabel} ${whenText}`,
+        reason: RECOMMENDATION_REASONS.interviewCountdown(roundLabel, daysUntil),
+        roleTrackId: null,
+        area: null,
+        targetHref: `/jobs/${round.jobApplicationId}`,
+        // 101–115: above overdue tasks (100); the nearer the round, the higher.
+        priority: 101 + Math.max(0, INTERVIEW_COUNTDOWN_WINDOW_DAYS - daysUntil),
+      });
+    }
+
+    // MOM-142: interview-grounded weaknesses come first. Open WeaknessSignals —
+    // emitted by the MOM-113 debrief edge (or manual entry), stored and decayed by
+    // MOM-127 — are first-class Today items ranked *above* derived struggle
+    // patterns, because a bombed real round is stronger evidence than practice
+    // noise. Severity (already decayed at read time) both orders them and nudges
+    // priority. Their keys are recorded so the derived path below doesn't repeat them.
+    const surfacedSignalKeys = new Set<string>();
+    const openSignals = (weaknessSummary.openSignals ?? [])
+      .slice()
+      .sort((left, right) => right.severity - left.severity)
+      .slice(0, 3);
+    for (const signal of openSignals) {
+      surfacedSignalKeys.add(signal.key);
+      const isArea = signal.signalType === 'area' && Boolean(signal.area);
+      // MOM-167: a signal the user has already shown one clean rep on (MOM-166) reads
+      // `Repairing:` — visible progress, so the card is encouragement, not just a nag.
+      const repairing = signal.status === 'repairing';
+      recommendations.push({
+        id: `signal:${signal.signalType}:${signal.key}:${signal.jobApplicationId ?? 'global'}`,
+        type: 'practice',
+        title: `${repairing ? 'Repairing' : 'Repair'}: ${signal.label}`,
+        reason: repairing
+          ? `You've made progress here — one more strong rep in ${isArea ? signal.area?.replace(/_/g, ' ') : 'this area'} clears it.`
+          : RECOMMENDATION_REASONS.weaknessSignal(signal.source, signal.occurrences),
+        roleTrackId: signal.roleTrackId as PracticeRecommendationResponse['roleTrackId'],
+        area: (isArea ? signal.area : null) as PracticeRecommendationResponse['area'],
+        targetHref: isArea
+          ? `/practice/new?area=${signal.area}&mode=weak_area_review`
+          : '/practice/new?mode=weak_area_review',
+        // 95–99: at/above derived weakness (95), below overdue tasks (100).
+        priority: 94 + Math.min(5, Math.max(1, Math.round(signal.severity))),
+      });
+    }
 
     // Plan §6.1 queue priority 3: weakness repair sits above readiness gaps
     // (80+) and below overdue tasks (100). Patterns/topics with repeated
@@ -64,7 +208,7 @@ export class RecommendationsService {
     // repeated miss reason without an area (e.g. "time_pressure" across mixed
     // topics) still surfaces once so the signal is never silently dropped.
     const weakAreas = [...weaknessSummary.patterns, ...weaknessSummary.topics]
-      .filter((area) => area.struggles >= WEAKNESS_MIN_COUNT)
+      .filter((area) => area.struggles >= WEAKNESS_MIN_COUNT && !surfacedSignalKeys.has(area.key))
       .sort((left, right) => right.struggles - left.struggles)
       .slice(0, 2);
     for (const area of weakAreas) {
@@ -80,7 +224,9 @@ export class RecommendationsService {
       });
     }
     if (weakAreas.length === 0) {
-      const topReason = weaknessSummary.reasons.find((reason) => reason.count >= WEAKNESS_MIN_COUNT);
+      const topReason = weaknessSummary.reasons.find(
+        (reason) => reason.count >= WEAKNESS_MIN_COUNT && !surfacedSignalKeys.has(reason.reason),
+      );
       if (topReason) {
         recommendations.push({
           id: `weakness:reason:${topReason.reason}`,
@@ -94,18 +240,8 @@ export class RecommendationsService {
         });
       }
     }
-    for (const mission of activeMissions.filter((item) => item.stage !== 'archived').slice(0, 2)) {
-      recommendations.push({
-        id: `mission:${mission.id}`,
-        type: 'task',
-        title: `Focus ${mission.name}`,
-        reason: mission.diagnosisSummary ?? RECOMMENDATION_REASONS.activeMission(mission.name),
-        roleTrackId: mission.roleTrackId,
-        area: null,
-        targetHref: `/missions/${mission.id}`,
-        priority: 110,
-      });
-    }
+    // MOM-163 (D-021): the Missions engine is retired — its priority-110 "Focus <mission>" cards
+    // no longer lead Today, and overdue tasks link to the calendar (the missionId deep-link is gone).
     for (const task of overdueTasks) {
       recommendations.push({
         id: `task:${task.id}`,
@@ -114,7 +250,7 @@ export class RecommendationsService {
         reason: RECOMMENDATION_REASONS.overdueTask(),
         roleTrackId: task.roleTrackId as PracticeRecommendationResponse['roleTrackId'],
         area: task.area as PracticeRecommendationResponse['area'],
-        targetHref: task.missionId ? `/missions/${task.missionId}` : '/calendar',
+        targetHref: '/calendar',
         priority: 100,
       });
     }
@@ -135,17 +271,73 @@ export class RecommendationsService {
       }
     }
     for (const job of jobs) {
+      // MOM-105: a stalled app (past its stage threshold) gets a "follow up / mark
+      // no-response" nudge that supersedes the routine stage card — the actionable
+      // move is to unblock it, not to prep it further. Priority sits below the
+      // interview countdown (101+) and deadlines (90) but above routine study.
+      const stallThreshold = JOB_STAGE_STALL_THRESHOLDS[job.status];
+      const enteredAt = job.events?.[0]?.eventAt ?? job.createdAt;
+      const daysInStage = enteredAt ? Math.floor((now.getTime() - enteredAt.getTime()) / (24 * 60 * 60 * 1000)) : null;
+      if (stallThreshold !== undefined && daysInStage !== null && daysInStage >= stallThreshold) {
+        recommendations.push({
+          id: `job-stall:${job.id}`,
+          type: 'job',
+          title: `Follow up on ${job.company} — ${daysInStage}d in ${job.status}`,
+          reason: RECOMMENDATION_REASONS.stalledJob(job.status, daysInStage),
+          roleTrackId: job.roleTrackId as PracticeRecommendationResponse['roleTrackId'],
+          area: null,
+          targetHref: `/jobs/${job.id}`,
+          priority: 68,
+        });
+        continue;
+      }
+      const card = JOB_STAGE_CARD[job.status] ?? {
+        title: (company: string, role: string) => `Prepare ${company} ${role}`,
+        reason: RECOMMENDATION_REASONS.jobActive(),
+        priority: 60,
+      };
+      // An application deadline is only actionable-by-date while the job is still
+      // a saved lead ("apply by Friday"); once applied it is moot, so from then on
+      // the stage governs both the copy and the ranking.
+      const deadlineUrgent = job.status === 'saved' && Boolean(job.deadline);
       recommendations.push({
         id: `job:${job.id}`,
         type: 'job',
-        title: `Prepare ${job.company} ${job.roleTitle}`,
-        reason: job.deadline ? RECOMMENDATION_REASONS.jobDeadline() : RECOMMENDATION_REASONS.jobActive(),
+        title: card.title(job.company, job.roleTitle),
+        reason: deadlineUrgent ? RECOMMENDATION_REASONS.jobDeadline() : card.reason,
         roleTrackId: job.roleTrackId as PracticeRecommendationResponse['roleTrackId'],
         area: null,
         targetHref: `/jobs/${job.id}`,
-        priority: job.deadline ? 90 : 60,
+        priority: deadlineUrgent ? 90 : card.priority,
       });
     }
+    // MOM-157: drift belongs on Today because it only helps BEFORE you send the résumé — the
+    // one page a user won't think to open when they don't already suspect the résumé is behind.
+    // Only the most-drifted version surfaces (the rest would be noise), and it earns real urgency
+    // only when it is the résumé linked to a job still in `saved` (fixable before sending).
+    const savedJobById = new Map(savedJobs.map((job) => [job.id, job.company]));
+    const topDrift = driftSummaries[0];
+    if (topDrift) {
+      const preSendCompany = topDrift.jobApplicationId ? savedJobById.get(topDrift.jobApplicationId) : undefined;
+      recommendations.push({
+        id: `resume-drift:${topDrift.id}`,
+        type: 'profile',
+        title: preSendCompany
+          ? `Refresh your "${topDrift.label}" résumé before applying to ${preSendCompany}`
+          : `Your "${topDrift.label}" résumé is behind your profile`,
+        reason: preSendCompany
+          ? RECOMMENDATION_REASONS.resumeDriftPreSend(topDrift.label, topDrift.missingCount, preSendCompany)
+          : RECOMMENDATION_REASONS.resumeDrift(topDrift.label, topDrift.missingCount),
+        roleTrackId: null,
+        area: null,
+        // MOM-157: deep-link straight to the stale version, not the résumé list.
+        targetHref: `/profile/resumes?v=${topDrift.id}`,
+        // pre-send sits between deadlines (90) and stalls (68) — act before you apply;
+        // informational drift ranks below routine study, a background reminder.
+        priority: preSendCompany ? 74 : 45,
+      });
+    }
+
     if (inboxCount > 0) {
       recommendations.push({
         id: 'readwise:inbox',

@@ -20,25 +20,34 @@ export function Sidebar() {
         </Link>
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2" aria-label="Primary">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.map((item, index) => {
           const active = isNavItemActive(pathname, item.href);
+          // MOM-165: emit a section header the first time a new section appears (items sharing
+          // a section are contiguous). Primary items and Settings have no section → no header.
+          const showHeader = Boolean(item.section) && item.section !== NAV_ITEMS[index - 1]?.section;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium',
-                active
-                  ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400'
-                  : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100',
+            <div key={item.href}>
+              {showHeader && (
+                <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                  {item.section}
+                </p>
               )}
-              aria-current={active ? 'page' : undefined}
-            >
-              <span className="text-base leading-none" aria-hidden="true">
-                {item.icon}
-              </span>
-              {item.label}
-            </Link>
+              <Link
+                href={item.href}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium',
+                  active
+                    ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400'
+                    : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100',
+                )}
+                aria-current={active ? 'page' : undefined}
+              >
+                <span className="text-base leading-none" aria-hidden="true">
+                  {item.icon}
+                </span>
+                {item.label}
+              </Link>
+            </div>
           );
         })}
       </nav>

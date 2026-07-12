@@ -11,6 +11,7 @@ const weaknessesStub = () =>
   ({
     struggledQuestionIds: vi.fn().mockResolvedValue([]),
     summary: vi.fn().mockResolvedValue({ windowDays: 30, totalAttempts: 0, totalStruggles: 0, reasons: [], patterns: [], topics: [] }),
+    creditRepairEvidence: vi.fn().mockResolvedValue({ repairing: 0, resolved: 0 }),
   }) as never;
 
 describe('SessionsService', () => {
@@ -265,6 +266,66 @@ describe('SessionsService', () => {
     await expect(service.abandon('session-1', 'user-1'))
       .rejects.toEqual(new ConflictException('Session is already completed'));
   });
+
+  // MOM-166: completing a repair/job_prep session closes the weakness signals it targeted.
+  function finishSetup(sessionType: string, attempts: unknown[]) {
+    const prisma = {
+      interviewSession: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 'session-1', sessionType }),
+      },
+      answerAttempt: { findMany: vi.fn().mockResolvedValue(attempts) },
+    };
+    const weaknesses = {
+      struggledQuestionIds: vi.fn().mockResolvedValue([]),
+      summary: vi.fn(),
+      creditRepairEvidence: vi.fn().mockResolvedValue({ repairing: 0, resolved: 0 }),
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknesses as never);
+    return { service, weaknesses, prisma };
+  }
+
+  it('credits repair evidence when a weakness_repair session completes', async () => {
+    const { service, weaknesses } = finishSetup('weak_area_review', [
+      { area: 'system_design', selfRating: 4, correctness: null, rubricScore: null, aiScore: null }, // positive
+      { area: 'system_design', selfRating: 1, correctness: null, rubricScore: null, aiScore: null }, // not
+      { area: 'dsa', selfRating: null, correctness: 'strong', rubricScore: null, aiScore: null }, // positive
+    ]);
+
+    await service.complete('session-1', 'user-1');
+
+    expect(weaknesses.creditRepairEvidence).toHaveBeenCalledWith('user-1', [
+      { area: 'system_design', positive: true },
+      { area: 'system_design', positive: false },
+      { area: 'dsa', positive: true },
+    ]);
+  });
+
+  it('does not credit for a non-repair session type', async () => {
+    const { service, weaknesses, prisma } = finishSetup('quick_practice', []);
+
+    await service.complete('session-1', 'user-1');
+
+    expect(weaknesses.creditRepairEvidence).not.toHaveBeenCalled();
+    expect(prisma.answerAttempt.findMany).not.toHaveBeenCalled();
+  });
+
+  it('does not credit when a repair session is abandoned, only when completed', async () => {
+    const { service, weaknesses } = finishSetup('weak_area_review', []);
+
+    await service.abandon('session-1', 'user-1');
+
+    expect(weaknesses.creditRepairEvidence).not.toHaveBeenCalled();
+  });
+
+  it('never lets a crediting failure break session completion', async () => {
+    const { service, weaknesses } = finishSetup('job_prep', [{ area: 'dsa', selfRating: 4, correctness: null, rubricScore: null, aiScore: null }]);
+    weaknesses.creditRepairEvidence.mockRejectedValue(new Error('db down'));
+
+    const result = await service.complete('session-1', 'user-1');
+
+    expect(result).toMatchObject({ id: 'session-1' }); // completion still returns the session
+  });
 });
 
 describe('SessionsService — weak_area_review selection', () => {
@@ -338,5 +399,211 @@ describe('SessionsService — weak_area_review selection', () => {
     const result = await service.create({ sessionType: 'weak_area_review', questionCount: 2 }, 'user-1');
 
     expect(result.questions.map((question) => question.questionId)).toEqual(['q-1']);
+  });
+});
+
+describe('SessionsService — mixed_interview selection (MOM-127)', () => {
+  const captureCreate = () =>
+    vi.fn().mockImplementation(({ data }) => ({
+      id: 'session-1',
+      status: 'active',
+      sessionQuestions: data.sessionQuestions.create.map((item: { questionId: string; order: number }) => ({
+        id: `sq-${item.order}`,
+        sessionId: 'session-1',
+        questionId: item.questionId,
+        order: item.order,
+        question: { id: item.questionId, topic: { id: 't', name: 'T' }, companies: [] },
+      })),
+    }));
+
+  it('interleaves recently-struggled questions with a fresh cross-area draw', async () => {
+    const create = captureCreate();
+    const prisma = {
+      interviewSession: { create },
+      question: {
+        // Distinct importances make the filtered sort deterministic despite the shuffle.
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'fresh-1', roleTags: [], areaTags: [], patternTags: [], importance: 3 },
+          { id: 'fresh-2', roleTags: [], areaTags: [], patternTags: [], importance: 2 },
+          { id: 'fresh-3', roleTags: [], areaTags: [], patternTags: [], importance: 1 },
+        ]),
+      },
+    };
+    const weaknesses = {
+      struggledQuestionIds: vi.fn().mockResolvedValue(['struggle-1', 'struggle-2']),
+      summary: vi.fn(),
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknesses as never);
+
+    const result = await service.create({ sessionType: 'mixed_interview', questionCount: 4 }, 'user-1');
+
+    // weakSlots = floor(4/2) = 2 → [struggle-1, struggle-2] interleaved with fresh.
+    expect(result.questions.map((question) => question.questionId)).toEqual([
+      'struggle-1',
+      'fresh-1',
+      'struggle-2',
+      'fresh-2',
+    ]);
+  });
+
+  it('falls back to a plain filtered draw when there is no struggle history', async () => {
+    const create = captureCreate();
+    const prisma = {
+      interviewSession: { create },
+      question: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'only-1', roleTags: [], areaTags: [], patternTags: [], importance: 1 },
+        ]),
+      },
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
+
+    const result = await service.create({ sessionType: 'mixed_interview', questionCount: 3 }, 'user-1');
+
+    expect(result.questions.map((question) => question.questionId)).toEqual(['only-1']);
+  });
+});
+
+describe('SessionsService — job_prep selection (MOM-128)', () => {
+  const captureCreate = () =>
+    vi.fn().mockImplementation(({ data }) => ({
+      id: 'session-1',
+      status: 'active',
+      sessionQuestions: data.sessionQuestions.create.map((item: { questionId: string; order: number }) => ({
+        id: `sq-${item.order}`,
+        sessionId: 'session-1',
+        questionId: item.questionId,
+        order: item.order,
+        question: { id: item.questionId, topic: { id: 't', name: 'T' }, companies: [] },
+      })),
+    }));
+
+  const signal = (area: string) => ({
+    id: `sig-${area}`,
+    signalType: 'area',
+    key: area,
+    area,
+    jobApplicationId: 'job-1',
+    severity: 1,
+    occurrences: 1,
+    source: 'debrief',
+    status: 'open',
+    lastSignalAt: '',
+    label: '',
+  });
+
+  it("leads with this job's weak-area questions from the company bank", async () => {
+    const create = captureCreate();
+    const prisma = {
+      jobApplication: { findFirst: vi.fn().mockResolvedValue({ id: 'job-1', company: 'Meta', roleTrackId: 'swe' }) },
+      company: { findFirst: vi.fn().mockResolvedValue({ id: 'company-meta' }) },
+      question: {
+        findMany: vi.fn().mockResolvedValue([
+          // Lower importance but hits the job's weak area → must still lead.
+          { id: 'weak-q', roleTags: [], areaTags: ['system_design'], patternTags: [], importance: 1 },
+          { id: 'strong-q', roleTags: [], areaTags: ['dsa'], patternTags: [], importance: 5 },
+        ]),
+      },
+      interviewSession: { create },
+    };
+    const weaknesses = {
+      struggledQuestionIds: vi.fn().mockResolvedValue([]),
+      summary: vi.fn().mockResolvedValue({
+        windowDays: 30,
+        totalAttempts: 0,
+        totalStruggles: 0,
+        reasons: [],
+        patterns: [],
+        topics: [],
+        openSignals: [signal('system_design')],
+      }),
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknesses as never);
+
+    const result = await service.create({ sessionType: 'job_prep', questionCount: 2, jobApplicationId: 'job-1' }, 'user-1');
+
+    expect(result.questions.map((question) => question.questionId)).toEqual(['weak-q', 'strong-q']);
+    expect(prisma.question.findMany.mock.calls[0][0].where.companies).toEqual({ some: { companyId: 'company-meta' } });
+  });
+
+  it("filters the pool by the job's role track when the company is not in the catalog", async () => {
+    const create = captureCreate();
+    const prisma = {
+      jobApplication: { findFirst: vi.fn().mockResolvedValue({ id: 'job-1', company: 'Obscure Startup', roleTrackId: 'swe' }) },
+      company: { findFirst: vi.fn().mockResolvedValue(null) },
+      question: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'swe-q', roleTags: ['swe'], areaTags: [], patternTags: [], importance: 2 },
+          { id: 'quant-q', roleTags: ['quant'], areaTags: [], patternTags: [], importance: 5 },
+        ]),
+      },
+      interviewSession: { create },
+    };
+    const weaknesses = {
+      struggledQuestionIds: vi.fn().mockResolvedValue([]),
+      summary: vi.fn().mockResolvedValue({ windowDays: 30, totalAttempts: 0, totalStruggles: 0, reasons: [], patterns: [], topics: [], openSignals: [] }),
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknesses as never);
+
+    const result = await service.create({ sessionType: 'job_prep', questionCount: 5, jobApplicationId: 'job-1' }, 'user-1');
+
+    // quant-q is filtered out by the job's role track; only swe-q remains.
+    expect(result.questions.map((question) => question.questionId)).toEqual(['swe-q']);
+    expect(prisma.question.findMany.mock.calls[0][0].where.companies).toBeUndefined();
+  });
+
+  it('degrades to a plain filtered draw when the job has no jobApplicationId context', async () => {
+    const create = captureCreate();
+    const prisma = {
+      question: { findMany: vi.fn().mockResolvedValue([{ id: 'any-q', roleTags: [], areaTags: [], patternTags: [], importance: 1 }]) },
+      interviewSession: { create },
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
+
+    const result = await service.create({ sessionType: 'job_prep', questionCount: 3 }, 'user-1');
+
+    expect(result.questions.map((question) => question.questionId)).toEqual(['any-q']);
+  });
+});
+
+describe('SessionsService — attempt tagging (MOM-128)', () => {
+  it('tags the attempt with the session role track and the question area', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'attempt-1' });
+    const prisma = {
+      interviewSession: {
+        findFirst: vi.fn().mockResolvedValue({
+          status: 'active',
+          roleTrackId: 'swe',
+          area: null,
+          sessionQuestions: [{ id: 'sq-1', question: { areaTags: ['system_design'] } }],
+        }),
+      },
+      answerAttempt: { create },
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
+
+    await service.answer('session-1', { questionId: 'q-1', answerText: 'answer' }, 'user-1');
+
+    expect(create.mock.calls[0][0].data).toMatchObject({ roleTrackId: 'swe', area: 'system_design' });
+  });
+
+  it('falls back to the session area and leaves role track null when the session is untargeted', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'attempt-1' });
+    const prisma = {
+      interviewSession: {
+        findFirst: vi.fn().mockResolvedValue({
+          status: 'active',
+          roleTrackId: null,
+          area: 'behavioral',
+          sessionQuestions: [{ id: 'sq-1', question: { areaTags: [] } }],
+        }),
+      },
+      answerAttempt: { create },
+    };
+    const service = new SessionsService(prisma as never, { record: vi.fn() } as never, weaknessesStub());
+
+    await service.answer('session-1', { questionId: 'q-1', answerText: 'answer' }, 'user-1');
+
+    expect(create.mock.calls[0][0].data).toMatchObject({ roleTrackId: null, area: 'behavioral' });
   });
 });
