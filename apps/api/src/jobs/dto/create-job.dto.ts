@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsString, IsUrl, IsUUID, Max, MaxLength, Min, Matches } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUrl, IsUUID, MaxLength, Matches } from 'class-validator';
 import {
   CAREER_ROLE_TRACK_IDS,
   CareerRoleTrackId,
@@ -65,25 +65,12 @@ export class CreateJobDto {
   @IsIn(JOB_APPLICATION_SOURCES)
   source?: JobApplicationSource | null;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  referralName?: string | null;
+  // MOM-164 (D-021 spirit): referralName (→ Contacts), h1bCountLastYear, and compensationNotes
+  // were write-only — no UI ever set or read them. Removed from the DTO; the DB columns stay.
 
   @IsOptional()
   @IsIn(VISA_TAGS)
   visaTag?: VisaTag | null;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(1_000_000)
-  h1bCountLastYear?: number | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(2000)
-  compensationNotes?: string | null;
 
   @IsOptional()
   @IsString()

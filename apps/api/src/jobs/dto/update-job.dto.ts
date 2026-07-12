@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsString, IsUrl, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUrl, IsUUID, Matches, MaxLength } from 'class-validator';
 import {
   CAREER_ROLE_TRACK_IDS,
   CareerRoleTrackId,
@@ -67,25 +67,11 @@ export class UpdateJobDto {
   @IsIn(JOB_APPLICATION_SOURCES)
   source?: JobApplicationSource | null;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  referralName?: string | null;
+  // MOM-164: referralName/h1bCountLastYear/compensationNotes removed — write-only, no UI. Columns stay.
 
   @IsOptional()
   @IsIn(VISA_TAGS)
   visaTag?: VisaTag | null;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(1_000_000)
-  h1bCountLastYear?: number | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(2000)
-  compensationNotes?: string | null;
 
   @IsOptional()
   @IsString()

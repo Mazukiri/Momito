@@ -1,5 +1,21 @@
 # LOG
 
+## 2026-07-12 - MOM-164: strip vestigial write-only job fields (Momito 1.0 PR 5) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 5 of Momito 1.0.
+
+`JobApplication.referralName`, `h1bCountLastYear`, and `compensationNotes` were accepted, persisted, and serialized by
+the API but **no web UI ever set or read them** (confirmed by grep: the only web hit was a comment). referralName was
+superseded by the Contacts model (MOM-116); the other two never grew a UI. Removed all three from the create/update
+DTOs (and the now-unused `IsInt`/`Min`/`Max` imports), the create/update writes, the serializer, and the
+`JobApplicationResponse`/`CreateJobApplicationRequest` shared types. The **DB columns stay** (D-021 spirit — no data
+destroyed). The `forbidNonWhitelisted` validation pipe now cleanly 400s a request that includes a removed field,
+which no real client sends.
+
+**Verified:** shared builds; 328 API + 34 web tests green; lint + typecheck clean both apps. Live: a job response no
+longer carries the three fields; a create with `referralName` in the body → 400 "property referralName should not
+exist"; a normal create still works. Throwaway job removed; baseline restored.
+
 ## 2026-07-12 - MOM-163: retire Missions — API half + shared types (Momito 1.0 PR 4) (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 4 of Momito 1.0; completes D-021.

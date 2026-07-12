@@ -1011,10 +1011,9 @@ export interface JobApplicationResponse {
   appliedDate: string | null;
   deadline: string | null;
   source: JobApplicationSource | null;
-  referralName: string | null;
   visaTag: VisaTag | null;
-  h1bCountLastYear: number | null;
-  compensationNotes: string | null;
+  // MOM-164: referralName (→ Contacts), h1bCountLastYear, compensationNotes were write-only with
+  // no UI — removed from the API surface. The DB columns are preserved (D-021 spirit).
   notes: string | null;
   // MOM-106: set only on a rejected application (loss analysis); null otherwise.
   rejectionReason: RejectionReason | null;
@@ -1040,10 +1039,7 @@ export interface CreateJobApplicationRequest {
   appliedDate?: string | null;
   deadline?: string | null;
   source?: JobApplicationSource | null;
-  referralName?: string | null;
   visaTag?: VisaTag | null;
-  h1bCountLastYear?: number | null;
-  compensationNotes?: string | null;
   notes?: string | null;
   // MOM-106: accepted only when the (resulting) status is `rejected`.
   rejectionReason?: RejectionReason | null;
