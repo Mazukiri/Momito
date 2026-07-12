@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma, Profile, ProfileScore } from '@prisma/client';
 import {
   AtsCoverageResponse,
+  CAREER_ROLE_TRACKS,
   ProfileExperienceItem,
   ProfileProjectItem,
   ProfileScoreResponse,
@@ -24,6 +25,19 @@ type ScoreResult = {
   presentationGaps: string[];
   suggestions: string[];
 };
+
+// MOM-170: a curated skill lexicon, reused from the role-track checklists' `keywords` (already
+// maintained in @momito/shared) — e.g. 'dynamic programming', 'system design', 'consistency'.
+// The JD tokenizer only caught Capitalized tokens, so lowercase and multi-word skills were
+// invisible to ATS coverage. Scanning the JD for these phrases (case-insensitive) recovers them.
+const SKILL_LEXICON: string[] = [
+  ...new Set(
+    Object.values(CAREER_ROLE_TRACKS)
+      .flatMap((track) => track.checklist.flatMap((item) => item.keywords ?? []))
+      .map((keyword) => keyword.toLowerCase().trim())
+      .filter((keyword) => keyword.length > 1),
+  ),
+];
 
 const METRIC_PATTERN = /\d+[%x]|\d+\s?(ms|seconds?|users?|requests?|gb|tb|mb|k|m)\b/gi;
 const ACTION_VERBS = new Set([
@@ -103,10 +117,20 @@ export class ProfileScoresService {
   // - resumeVersionId present → measure that ResumeVersion's contentMd (full),
   //   so you can see whether a *tailored* résumé actually covers the JD.
   async atsCoverage(jdText: string, userId: string, resumeVersionId?: string): Promise<AtsCoverageResponse> {
-    const { have, source, versionId } = await this.coverageHaveSet(userId, resumeVersionId);
-    const jdKeywords = this.extractJdSkills(jdText);
-    const covered = jdKeywords.filter((keyword) => have.has(this.normalize(keyword)));
-    const missing = jdKeywords.filter((keyword) => !have.has(this.normalize(keyword)));
+    const { have, haveText, source, versionId } = await this.coverageHaveSet(userId, resumeVersionId);
+    // MOM-170: the user's own skill labels join the lexicon so a JD phrase they actually have —
+    // even lowercase or multi-word — is extracted and matched.
+    const profile = await this.prisma.profile.findUnique({ where: { userId }, select: { skills: true } });
+    const profileSkills = this.asStringArray(profile?.skills ?? []);
+    const jdKeywords = this.extractJdSkills(jdText, profileSkills);
+    const isCovered = (keyword: string): boolean => {
+      const n = this.normalize(keyword);
+      // Multi-word phrases can't live in a token set → substring-match the artifact text.
+      // Single tokens keep exact set membership (so "go" doesn't match inside "google").
+      return n.includes(' ') ? haveText.includes(n) : have.has(n);
+    };
+    const covered = jdKeywords.filter(isCovered);
+    const missing = jdKeywords.filter((keyword) => !isCovered(keyword));
     return {
       jdKeywordCount: jdKeywords.length,
       covered,
@@ -143,21 +167,24 @@ export class ProfileScoresService {
   // Build the "keywords this artifact already contains" set. Profile → its skills
   // list (exact skill labels); ResumeVersion → every word token in its contentMd
   // (so a skill mentioned in a bullet, not just a skills line, still counts).
+  // `have` = single-token exact-match set; `haveText` = the artifact's full lowercased text, for
+  // matching multi-word lexicon phrases (MOM-170) that a token set can't hold.
   private async coverageHaveSet(
     userId: string,
     resumeVersionId?: string,
-  ): Promise<{ have: Set<string>; source: 'profile' | 'resume'; versionId: string | null }> {
+  ): Promise<{ have: Set<string>; haveText: string; source: 'profile' | 'resume'; versionId: string | null }> {
     if (resumeVersionId) {
       const version = await this.prisma.resumeVersion.findFirst({
         where: { id: resumeVersionId, userId },
         select: { id: true, contentMd: true },
       });
       if (!version) throw new NotFoundException('Résumé version not found');
-      return { have: this.resumeHaveSet(version.contentMd), source: 'resume', versionId: version.id };
+      return { have: this.resumeHaveSet(version.contentMd), haveText: version.contentMd.toLowerCase(), source: 'resume', versionId: version.id };
     }
     const profile = await this.prisma.profile.findUnique({ where: { userId }, select: { skills: true } });
-    const have = new Set(this.asStringArray(profile?.skills ?? []).map((skill) => this.normalize(skill)));
-    return { have, source: 'profile', versionId: null };
+    const skills = this.asStringArray(profile?.skills ?? []);
+    const have = new Set(skills.map((skill) => this.normalize(skill)));
+    return { have, haveText: skills.join(' ').toLowerCase(), source: 'profile', versionId: null };
   }
 
   // Tokenize résumé Markdown into normalized word tokens (keeping +/#/. so c++,
@@ -330,7 +357,7 @@ export class ProfileScoresService {
     return [this.round(score), gaps];
   }
 
-  private extractJdSkills(jdText: string): string[] {
+  private extractJdSkills(jdText: string, extraLexicon: string[] = []): string[] {
     // The capture class allows a dot so "Node.js" survives — but that also swallows the
     // sentence-final period in "…experience with Kubernetes." The résumé have-set strips
     // trailing dots (resumeHaveSet), so a JD keyword that kept one ("kubernetes.") would never
@@ -338,7 +365,23 @@ export class ProfileScoresService {
     // too so both sides normalize identically — and so "We." can't slip past the stop list.
     const tokens = (jdText.match(/[A-Z][A-Za-z+#.]{1,30}/g) ?? []).map((token) => token.replace(/\.+$/, ''));
     const stop = new Set(['The', 'We', 'You', 'Our', 'This', 'Must', 'Will', 'And', 'For', 'With']);
-    return this.uniqueByNormalized(tokens.filter((token) => token.length > 1 && !stop.has(token)));
+    const fromTokens = tokens.filter((token) => token.length > 1 && !stop.has(token));
+
+    // MOM-170: also pull known skill phrases (curated lexicon + the user's own skills) that
+    // appear in the JD case-insensitively — this is what recovers lowercase and multi-word
+    // skills the capitalized-token pass alone would miss. Word-boundary match so "go" in the
+    // lexicon doesn't fire on "goal".
+    const haystack = jdText.toLowerCase();
+    const lexicon = [...SKILL_LEXICON, ...extraLexicon.map((skill) => skill.toLowerCase().trim())];
+    const fromLexicon = lexicon.filter((phrase) => phrase.length > 1 && this.containsPhrase(haystack, phrase));
+
+    return this.uniqueByNormalized([...fromTokens, ...fromLexicon]);
+  }
+
+  // Whole-phrase, case-insensitive presence with word boundaries (handles +/#/. in c++, node.js).
+  private containsPhrase(lowerHaystack: string, lowerPhrase: string): boolean {
+    const escaped = lowerPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(lowerHaystack);
   }
 
   private generateSuggestions(gaps: {

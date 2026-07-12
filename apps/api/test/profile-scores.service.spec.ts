@@ -147,8 +147,10 @@ describe('ProfileScoresService.atsCoverage vs a ResumeVersion (MOM-134-full)', (
       resumeVersion: {
         findFirst: vi.fn().mockResolvedValue({ id: 'rv-1', contentMd: 'Built Python and SQL pipelines on Kubernetes.' }),
       },
-      // profile.findUnique must NOT be consulted on the resume path
-      profile: { findUnique: vi.fn().mockRejectedValue(new Error('should not be called')) },
+      // MOM-170: profile skills now enrich the JD lexicon (so a JD phrase the user has is
+      // extracted) — but the coverage have-set on the resume path is still the résumé, not the
+      // profile. An empty skill list keeps this test measuring the résumé alone.
+      profile: { findUnique: vi.fn().mockResolvedValue({ skills: [] }) },
     } as never);
 
     const result = await service.atsCoverage('We need Kubernetes, Go, Python and SQL experience.', 'user-1', 'rv-1');
@@ -166,6 +168,7 @@ describe('ProfileScoresService.atsCoverage vs a ResumeVersion (MOM-134-full)', (
   it('matches a JD keyword at the end of a sentence despite the trailing period (MOM-159)', async () => {
     const service = new ProfileScoresService({
       resumeVersion: { findFirst: vi.fn().mockResolvedValue({ id: 'rv-1', contentMd: 'Shipped services in Go on Kubernetes.' }) },
+      profile: { findUnique: vi.fn().mockResolvedValue({ skills: [] }) },
     } as never);
 
     // both skills sit at a clause end in the JD → both would keep a trailing dot pre-fix
@@ -177,6 +180,46 @@ describe('ProfileScoresService.atsCoverage vs a ResumeVersion (MOM-134-full)', (
     expect(result.missing).not.toContain('Kubernetes');
     // and the stray period never appears in either list (so tasks read "Add … Kubernetes")
     expect([...result.covered, ...result.missing].some((k) => k.endsWith('.'))).toBe(false);
+  });
+
+  // MOM-170 — the JD tokenizer only caught Capitalized tokens, so lowercase and multi-word
+  // skills were invisible to coverage. A curated lexicon (from the role-track keywords) + the
+  // user's own skills now recover them.
+  it('finds lowercase and multi-word skills the capitalized-token pass alone would miss (MOM-170)', async () => {
+    const service = new ProfileScoresService({
+      resumeVersion: { findFirst: vi.fn().mockResolvedValue({ id: 'rv-1', contentMd: 'Deployed on Kubernetes; strong in Dynamic Programming.' }) },
+      profile: { findUnique: vi.fn().mockResolvedValue({ skills: [] }) },
+    } as never);
+
+    // all-lowercase JD — pre-MOM-170 the capitalized pass extracted nothing here.
+    const result = await service.atsCoverage('experience with kubernetes and dynamic programming required', 'user-1', 'rv-1');
+
+    expect(result.covered).toEqual(expect.arrayContaining(['kubernetes', 'dynamic programming']));
+    expect(result.missing).toEqual([]);
+    expect(result.jdKeywordCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it('flags a missing multi-word lexicon skill with a sane task title (MOM-170)', async () => {
+    const service = new ProfileScoresService({
+      resumeVersion: { findFirst: vi.fn().mockResolvedValue({ id: 'rv-1', contentMd: 'Backend engineer, no security work.' }) },
+      profile: { findUnique: vi.fn().mockResolvedValue({ skills: [] }) },
+    } as never);
+
+    const result = await service.atsCoverage('you will do threat modeling every sprint', 'user-1', 'rv-1');
+
+    expect(result.missing).toContain('threat modeling'); // → "Add to résumé: threat modeling"
+  });
+
+  it('extracts a JD phrase from the user\'s own profile skills, even lowercase (MOM-170)', async () => {
+    const service = new ProfileScoresService({
+      // rust is NOT in the static lexicon — it reaches the JD scan only via the profile skills.
+      resumeVersion: { findFirst: vi.fn().mockResolvedValue({ id: 'rv-1', contentMd: 'Wrote systems in Rust.' }) },
+      profile: { findUnique: vi.fn().mockResolvedValue({ skills: ['Rust'] }) },
+    } as never);
+
+    const result = await service.atsCoverage('we need rust experience', 'user-1', 'rv-1');
+
+    expect(result.covered).toContain('rust');
   });
 
   it('404s when the résumé version is not the caller\'s', async () => {
@@ -207,6 +250,7 @@ describe('ProfileScoresService.atsGenerateTasks (MOM-134-full gap→task bridge)
       resumeVersion: {
         findFirst: vi.fn().mockResolvedValue({ id: 'rv-1', contentMd: 'Built Python and SQL pipelines on Kubernetes.' }),
       },
+      profile: { findUnique: vi.fn().mockResolvedValue({ skills: [] }) },
       task: { findMany: vi.fn().mockResolvedValue([]), createMany },
     } as never);
 
@@ -234,6 +278,7 @@ describe('ProfileScoresService.atsGenerateTasks (MOM-134-full gap→task bridge)
       resumeVersion: {
         findFirst: vi.fn().mockResolvedValue({ id: 'rv-1', contentMd: 'Python only.' }),
       },
+      profile: { findUnique: vi.fn().mockResolvedValue({ skills: [] }) },
       task: { findMany, createMany },
     } as never);
 

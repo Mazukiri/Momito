@@ -1,5 +1,26 @@
 # LOG
 
+## 2026-07-12 - MOM-170: ATS matching understands lowercase + multi-word skills (Momito 1.1 PR 5) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 5 of Momito 1.1.
+
+`extractJdSkills` captured only `[A-Z]`-initial tokens, so a JD written in lowercase ("kubernetes", "golang") and
+every multi-word skill ("dynamic programming", "threat modeling") were **invisible** to ATS coverage and to the
+gap→task bridge — while `CAREER_ROLE_TRACKS` already carried a curated 143-phrase keyword lexicon that was never used
+for this. `extractJdSkills` now unions the capitalized-token pass with a **case-insensitive, word-boundary phrase
+scan** against that lexicon plus the user's own profile skill labels (threaded through — the résumé path now loads the
+profile too, for the lexicon, though its coverage have-set is still the résumé). Matching a covered keyword: single
+tokens keep exact set membership (so "go" doesn't fire inside "google"); multi-word phrases substring-match the
+artifact's full lowercased text (a token set can't hold "dynamic programming"). The MOM-159 trailing-dot strip and the
+`uniqueByNormalized` dedupe are preserved.
+
+**Verified.** 343 API tests (+3 counterfactual: lowercase "kubernetes" + multi-word "dynamic programming" now matched;
+a missing "threat modeling" flagged with a sane task title; a JD phrase reached only via the user's own "rust" skill
+extracted — plus the existing MOM-159 tests stay green after updating the resume-path fixtures, since atsCoverage now
+also reads the profile). Lint + typecheck clean. Live: an **all-lowercase** JD ("we use typescript and react with
+dynamic programming and binary search") extracted 3 keywords — `typescript` covered from the profile, the two
+multi-word phrases correctly missing — where the old capitalized-only pass would have extracted **zero**.
+
 ## 2026-07-12 - MOM-169: readiness computed once per request (Momito 1.1 PR 4) (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 4 of Momito 1.1 — a pure performance refactor,
