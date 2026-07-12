@@ -117,11 +117,19 @@ export class CareerService {
     return this.serializeGoal(goal);
   }
 
-  async getReadiness(roleTrackId: CareerRoleTrackId, userId: string): Promise<RoleReadinessResponse> {
+  // MOM-169: `sharedMastery` lets a caller computing readiness for several role tracks at once
+  // (listActiveReadiness, getTargetShortlist) run the heavy per-user `areaMastery` scan — a full
+  // ReviewState + attempt sweep — ONCE and reuse it, instead of once per track. It is user-scoped,
+  // not track-scoped, so sharing is exact, not an approximation.
+  async getReadiness(
+    roleTrackId: CareerRoleTrackId,
+    userId: string,
+    sharedMastery?: Map<string, AreaMastery>,
+  ): Promise<RoleReadinessResponse> {
     const roleTrack = this.getRoleTrack(roleTrackId);
     const [context, mastery] = await Promise.all([
       this.loadEvidenceContext(roleTrackId, userId),
-      this.readiness.areaMastery(userId),
+      sharedMastery ? Promise.resolve(sharedMastery) : this.readiness.areaMastery(userId),
     ]);
     const areas = this.computeAreas(roleTrack, context, mastery);
     const totalWeight = areas.reduce((sum, area) => sum + area.totalWeight, 0);
@@ -150,7 +158,9 @@ export class CareerService {
     const roleIds = goals.length
       ? goals.map((goal) => goal.roleTrackId as CareerRoleTrackId)
       : (['big-tech-swe'] satisfies CareerRoleTrackId[]);
-    return Promise.all(roleIds.map((roleTrackId) => this.getReadiness(roleTrackId, userId)));
+    // MOM-169: one mastery scan for the whole set, not one per goal.
+    const mastery = await this.readiness.areaMastery(userId);
+    return Promise.all(roleIds.map((roleTrackId) => this.getReadiness(roleTrackId, userId, mastery)));
   }
 
   // MOM-130: "am I ready for <company>?" — the target's grounded role readiness
@@ -305,11 +315,14 @@ export class CareerService {
 
     // Memoize grounded readiness per distinct role track (companies share tracks, so
     // this is a handful of computations, not one heavy evidence load per company).
+    // MOM-169: the memo dedupes identical tracks, but distinct tracks each recomputed the
+    // per-user mastery scan — so compute it once here and share it across every track.
+    const mastery = await this.readiness.areaMastery(userId);
     const readinessByTrack = new Map<CareerRoleTrackId, RoleReadinessResponse>();
     const trackReadiness = async (trackId: CareerRoleTrackId) => {
       const cached = readinessByTrack.get(trackId);
       if (cached) return cached;
-      const computed = await this.getReadiness(trackId, userId);
+      const computed = await this.getReadiness(trackId, userId, mastery);
       readinessByTrack.set(trackId, computed);
       return computed;
     };

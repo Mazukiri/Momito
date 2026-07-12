@@ -1,5 +1,24 @@
 # LOG
 
+## 2026-07-12 - MOM-169: readiness computed once per request (Momito 1.1 PR 4) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 4 of Momito 1.1 — a pure performance refactor,
+zero behavior change.
+
+`career.getReadiness` ran `readiness.areaMastery(userId)` — a full ReviewState scan + full attempt scan + question
+join — and `listActiveReadiness` called it once *per active goal*, `getTargetShortlist` once *per distinct track*.
+Since `areaMastery` is user-scoped, not track-scoped, that was the identical heavy sweep repeated N times. `getReadiness`
+now takes an optional `sharedMastery`; `listActiveReadiness` computes the sweep once and passes it to every goal, and
+`getTargetShortlist` computes it once and passes it to every track. The dashboard benefits automatically (it calls
+`listActiveReadiness` directly and again via `recommendations.list` — each is now a single sweep instead of one per
+goal; the two remaining sweeps aren't deduped because that would couple dashboard to recommendations' internals,
+deliberately not done). `loadEvidenceContext`'s per-track queries are left as-is — the mastery sweep is by far the
+heaviest and the 80/20.
+
+**Verified.** 340 API tests (+1: `areaMastery` mock called exactly once for a 3-goal `listActiveReadiness`, was 3×).
+Lint + typecheck clean. Live before/after against the demo (2 active goals → 2 sweeps before, 1 after): the
+`roleReadiness` payload is **byte-identical** — the change is invisible except in query count.
+
 ## 2026-07-12 - MOM-168: the AI grade feeds FSRS (one-tap suggested rating) (Momito 1.1 PR 3) (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. PR 3 of Momito 1.1.

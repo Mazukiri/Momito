@@ -286,3 +286,34 @@ describe('CareerService.getJobStoryGaps — behavioral gap map (MOM-131)', () =>
     await expect(service.getJobStoryGaps('job-x', 'user-1')).rejects.toThrow();
   });
 });
+
+// MOM-169: readiness for several role tracks in one request must scan the heavy per-user
+// areaMastery ONCE, not once per track.
+describe('CareerService.listActiveReadiness — shared mastery (MOM-169)', () => {
+  it('computes areaMastery once across multiple active goals, not once per goal', async () => {
+    const areaMastery = vi.fn().mockResolvedValue(new Map());
+    const prisma = {
+      careerGoal: {
+        findMany: vi.fn().mockResolvedValue([
+          { roleTrackId: 'big-tech-swe' },
+          { roleTrackId: 'google-l4-swe' },
+          { roleTrackId: 'quant-swe' },
+        ]),
+      },
+      profile: { findUnique: vi.fn().mockResolvedValue(null) },
+      answerAttempt: { findMany: vi.fn().mockResolvedValue([]) },
+      learningEvidence: { findMany: vi.fn().mockResolvedValue([]) },
+      learningHighlight: { findMany: vi.fn().mockResolvedValue([]) },
+      jobApplication: { findMany: vi.fn().mockResolvedValue([]) },
+      task: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const readiness = { isPositiveAttempt: () => true, areaMastery };
+    const weaknesses = { listOpenSignals: vi.fn().mockResolvedValue([]) };
+    const service = new CareerService(prisma as never, readiness as never, weaknesses as never);
+
+    const result = await service.listActiveReadiness('user-1');
+
+    expect(result).toHaveLength(3);
+    expect(areaMastery).toHaveBeenCalledTimes(1); // once per goal before MOM-169
+  });
+});
