@@ -2,6 +2,32 @@
 
 > The single active PR-sized task. Only one at a time (Engineering Invariant 2.4.1).
 
+## ★ Momito 1.1 — "Close the Half-Closed Loops" SHIPPED (2026-07-12)
+
+Owner direction: **strengthen what exists — create nothing new.** Six PRs, all live-verified against localhost,
+all suites green (**343 API + 42 web tests**, lint + typecheck clean on both apps). No schema migrations.
+
+- **MOM-166** (`a920752`) — repair sessions actually close weakness signals (D-023): a completed
+  `weak_area_review`/`job_prep` session's positive attempts drive open area-signals `open→repairing→resolved`. The
+  loop that emitted a signal on a bombed round now *clears* it on demonstrated repair. (Live testing caught the real
+  enum bug: `weak_area_review`, not `weakness_repair`.)
+- **MOM-167** (`c068b7a`) — wired the previously-dead resolve/dismiss endpoints into `JobReadinessCard` (✓/✕ chips,
+  amber `repairing` styling) and titled Today's repair card `Repairing:` with a one-more-rep nudge.
+- **MOM-168** (`f2e12a2`) — the AI grade feeds FSRS: `gradeAttempt` returns `suggestedRating` (null on cached), and
+  a one-tap "Rate '<Good>' — the AI's suggestion" button routes through `RevealPanel.rate()`. Map is the inverse of
+  `SELF_RATING_TO_GRADE` (good→3).
+- **MOM-169** (`e4efb4e`) — readiness computed once per request: `areaMastery` (the heavy ReviewState+attempt sweep)
+  is shared across per-goal/per-track calls instead of re-run N times. Byte-identical output.
+- **MOM-170** (`59261ff`) — ATS matching understands lowercase + multi-word skills via a 143-phrase lexicon (from
+  `CAREER_ROLE_TRACKS` keywords) + the user's own skills; multi-word phrases substring-match.
+- **MOM-171** (`fd22530`) — hardened the flaky résumé-Accept asserts (`findBy`/`await`) and added `JobReadinessCard`
+  + jobs-list test coverage. 42 web tests, stable across repeated runs.
+
+**Verification note:** all six PRs were individually live-verified during implementation (repair loop end-to-end, AI
+grade suggestion, readiness before/after byte-diff, ATS lowercase JD). Post-release full-suite re-run confirmed
+343 API + 42 web green, lint + typecheck clean, shared build clean. Working tree holds only pre-existing dev
+scaffolding + the pending `/doctor` `CLAUDE.md` fix (owner to review in `git diff`).
+
 ## ★ Momito 1.0 — Consolidation Release SHIPPED (2026-07-12)
 
 The consolidation release is complete — 6 PRs, all live-verified against localhost, all suites green
