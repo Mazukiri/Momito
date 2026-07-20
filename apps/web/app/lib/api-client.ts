@@ -50,6 +50,93 @@ function notifyUnauthorized() {
   }
 }
 
+// MOM-177: the API runs on Render's free tier, which spins the instance down
+// after ~15 min idle and takes 30–60s to wake. `fetch` has no default timeout,
+// so the first request of the morning used to hang on a bare spinner for up to
+// a minute and then, if the browser gave up first, reject with a raw TypeError
+// that is not an ApiClientError at all — every caller does
+// `err instanceof Error ? err.message : …`, so what the user actually read on
+// the login form was the literal string "Failed to fetch".
+//
+// A cold start is not an error, it is a wait. These two constants split that
+// wait into "probably waking" and "actually broken".
+const WAKE_HINT_MS = 3_000;
+const REQUEST_TIMEOUT_MS = 45_000;
+
+/** A transport failure — no HTTP response was ever received. */
+export class ApiNetworkError extends Error {
+  /** True when the request was aborted on our own timeout rather than refused. */
+  readonly timedOut: boolean;
+
+  constructor(message: string, timedOut: boolean) {
+    super(message);
+    this.name = 'ApiNetworkError';
+    this.timedOut = timedOut;
+  }
+}
+
+/**
+ * Fires once the request has been in flight long enough that a cold start is
+ * the likely explanation. The shell listens and can say so, instead of showing
+ * a silent spinner. Emitted at most once per request; `momito:api-awake`
+ * always follows, whether the request succeeded or failed.
+ */
+function announce(event: 'momito:api-waking' | 'momito:api-awake') {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(event));
+}
+
+async function fetchWithWake(url: string, options: RequestInit): Promise<Response> {
+  // Retry once, and only for the idempotent verbs. A timed-out POST may well
+  // have been applied server-side; replaying it could double-create.
+  const method = (options.method ?? 'GET').toUpperCase();
+  const retryable = method === 'GET' || method === 'HEAD';
+  let announced = false;
+
+  const attempt = async (): Promise<Response> => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const hint = setTimeout(() => {
+      announced = true;
+      announce('momito:api-waking');
+    }, WAKE_HINT_MS);
+    try {
+      return await fetch(url, { ...options, signal: options.signal ?? controller.signal });
+    } finally {
+      clearTimeout(timeout);
+      clearTimeout(hint);
+    }
+  };
+
+  try {
+    try {
+      return await attempt();
+    } catch (error) {
+      const timedOut = error instanceof DOMException && error.name === 'AbortError';
+      // A caller-supplied signal is theirs to own — never retry over it.
+      if (!retryable || options.signal) throw asNetworkError(error, timedOut);
+      // One retry: a wake triggered by the first request is usually complete by
+      // the time the second lands.
+      try {
+        return await attempt();
+      } catch (retryError) {
+        throw asNetworkError(retryError, retryError instanceof DOMException && retryError.name === 'AbortError');
+      }
+    }
+  } finally {
+    if (announced) announce('momito:api-awake');
+  }
+}
+
+function asNetworkError(error: unknown, timedOut: boolean): ApiNetworkError {
+  if (timedOut) {
+    return new ApiNetworkError(
+      'The server is taking longer than usual to respond. It may be waking up — try again in a moment.',
+      true,
+    );
+  }
+  return new ApiNetworkError("Can't reach the server. Check your connection and try again.", false);
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -61,10 +148,7 @@ async function request<T>(
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  const res = await fetchWithWake(`${API_BASE}${path}`, { ...options, headers });
 
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith('/auth/login') && !path.startsWith('/auth/register')) {
@@ -88,7 +172,10 @@ async function requestForm<T>(path: string, body: FormData): Promise<T> {
   const headers: Record<string, string> = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  // POST, so fetchWithWake will not retry it — an upload that timed out may
+  // already have been accepted, and replaying it would duplicate the record.
+  // It still gets the timeout and the typed network error.
+  const res = await fetchWithWake(`${API_BASE}${path}`, {
     method: 'POST',
     headers,
     body,
@@ -603,7 +690,7 @@ export const resumesApi = {
   // the Bearer token), then trigger a browser download of the returned blob.
   download: async (id: string, format: 'md' | 'pdf') => {
     const token = getToken();
-    const res = await fetch(`${API_BASE}/resumes/${id}/export?format=${format}`, {
+    const res = await fetchWithWake(`${API_BASE}/resumes/${id}/export?format=${format}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) {

@@ -1,5 +1,38 @@
 # LOG
 
+## 2026-07-20 - MOM-177: the first request of the morning was a silent 60-second spinner (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. V2 Epic 0 (release hardening).
+
+The API runs on Render's free tier, which spins the instance down after ~15 min idle and takes 30–60s to wake.
+`api-client.ts` called bare `fetch` with no `signal`, no timeout and no retry, in all three places it talked to
+the network. Two consequences, both landing on the most common moment in the app — opening it in the morning:
+
+1. **A cold start showed `LoadingPage`, an untexted spinner, for up to a minute** with nothing distinguishing
+   "waking" from "hung".
+2. **If the browser gave up first, `fetch` rejected with a raw `TypeError`** — not an `ApiClientError`. Every
+   caller does `err instanceof Error ? err.message : …`, so what the user actually read was the literal string
+   **"Failed to fetch"**, most often on the login form (`login/page.tsx:24-26`), which is the very first screen.
+
+New `fetchWithWake` wraps all three call sites. It adds a 45s `AbortSignal`, converts transport failures into a
+typed `ApiNetworkError` carrying a `timedOut` flag and a sentence a person can act on, and **retries exactly
+once — only for GET/HEAD**. A timed-out POST may well have been applied server-side, so replaying it could
+double-create; `requestForm` therefore gets the timeout and the typed error but no retry. A caller-supplied
+`signal` also suppresses the retry: cancellation belongs to whoever asked for it.
+
+The wait is now *named* rather than merely survived. After 3s in flight the client emits `momito:api-waking`,
+and `momito:api-awake` when the request settles either way. `OfflineBanner` listens and shows "Waking the
+server". This closes a real blind spot: `navigator.onLine` is true whenever the device has a network
+association, so the existing offline banner **could never detect a sleeping API** — precisely the Render Free
+failure mode. Offline wins when both apply, since it is the more actionable message and also explains the delay.
+
+**Verified.** `pnpm lint`, `pnpm typecheck`, `pnpm build` clean. **437 tests** (383 API across 42 files +
+54 web across 12; was 380 + 42). 5 new api-client cases — typed error instead of "Failed to fetch", GET retried
+once and succeeding on the second try, mutation *not* retried, timeout distinguished from refusal, and the
+waking/awake events firing in order under fake timers — plus 4 new `offline-banner` cases including the
+both-states precedence. One draft test was deleted rather than kept: it asserted abort-signal pass-through but
+`reviewsApi.due` takes no `RequestInit`, so it was passing vacuously.
+
 ## 2026-07-20 - MOM-175: day one led straight into a dead end (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. V2 Epic 0 (release hardening).
