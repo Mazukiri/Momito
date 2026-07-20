@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Reminder, Task } from '@prisma/client';
 import { ReminderResponse, TaskResponse } from '@momito/shared';
 import { CareerService } from '../career/career.service';
+import { DEFAULT_TIME_ZONE, consecutiveDayStreak } from '../common/date-key';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecommendationsService } from '../recommendations/recommendations.service';
 
@@ -120,33 +121,12 @@ export class DashboardService {
     };
   }
 
-  // A3: consecutive-day study streak. Default tz Asia/Ho_Chi_Minh (fixed UTC+7,
-  // no DST) since there's no per-user tz preference yet — a reasonable single-user
-  // default, not a hardcoded regression, since the plan itself names this as the
-  // default. Uses Intl.DateTimeFormat (no extra date-library dependency) to turn
-  // each attempt's instant into a calendar-day key in that tz, then walks
-  // backward from today counting consecutive days present. If today has no
-  // attempt yet the streak isn't broken — it's computed from yesterday backward,
-  // matching how most streak UIs give the user the rest of the day to keep it alive.
-  private computeStreak(attemptTimestamps: Date[], timeZone = 'Asia/Ho_Chi_Minh'): number {
-    if (attemptTimestamps.length === 0) return 0;
-    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
-    const dateKeys = new Set(attemptTimestamps.map((d) => fmt.format(d)));
-
-    const todayKey = fmt.format(new Date());
-    let cursor = dateKeys.has(todayKey) ? todayKey : this.shiftDateKey(todayKey, -1);
-    let streak = 0;
-    while (dateKeys.has(cursor)) {
-      streak++;
-      cursor = this.shiftDateKey(cursor, -1);
-    }
-    return streak;
-  }
-
-  private shiftDateKey(key: string, days: number): string {
-    const date = new Date(`${key}T00:00:00Z`);
-    date.setUTCDate(date.getUTCDate() + days);
-    return date.toISOString().slice(0, 10);
+  // A3: consecutive-day study streak. MOM-172 moved the day-key arithmetic to
+  // common/date-key.ts so the V2 daily plan resolves "today" the same way this does
+  // — behavior here is unchanged (same tz default, same grace for a day with no
+  // attempt yet).
+  private computeStreak(attemptTimestamps: Date[], timeZone = DEFAULT_TIME_ZONE): number {
+    return consecutiveDayStreak(attemptTimestamps, timeZone);
   }
 
   private serializeTask(task: Task): TaskResponse {
