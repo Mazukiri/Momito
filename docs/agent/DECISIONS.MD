@@ -331,3 +331,27 @@ derived struggle path is unchanged: practice still does not *create* stored sign
 **Consequences:** The loop closes — repair a weakness and it visibly clears from Today and from the job-readiness
 penalty. Time-decay stays the fallback for anything never demonstrably repaired. No schema change (all four statuses
 already existed). MOM-166; the dead resolve/dismiss endpoints get their UI in MOM-167.
+
+### D-024 — Release-hardening invariants live in ADR-0016, not in the code they constrain
+**Context:** Preparing the first real deployment surfaced four defects sharing one property: **each was invisible from
+inside `apps/api/src`.** Every one depended on a fact stored elsewhere — `TZ: UTC` in `render.yaml` (so
+`EVERY_DAY_AT_6AM` fired at 13:00 ICT), the ping window in `keepwarm.yml` (so the obvious fix, 06:00 local, would
+have stopped the job firing at all since Render Free sleeps outside it), the state of a git branch (`main` sat 73
+commits behind the deployable code while no deploy file pinned a branch), and the absence of a `vitest.config.ts`
+(40 spec files mocking Prisma by hand while CI stood up a Postgres nothing read from). Reading the source would
+never have found any of them, and none produced a failing test.
+**Decision:** Record them together in **ADR-0016** as standing invariants, and give each one an enforcement point
+rather than a paragraph. Cron times move into `common/schedule.ts` with explicit `{ timeZone }`, and
+`test/schedule.spec.ts` **parses the keep-warm window out of `keepwarm.yml`** so narrowing that workflow fails CI
+instead of silently killing a job. `main` is the deploy branch. Tests split into `*.spec.ts` (mocked, everywhere)
+and `*.int.spec.ts` (real Postgres, **required** for uniqueness/ordering/cascade — a mock has no constraints, so the
+V2 generator's `@@unique` idempotency cannot be tested against one even in principle), with the integration tier
+reading `TEST_DATABASE_URL` and never `DATABASE_URL` because it truncates and `DATABASE_URL` is someone's real data.
+`prisma/seed-guard.ts` refuses to write the source-committed demo login to a non-local database, keyed on the target
+rather than on `NODE_ENV` (the seed runs from a laptop where `NODE_ENV` is unset).
+**Consequences:** The daily jobs now run at a different wall-clock time than they did in production; the first run
+after deploy shifts. Editing `keepwarm.yml`'s hours breaks `schedule.spec.ts` by design — fix the times, don't relax
+the test. Contributors need `TEST_DATABASE_URL` for the integration tier (documented in `.env.example`); without it
+those tests skip and `pnpm test` stays green. Seeding a remote database now demands explicit credentials, which is
+deliberate friction on a one-time step. `render.yaml`/`vercel.json` are still unpinned — correct only because `main`
+is now the truth, so pinning stays the belt to add if the default branch ever changes. MOM-173..MOM-178.
