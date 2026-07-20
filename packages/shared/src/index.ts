@@ -1872,3 +1872,105 @@ export interface CreateStoryRequest {
 }
 
 export type UpdateStoryRequest = Partial<CreateStoryRequest>;
+
+// ─── Daily plan (V2 Epic 1) ────────────────────────────────────────────────
+//
+// The commitment object. Everything else in this app produces advice and
+// forgets it; a DailyPlan is the one thing that records what the user actually
+// agreed to do on a given day, so the system can tell whether yesterday
+// happened.
+
+export const DAILY_PLAN_STATUSES = ['pending', 'committed', 'completed', 'abandoned'] as const;
+export type DailyPlanStatus = (typeof DAILY_PLAN_STATUSES)[number];
+
+export const DAILY_PLAN_ITEM_STATUSES = ['pending', 'done', 'skipped'] as const;
+export type DailyPlanItemStatus = (typeof DAILY_PLAN_ITEM_STATUSES)[number];
+
+// Where an item came from. Doubles as the fixed slot order the generator fills:
+// an imminent interview outranks everything, and the CP rung is always present
+// so the daily practice rhythm is never interrupted.
+export const DAILY_PLAN_ITEM_SOURCES = [
+  'interview_prep',
+  'cp_ladder',
+  'fsrs_due',
+  'weakness_drill',
+  'job_action',
+  'manual',
+] as const;
+export type DailyPlanItemSource = (typeof DAILY_PLAN_ITEM_SOURCES)[number];
+
+// Skipping requires a reason: it is the only signal that lets the generator
+// learn. Each maps to a distinct correction — shrink the default capacity, drop
+// a difficulty rung, or down-weight a source that keeps being wrong.
+export const DAILY_PLAN_SKIP_REASONS = ['no_time', 'too_hard', 'not_relevant'] as const;
+export type DailyPlanSkipReason = (typeof DAILY_PLAN_SKIP_REASONS)[number];
+
+export const DAILY_PLAN_SKIP_REASON_LABELS: Record<DailyPlanSkipReason, string> = {
+  no_time: 'Ran out of time',
+  too_hard: 'Too hard',
+  not_relevant: 'Not relevant',
+};
+
+export const DAILY_PLAN_DEFAULTS = {
+  /** Preselected on the capacity dial — the single input the user gives. */
+  capacityMinutes: 90,
+  /** Offered options, in minutes. */
+  capacityChoices: [45, 90, 120, 180] as const,
+  /** Hard ceiling on items per day. Focus mode dies if this grows. */
+  maxItems: 5,
+  /** FSRS cards per day. Backlog beyond this is ordered by retrievability,
+   *  most-at-risk first — never FIFO, or the cards closest to being forgotten
+   *  are exactly the ones that keep getting postponed. */
+  reviewDailyCap: 15,
+} as const;
+
+export interface DailyPlanItemResponse {
+  id: string;
+  planId: string;
+  slot: number;
+  source: DailyPlanItemSource;
+  title: string;
+  /** Evidence for why this was prescribed. The trust contract — never empty. */
+  reason: string;
+  targetHref: string;
+  estimatedMinutes: number;
+  status: DailyPlanItemStatus;
+  skipReason: DailyPlanSkipReason | null;
+  targetCount: number;
+  progressCount: number;
+  objectType: string | null;
+  objectId: string | null;
+  metadata: Record<string, unknown>;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DailyPlanResponse {
+  id: string;
+  /** Local calendar day, "YYYY-MM-DD". */
+  planDate: string;
+  status: DailyPlanStatus;
+  capacityMinutes: number;
+  /** How many candidates were considered and left out. A count only: showing
+   *  the list would rebuild the choice paralysis this design removes. */
+  hiddenCount: number;
+  committedAt: string | null;
+  completedAt: string | null;
+  items: DailyPlanItemResponse[];
+  /** Consecutive days completed, unioned with the pre-V2 attempt streak so
+   *  launching does not reset a run the user already has. */
+  planStreak: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GenerateDailyPlanRequest {
+  capacityMinutes?: number;
+}
+
+export interface UpdateDailyPlanItemRequest {
+  status: DailyPlanItemStatus;
+  skipReason?: DailyPlanSkipReason;
+  progressCount?: number;
+}

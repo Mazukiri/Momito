@@ -13,46 +13,48 @@ datasource db {
 }
 
 model User {
-  id             String             @id @default(uuid()) @db.Uuid
-  email          String             @unique
-  passwordHash   String             @map("password_hash")
-  name           String
-  role           String             @default("user")
+  id                  String                   @id @default(uuid()) @db.Uuid
+  email               String                   @unique
+  passwordHash        String                   @map("password_hash")
+  name                String
+  role                String                   @default("user")
   // Embedded in every issued JWT as `tv`; bumped on logout so all previously
   // issued (otherwise stateless, non-expiring-for-30-days) tokens are
   // rejected immediately instead of staying valid until they naturally expire.
-  tokenVersion   Int                @default(0) @map("token_version")
-  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
-  questions      Question[]
-  sessions       InterviewSession[]
-  answerAttempts AnswerAttempt[]
-  stories        Story[]
-  profile        Profile?
-  profileScores  ProfileScore[]
-  careerGoals    CareerGoal[]
-  missions       Mission[]
+  tokenVersion        Int                      @default(0) @map("token_version")
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  questions           Question[]
+  sessions            InterviewSession[]
+  answerAttempts      AnswerAttempt[]
+  stories             Story[]
+  profile             Profile?
+  profileScores       ProfileScore[]
+  careerGoals         CareerGoal[]
+  missions            Mission[]
   missionCompetencies MissionCompetencyState[]
-  weeklyPlans    WeeklyPlan[]
-  planItems      PlanItem[]
-  missionCheckIns MissionCheckIn[]
-  jobApplications JobApplication[]
-  jobEvents      JobEvent[]
-  tasks          Task[]
-  reminders      Reminder[]
-  reviewStates   ReviewState[]
-  learningSources LearningSource[]
-  learningHighlights LearningHighlight[]
-  learningEvidence LearningEvidence[]
-  readwiseConnection ReadwiseConnection?
-  readwiseSyncRuns ReadwiseSyncRun[]
-  aiUsage        AiUsage[]
-  pushSubscriptions PushSubscription[]
-  weaknessSignals WeaknessSignal[]
-  interviewRounds InterviewRound[]
-  contacts       Contact[]
-  offers         Offer[]
-  resumeVersions ResumeVersion[]
+  weeklyPlans         WeeklyPlan[]
+  planItems           PlanItem[]
+  missionCheckIns     MissionCheckIn[]
+  jobApplications     JobApplication[]
+  jobEvents           JobEvent[]
+  tasks               Task[]
+  reminders           Reminder[]
+  reviewStates        ReviewState[]
+  learningSources     LearningSource[]
+  learningHighlights  LearningHighlight[]
+  learningEvidence    LearningEvidence[]
+  readwiseConnection  ReadwiseConnection?
+  readwiseSyncRuns    ReadwiseSyncRun[]
+  aiUsage             AiUsage[]
+  pushSubscriptions   PushSubscription[]
+  weaknessSignals     WeaknessSignal[]
+  interviewRounds     InterviewRound[]
+  contacts            Contact[]
+  offers              Offer[]
+  resumeVersions      ResumeVersion[]
+  dailyPlans          DailyPlan[]
+  dailyPlanItems      DailyPlanItem[]
 
   @@map("users")
 }
@@ -94,68 +96,68 @@ model AiUsage {
 }
 
 model Topic {
-  id             String          @id @default(uuid()) @db.Uuid
-  name           String
-  parentTopicId  String?         @map("parent_topic_id") @db.Uuid
-  description    String?
-  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
-  parentTopic    Topic?          @relation("TopicHierarchy", fields: [parentTopicId], references: [id], onDelete: SetNull)
-  childTopics    Topic[]         @relation("TopicHierarchy")
-  questions      Question[]
-  tasks          Task[]
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  parentTopicId      String?             @map("parent_topic_id") @db.Uuid
+  description        String?
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  parentTopic        Topic?              @relation("TopicHierarchy", fields: [parentTopicId], references: [id], onDelete: SetNull)
+  childTopics        Topic[]             @relation("TopicHierarchy")
+  questions          Question[]
+  tasks              Task[]
   learningHighlights LearningHighlight[]
-  learningEvidence LearningEvidence[]
+  learningEvidence   LearningEvidence[]
 
   @@index([parentTopicId])
   @@map("topics")
 }
 
 model Company {
-  id        String            @id @default(uuid()) @db.Uuid
-  name      String
-  region    String?
-  notes     String?
+  id                String            @id @default(uuid()) @db.Uuid
+  name              String
+  region            String?
+  notes             String?
   // MOM-121 (ADR-0010 / D-017): structured interview intelligence. Json map/array
   // (not relation tables) because the area/track taxonomies are TS-owned
   // (CAREER_ROLE_AREA_IDS / CAREER_ROLE_TRACK_IDS) and the only query is
   // "load one company, weight its readiness" — never "find companies by area".
-  focusAreas        Json    @default("{}") @map("focus_areas")       // { [CareerRoleAreaId]: 1-5 weight }
-  roleTrackIds      Json    @default("[]") @map("role_track_ids")    // CareerRoleTrackId[]
-  interviewProcess  Json    @default("[]") @map("interview_process") // ordered [{ roundType, label, notes? }]
-  sponsorshipStatus String? @map("sponsorship_status")              // VISA_TAGS value; null = no data
-  compBand          String? @map("comp_band")                       // free text
-  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  questions QuestionCompany[]
-  stories   StoryCompany[]
-  jobApplications JobApplication[]
+  focusAreas        Json              @default("{}") @map("focus_areas") // { [CareerRoleAreaId]: 1-5 weight }
+  roleTrackIds      Json              @default("[]") @map("role_track_ids") // CareerRoleTrackId[]
+  interviewProcess  Json              @default("[]") @map("interview_process") // ordered [{ roundType, label, notes? }]
+  sponsorshipStatus String?           @map("sponsorship_status") // VISA_TAGS value; null = no data
+  compBand          String?           @map("comp_band") // free text
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  questions         QuestionCompany[]
+  stories           StoryCompany[]
+  jobApplications   JobApplication[]
 
   @@map("companies")
 }
 
 model Question {
-  id               String            @id @default(uuid()) @db.Uuid
+  id               String             @id @default(uuid()) @db.Uuid
   title            String
   prompt           String
   type             String
   difficulty       String
-  topicId          String            @map("topic_id") @db.Uuid
+  topicId          String             @map("topic_id") @db.Uuid
   subtopic         String?
-  referenceAnswer  String?           @map("reference_answer")
+  referenceAnswer  String?            @map("reference_answer")
   notes            String?
-  sourceUrl        String?           @map("source_url")
-  roleTags         Json              @default("[]") @map("role_tags")
-  areaTags         Json              @default("[]") @map("area_tags")
-  patternTags      Json              @default("[]") @map("pattern_tags")
-  estimatedMinutes Int?              @map("estimated_minutes")
-  rubric           Json              @default("{}")
-  importance       Int               @default(1)
-  createdByUserId  String            @map("created_by_user_id") @db.Uuid
-  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  topic            Topic             @relation(fields: [topicId], references: [id], onDelete: Restrict)
-  createdBy        User              @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  sourceUrl        String?            @map("source_url")
+  roleTags         Json               @default("[]") @map("role_tags")
+  areaTags         Json               @default("[]") @map("area_tags")
+  patternTags      Json               @default("[]") @map("pattern_tags")
+  estimatedMinutes Int?               @map("estimated_minutes")
+  rubric           Json               @default("{}")
+  importance       Int                @default(1)
+  createdByUserId  String             @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  topic            Topic              @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  createdBy        User               @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
   companies        QuestionCompany[]
   sessionQuestions SessionQuestion[]
   answerAttempts   AnswerAttempt[]
@@ -186,19 +188,19 @@ model QuestionCompany {
 // no FK from ReviewState.objectId to this table, by the same design already
 // used for Question.
 model Story {
-  id                String        @id @default(uuid()) @db.Uuid
-  userId            String        @map("user_id") @db.Uuid
+  id                String         @id @default(uuid()) @db.Uuid
+  userId            String         @map("user_id") @db.Uuid
   title             String
   situation         String
   task              String
   action            String
   result            String
   metrics           String?
-  competencyTags    String[]      @default([]) @map("competency_tags")
-  followUpQuestions String[]      @default([]) @map("follow_up_questions")
-  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  competencyTags    String[]       @default([]) @map("competency_tags")
+  followUpQuestions String[]       @default([]) @map("follow_up_questions")
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   companies         StoryCompany[]
   prompts           StoryPrompt[]
 
@@ -278,39 +280,39 @@ model SessionQuestion {
 }
 
 model AnswerAttempt {
-  id         String            @id @default(uuid()) @db.Uuid
-  userId     String            @map("user_id") @db.Uuid
-  sessionId  String?           @map("session_id") @db.Uuid
-  questionId String            @map("question_id") @db.Uuid
-  answerText String            @map("answer_text")
-  selfRating Int?              @map("self_rating")
-  aiScore    Float?            @map("ai_score")
-  aiFeedback String?           @map("ai_feedback")
-  correctness String?
-  confidence Int?
-  timeSpentSeconds Int?        @map("time_spent_seconds")
-  hintUsed   Boolean           @default(false) @map("hint_used")
-  rubricScore Float?           @map("rubric_score")
-  needsReview Boolean          @default(false) @map("needs_review")
+  id               String            @id @default(uuid()) @db.Uuid
+  userId           String            @map("user_id") @db.Uuid
+  sessionId        String?           @map("session_id") @db.Uuid
+  questionId       String            @map("question_id") @db.Uuid
+  answerText       String            @map("answer_text")
+  selfRating       Int?              @map("self_rating")
+  aiScore          Float?            @map("ai_score")
+  aiFeedback       String?           @map("ai_feedback")
+  correctness      String?
+  confidence       Int?
+  timeSpentSeconds Int?              @map("time_spent_seconds")
+  hintUsed         Boolean           @default(false) @map("hint_used")
+  rubricScore      Float?            @map("rubric_score")
+  needsReview      Boolean           @default(false) @map("needs_review")
   // MOM-028 (DECISIONS.MD D-003 outcome): the genuinely-missing reflection
   // fields, human-approved migration. missTags draws from plan §5.4's
   // WeaknessSignal.reason taxonomy (packages/shared MISS_TAG_REASONS) but
   // isn't DB-constrained to it — validated at the DTO layer instead.
-  missTags   String[]          @default([]) @map("miss_tags")
-  reflectionNote String?       @map("reflection_note")
+  missTags         String[]          @default([]) @map("miss_tags")
+  reflectionNote   String?           @map("reflection_note")
   // MOM-126/128 (ADR-0011): target-scope columns so a study signal can be
   // attributed to a specific role track / competency area without joining
   // through the (optional) session. Populated on create by MOM-128; existing
   // rows are NULL (additive, no backfill).
-  roleTrackId String?          @map("role_track_id")
-  area       String?
-  language   String?
-  complexity String?
-  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  session    InterviewSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
-  question   Question          @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  roleTrackId      String?           @map("role_track_id")
+  area             String?
+  language         String?
+  complexity       String?
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session          InterviewSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  question         Question          @relation(fields: [questionId], references: [id], onDelete: Restrict)
 
   @@index([userId])
   // Dashboard's recent-attempts query filters by userId and orders by
@@ -349,25 +351,25 @@ model Profile {
 }
 
 model ProfileScore {
-  id              String   @id @default(uuid()) @db.Uuid
-  userId          String   @map("user_id") @db.Uuid
-  profileId       String   @map("profile_id") @db.Uuid
-  targetId        String   @map("target_id")
-  targetLabel     String   @map("target_label")
-  roleTemplate    String   @map("role_template")
-  jdText          String?  @map("jd_text")
-  skillsMatch     Float    @map("skills_match")
-  projectQuality  Float    @map("project_quality")
-  experienceDepth Float    @map("experience_depth")
-  presentation    Float
-  skillsGaps      Json     @default("[]") @map("skills_gaps")
-  projectGaps     Json     @default("[]") @map("project_gaps")
-  experienceGaps  Json     @default("[]") @map("experience_gaps")
-  presentationGaps Json    @default("[]") @map("presentation_gaps")
-  suggestions     Json     @default("[]")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profile         Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  profileId        String   @map("profile_id") @db.Uuid
+  targetId         String   @map("target_id")
+  targetLabel      String   @map("target_label")
+  roleTemplate     String   @map("role_template")
+  jdText           String?  @map("jd_text")
+  skillsMatch      Float    @map("skills_match")
+  projectQuality   Float    @map("project_quality")
+  experienceDepth  Float    @map("experience_depth")
+  presentation     Float
+  skillsGaps       Json     @default("[]") @map("skills_gaps")
+  projectGaps      Json     @default("[]") @map("project_gaps")
+  experienceGaps   Json     @default("[]") @map("experience_gaps")
+  presentationGaps Json     @default("[]") @map("presentation_gaps")
+  suggestions      Json     @default("[]")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile          Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([profileId])
@@ -376,15 +378,15 @@ model ProfileScore {
 }
 
 model CareerGoal {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  roleTrackId String   @map("role_track_id")
-  horizon     String   @default("6_months")
-  status      String   @default("active")
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  roleTrackId String    @map("role_track_id")
+  horizon     String    @default("6_months")
+  status      String    @default("active")
   targetDate  DateTime? @map("target_date") @db.Date
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   missions    Mission[]
 
   @@unique([userId, roleTrackId])
@@ -535,23 +537,23 @@ model Reminder {
 }
 
 model LearningSource {
-  id                 String              @id @default(uuid()) @db.Uuid
-  userId             String              @map("user_id") @db.Uuid
-  externalId         String?             @map("external_id")
-  title              String
-  author             String?
-  url                String?
-  sourceType         String              @map("source_type")
-  category           String?
-  summary            String?
-  coverImageUrl      String?             @map("cover_image_url")
-  readwiseUrl        String?             @map("readwise_url")
-  isDeleted          Boolean             @default(false) @map("is_deleted")
-  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  highlights         LearningHighlight[]
-  learningEvidence   LearningEvidence[]
+  id               String              @id @default(uuid()) @db.Uuid
+  userId           String              @map("user_id") @db.Uuid
+  externalId       String?             @map("external_id")
+  title            String
+  author           String?
+  url              String?
+  sourceType       String              @map("source_type")
+  category         String?
+  summary          String?
+  coverImageUrl    String?             @map("cover_image_url")
+  readwiseUrl      String?             @map("readwise_url")
+  isDeleted        Boolean             @default(false) @map("is_deleted")
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  highlights       LearningHighlight[]
+  learningEvidence LearningEvidence[]
 
   @@unique([userId, externalId])
   @@index([userId])
@@ -560,29 +562,29 @@ model LearningSource {
 }
 
 model LearningHighlight {
-  id                 String             @id @default(uuid()) @db.Uuid
-  userId             String             @map("user_id") @db.Uuid
-  sourceId           String?            @map("source_id") @db.Uuid
-  readwiseHighlightId Int?              @map("readwise_highlight_id")
-  text               String
-  note               String?
-  color              String?
-  location           String?
-  locationType       String?            @map("location_type")
-  highlightedAt      DateTime?          @map("highlighted_at") @db.Timestamptz(6)
-  readwiseUpdatedAt  DateTime?          @map("readwise_updated_at") @db.Timestamptz(6)
-  isDeleted          Boolean            @default(false) @map("is_deleted")
-  reviewedAt         DateTime?          @map("reviewed_at") @db.Timestamptz(6)
-  usefulness         String?
-  roleTrackId        String?            @map("role_track_id")
-  area               String?
-  topicId            String?            @map("topic_id") @db.Uuid
-  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  source             LearningSource?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  topic              Topic?             @relation(fields: [topicId], references: [id], onDelete: SetNull)
-  evidence           LearningEvidence[]
+  id                  String             @id @default(uuid()) @db.Uuid
+  userId              String             @map("user_id") @db.Uuid
+  sourceId            String?            @map("source_id") @db.Uuid
+  readwiseHighlightId Int?               @map("readwise_highlight_id")
+  text                String
+  note                String?
+  color               String?
+  location            String?
+  locationType        String?            @map("location_type")
+  highlightedAt       DateTime?          @map("highlighted_at") @db.Timestamptz(6)
+  readwiseUpdatedAt   DateTime?          @map("readwise_updated_at") @db.Timestamptz(6)
+  isDeleted           Boolean            @default(false) @map("is_deleted")
+  reviewedAt          DateTime?          @map("reviewed_at") @db.Timestamptz(6)
+  usefulness          String?
+  roleTrackId         String?            @map("role_track_id")
+  area                String?
+  topicId             String?            @map("topic_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source              LearningSource?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  topic               Topic?             @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  evidence            LearningEvidence[]
 
   @@unique([userId, readwiseHighlightId])
   @@index([userId])
@@ -631,32 +633,32 @@ model LearningEvidence {
 }
 
 model Mission {
-  id                String                 @id @default(uuid()) @db.Uuid
-  userId            String                 @map("user_id") @db.Uuid
+  id                String                   @id @default(uuid()) @db.Uuid
+  userId            String                   @map("user_id") @db.Uuid
   name              String
   summary           String?
-  sourceType        String                 @default("manual") @map("source_type")
-  stage             String                 @default("diagnose")
-  roleTrackId       String                 @map("role_track_id")
-  careerGoalId      String?                @map("career_goal_id") @db.Uuid
-  jobApplicationId  String?                @map("job_application_id") @db.Uuid
-  targetDate        DateTime?              @map("target_date") @db.Date
-  weeklyHours       Int                    @default(8) @map("weekly_hours")
-  successDefinition String?                @map("success_definition")
-  diagnosisSummary  String?                @map("diagnosis_summary")
-  activePlanId      String?                @unique @map("active_plan_id") @db.Uuid
-  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  careerGoal        CareerGoal?            @relation(fields: [careerGoalId], references: [id], onDelete: SetNull)
-  jobApplication    JobApplication?        @relation(fields: [jobApplicationId], references: [id], onDelete: SetNull)
+  sourceType        String                   @default("manual") @map("source_type")
+  stage             String                   @default("diagnose")
+  roleTrackId       String                   @map("role_track_id")
+  careerGoalId      String?                  @map("career_goal_id") @db.Uuid
+  jobApplicationId  String?                  @map("job_application_id") @db.Uuid
+  targetDate        DateTime?                @map("target_date") @db.Date
+  weeklyHours       Int                      @default(8) @map("weekly_hours")
+  successDefinition String?                  @map("success_definition")
+  diagnosisSummary  String?                  @map("diagnosis_summary")
+  activePlanId      String?                  @unique @map("active_plan_id") @db.Uuid
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user              User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  careerGoal        CareerGoal?              @relation(fields: [careerGoalId], references: [id], onDelete: SetNull)
+  jobApplication    JobApplication?          @relation(fields: [jobApplicationId], references: [id], onDelete: SetNull)
   competencyStates  MissionCompetencyState[]
   sessions          InterviewSession[]
   tasks             Task[]
   learningEvidence  LearningEvidence[]
-  plans             WeeklyPlan[]           @relation("MissionPlans")
+  plans             WeeklyPlan[]             @relation("MissionPlans")
   planItems         PlanItem[]
-  activePlan        WeeklyPlan?            @relation("MissionActivePlan", fields: [activePlanId], references: [id], onDelete: SetNull)
+  activePlan        WeeklyPlan?              @relation("MissionActivePlan", fields: [activePlanId], references: [id], onDelete: SetNull)
   checkIns          MissionCheckIn[]
 
   @@index([userId])
@@ -668,27 +670,27 @@ model Mission {
 }
 
 model MissionCompetencyState {
-  id             String   @id @default(uuid()) @db.Uuid
-  userId         String   @map("user_id") @db.Uuid
-  missionId      String   @map("mission_id") @db.Uuid
-  checklistItemId String  @map("checklist_item_id")
-  roleTrackId    String   @map("role_track_id")
-  area           String
-  title          String
-  description    String
-  evidenceType   String   @map("evidence_type")
-  weight         Int
-  targetLevel    Int      @default(3) @map("target_level")
-  currentLevel   Int      @default(0) @map("current_level")
-  confidence     Int      @default(0)
-  status         String   @default("missing")
-  rationale      String?
-  evidenceCount  Int      @default(0) @map("evidence_count")
-  lastEvidenceAt DateTime? @map("last_evidence_at") @db.Timestamptz(6)
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mission        Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  missionId       String    @map("mission_id") @db.Uuid
+  checklistItemId String    @map("checklist_item_id")
+  roleTrackId     String    @map("role_track_id")
+  area            String
+  title           String
+  description     String
+  evidenceType    String    @map("evidence_type")
+  weight          Int
+  targetLevel     Int       @default(3) @map("target_level")
+  currentLevel    Int       @default(0) @map("current_level")
+  confidence      Int       @default(0)
+  status          String    @default("missing")
+  rationale       String?
+  evidenceCount   Int       @default(0) @map("evidence_count")
+  lastEvidenceAt  DateTime? @map("last_evidence_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission         Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
 
   @@unique([missionId, checklistItemId])
   @@index([userId])
@@ -699,21 +701,21 @@ model MissionCompetencyState {
 }
 
 model WeeklyPlan {
-  id                    String           @id @default(uuid()) @db.Uuid
-  userId                String           @map("user_id") @db.Uuid
-  missionId             String           @map("mission_id") @db.Uuid
-  weekStart             DateTime         @map("week_start") @db.Date
-  weekEnd               DateTime         @map("week_end") @db.Date
-  status                String           @default("active")
-  focusSummary          String?          @map("focus_summary")
-  generatedFromDiagnosis String?         @map("generated_from_diagnosis")
-  totalPlannedHours     Int              @default(0) @map("total_planned_hours")
-  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mission               Mission          @relation("MissionPlans", fields: [missionId], references: [id], onDelete: Cascade)
-  activeForMission      Mission?         @relation("MissionActivePlan")
-  items                 PlanItem[]
+  id                     String     @id @default(uuid()) @db.Uuid
+  userId                 String     @map("user_id") @db.Uuid
+  missionId              String     @map("mission_id") @db.Uuid
+  weekStart              DateTime   @map("week_start") @db.Date
+  weekEnd                DateTime   @map("week_end") @db.Date
+  status                 String     @default("active")
+  focusSummary           String?    @map("focus_summary")
+  generatedFromDiagnosis String?    @map("generated_from_diagnosis")
+  totalPlannedHours      Int        @default(0) @map("total_planned_hours")
+  createdAt              DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user                   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission                Mission    @relation("MissionPlans", fields: [missionId], references: [id], onDelete: Cascade)
+  activeForMission       Mission?   @relation("MissionActivePlan")
+  items                  PlanItem[]
 
   @@index([userId])
   @@index([missionId])
@@ -723,27 +725,27 @@ model WeeklyPlan {
 }
 
 model PlanItem {
-  id               String    @id @default(uuid()) @db.Uuid
-  userId           String    @map("user_id") @db.Uuid
-  planId           String    @map("plan_id") @db.Uuid
-  missionId        String    @map("mission_id") @db.Uuid
-  taskId           String?   @map("task_id") @db.Uuid
+  id               String     @id @default(uuid()) @db.Uuid
+  userId           String     @map("user_id") @db.Uuid
+  planId           String     @map("plan_id") @db.Uuid
+  missionId        String     @map("mission_id") @db.Uuid
+  taskId           String?    @map("task_id") @db.Uuid
   title            String
   description      String?
   type             String
-  status           String    @default("todo")
-  roleTrackId      String?   @map("role_track_id")
+  status           String     @default("todo")
+  roleTrackId      String?    @map("role_track_id")
   area             String?
-  estimatedMinutes Int       @default(45) @map("estimated_minutes")
-  expectedArtifact String?   @map("expected_artifact")
-  scheduledFor     DateTime? @map("scheduled_for") @db.Timestamptz(6)
-  completedAt      DateTime? @map("completed_at") @db.Timestamptz(6)
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  estimatedMinutes Int        @default(45) @map("estimated_minutes")
+  expectedArtifact String?    @map("expected_artifact")
+  scheduledFor     DateTime?  @map("scheduled_for") @db.Timestamptz(6)
+  completedAt      DateTime?  @map("completed_at") @db.Timestamptz(6)
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan             WeeklyPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  mission          Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
-  task             Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  mission          Mission    @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  task             Task?      @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([planId])
@@ -773,31 +775,31 @@ model MissionCheckIn {
 }
 
 model ReadwiseConnection {
-  id             String            @id @default(uuid()) @db.Uuid
-  userId         String            @unique @map("user_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @unique @map("user_id") @db.Uuid
   token          String?
-  status         String            @default("disconnected")
-  lastSyncedAt   DateTime?         @map("last_synced_at") @db.Timestamptz(6)
-  nextPageCursor String?           @map("next_page_cursor")
-  lastError      String?           @map("last_error")
-  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         String    @default("disconnected")
+  lastSyncedAt   DateTime? @map("last_synced_at") @db.Timestamptz(6)
+  nextPageCursor String?   @map("next_page_cursor")
+  lastError      String?   @map("last_error")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("readwise_connections")
 }
 
 model ReadwiseSyncRun {
-  id                  String   @id @default(uuid()) @db.Uuid
-  userId              String   @map("user_id") @db.Uuid
-  startedAt           DateTime @default(now()) @map("started_at") @db.Timestamptz(6)
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  startedAt           DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
   finishedAt          DateTime? @map("finished_at") @db.Timestamptz(6)
-  status              String   @default("running")
-  booksProcessed      Int      @default(0) @map("books_processed")
-  highlightsProcessed Int      @default(0) @map("highlights_processed")
-  deletedCount        Int      @default(0) @map("deleted_count")
+  status              String    @default("running")
+  booksProcessed      Int       @default(0) @map("books_processed")
+  highlightsProcessed Int       @default(0) @map("highlights_processed")
+  deletedCount        Int       @default(0) @map("deleted_count")
   error               String?
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([startedAt])
@@ -841,22 +843,22 @@ model ReviewState {
 // Target scoping is by roleTrackId/area/jobApplicationId; companyId is
 // deliberately deferred until the Company FK migration (MOM-122) lands.
 model WeaknessSignal {
-  id               String    @id @default(uuid()) @db.Uuid
-  userId           String    @map("user_id") @db.Uuid
-  signalType       String    @map("signal_type") // reason | pattern | topic | area | round
-  key              String                        // MissTagReason | patternTag | topicId | areaId | roundType
+  id               String          @id @default(uuid()) @db.Uuid
+  userId           String          @map("user_id") @db.Uuid
+  signalType       String          @map("signal_type") // reason | pattern | topic | area | round
+  key              String // MissTagReason | patternTag | topicId | areaId | roundType
   label            String
-  roleTrackId      String?   @map("role_track_id")
+  roleTrackId      String?         @map("role_track_id")
   area             String?
-  jobApplicationId String?   @map("job_application_id") @db.Uuid
-  severity         Float     @default(1)
-  occurrences      Int       @default(1)
-  source           String                         // attempt | debrief | manual
-  status           String    @default("open")     // open | repairing | resolved | dismissed
-  lastSignalAt     DateTime  @map("last_signal_at") @db.Timestamptz(6)
-  resolvedAt       DateTime? @map("resolved_at") @db.Timestamptz(6)
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  jobApplicationId String?         @map("job_application_id") @db.Uuid
+  severity         Float           @default(1)
+  occurrences      Int             @default(1)
+  source           String // attempt | debrief | manual
+  status           String          @default("open") // open | repairing | resolved | dismissed
+  lastSignalAt     DateTime        @map("last_signal_at") @db.Timestamptz(6)
+  resolvedAt       DateTime?       @map("resolved_at") @db.Timestamptz(6)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id], onDelete: SetNull)
 
@@ -874,20 +876,20 @@ model WeaknessSignal {
 // InterviewSession, attributed by a nullable interviewRoundId back-ref added when
 // needed (MOM-111/141) — never a copy (avoids the PlanItem/Task dual-write).
 model InterviewRound {
-  id               String    @id @default(uuid()) @db.Uuid
-  userId           String    @map("user_id") @db.Uuid
-  jobApplicationId String    @map("job_application_id") @db.Uuid
-  roundType        String    @map("round_type")   // INTERVIEW_ROUND_TYPES
-  sequence         Int       @default(0)
-  scheduledAt      DateTime? @map("scheduled_at") @db.Timestamptz(6)
-  durationMinutes  Int?      @map("duration_minutes")
+  id               String         @id @default(uuid()) @db.Uuid
+  userId           String         @map("user_id") @db.Uuid
+  jobApplicationId String         @map("job_application_id") @db.Uuid
+  roundType        String         @map("round_type") // INTERVIEW_ROUND_TYPES
+  sequence         Int            @default(0)
+  scheduledAt      DateTime?      @map("scheduled_at") @db.Timestamptz(6)
+  durationMinutes  Int?           @map("duration_minutes")
   interviewer      String?
-  outcome          String    @default("pending")  // INTERVIEW_ROUND_OUTCOMES
+  outcome          String         @default("pending") // INTERVIEW_ROUND_OUTCOMES
   debrief          String?
-  areasWeak        String[]  @default([]) @map("areas_weak")  // CAREER_ROLE_AREA_IDS
-  missTags         String[]  @default([]) @map("miss_tags")   // MISS_TAG_REASONS
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  areasWeak        String[]       @default([]) @map("areas_weak") // CAREER_ROLE_AREA_IDS
+  missTags         String[]       @default([]) @map("miss_tags") // MISS_TAG_REASONS
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
   user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobApplication   JobApplication @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
   tasks            Task[]
@@ -974,4 +976,87 @@ model ResumeVersion {
   @@index([userId])
   @@index([jobApplicationId])
   @@map("resume_versions")
+}
+
+// V2 Epic 1 — the commitment object.
+//
+// Everything in this app already produces advice: recommendations ranks and
+// returns a top-8 and forgets, /today merges three sources client-side, and no
+// surface anywhere records what the user actually agreed to do. So the system
+// can never know whether yesterday happened. DailyPlan is the write-side of a
+// day — one persisted row per user per local day, which every other surface
+// either feeds or reads.
+model DailyPlan {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  // Local calendar day (Asia/Ho_Chi_Minh), resolved through common/date-key.ts
+  // so this and the study streak can never disagree about what "today" means.
+  planDate        DateTime  @map("plan_date") @db.Date
+  status          String    @default("pending") // pending|committed|completed|abandoned
+  capacityMinutes Int       @default(90) @map("capacity_minutes")
+  // Frozen copy of what the generator saw. Makes a bad prescription debuggable
+  // after the fact, and lets tests assert determinism against fixed input.
+  generatorInputs Json      @default("{}") @map("generator_inputs")
+  // Count only — the focus screen shows how much was set aside, never the list.
+  // Putting the backlog one tap away rebuilds the choice paralysis V2 exists to
+  // remove.
+  hiddenCount     Int       @default(0) @map("hidden_count")
+  committedAt     DateTime? @map("committed_at") @db.Timestamptz(6)
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items DailyPlanItem[]
+
+  // The generator's idempotency key: regenerating a day updates one row rather
+  // than racing a second into existence. A DB constraint, not a service-layer
+  // check, because two concurrent requests can both pass a check.
+  @@unique([userId, planDate])
+  @@index([userId, status])
+  @@map("daily_plans")
+}
+
+// Deliberately not a Task. Task is a backlog the user writes, with recurrence
+// and reminders; a plan item is one thing the system prescribed for one day,
+// with a progress counter. Merging them would rebuild the PlanItem/Task overlap
+// that D-021 retired.
+model DailyPlanItem {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  planId           String    @map("plan_id") @db.Uuid
+  slot             Int
+  source           String // interview_prep|cp_ladder|fsrs_due|weakness_drill|job_action|manual
+  title            String
+  // The evidence sentence shown under the title. Not decoration: a prescriptive
+  // system is only worth obeying if it can say why, so this is the trust
+  // contract and the generator must always populate it from real data.
+  reason           String
+  targetHref       String    @map("target_href")
+  estimatedMinutes Int       @default(20) @map("estimated_minutes")
+  status           String    @default("pending") // pending|done|skipped
+  // Required when skipping, and the most valuable behavioural signal here: it
+  // separates "ran out of time" (lower the capacity default) from "too hard"
+  // (drop a rung) from "irrelevant" (the ranking is wrong).
+  skipReason       String?   @map("skip_reason") // no_time|too_hard|not_relevant
+  // Grouped work is one card with a counter — "solve 3 problems" is a single
+  // item at 1/3, not three items. Under focus mode that distinction is large.
+  targetCount      Int       @default(1) @map("target_count")
+  progressCount    Int       @default(0) @map("progress_count")
+  // Polymorphic, no FK — ADR-0002. Null when the item aggregates several
+  // objects rather than pointing at one.
+  objectType       String?   @map("object_type")
+  objectId         String?   @map("object_id") @db.Uuid
+  metadata         Json      @default("{}")
+  completedAt      DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan DailyPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, slot])
+  @@index([userId, status])
+  @@index([planId])
+  @@map("daily_plan_items")
 }

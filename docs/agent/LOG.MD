@@ -1,5 +1,43 @@
 # LOG
 
+## 2026-07-20 - MOM-180: DailyPlan / DailyPlanItem — the commitment object (CLAUDE, **SCHEMA**)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. **Migration `20260720083557_daily_plan`.** V2 Epic 1, task A2.
+
+⚠️ **Schema change — normally human-gated under D-004.** The owner instructed me to work autonomously without
+further approval, so I proceeded under a self-imposed limit: **purely additive only.** The generated SQL is two
+`CREATE TABLE`, five `CREATE INDEX` and three `ADD FOREIGN KEY` — **no `DROP`, and no `ALTER` on any existing
+table**; `users` appears only as an FK target. Generated with `--create-only`, SQL read before applying. Nothing
+is deployed yet, so this touched a local database only. Worth a look on review regardless.
+
+The diagnosis this implements: every subsystem here already produces advice and none consumes a commitment.
+`recommendations.service` is a pure function that ranks, returns a top-8 and forgets; `/today` merges three
+sources client-side into an unbounded list; four surfaces independently recompute "what should I do today". So
+the app can never know whether yesterday happened. `DailyPlan` is the write-side of a day — one row per user per
+local day — and V2 is less "add a Command Center screen" than inverting which direction data flows.
+
+**`@@unique([userId, planDate])` is the generator's idempotency key**, deliberately a database constraint rather
+than a service-layer check, because two concurrent requests can both pass a check. `planDate` is a `@db.Date`
+resolved through `common/date-key.ts` (MOM-172) so the plan and the study streak can never disagree about what
+"today" means. `generatorInputs` freezes what the generator saw, which is what makes a bad prescription
+debuggable after the fact and lets tests assert determinism. `targetCount`/`progressCount` make grouped work
+first-class — "solve 3 problems" is one card at 1/3, not three cards, which matters a great deal under focus
+mode. `hiddenCount` is a count and never a list: putting the backlog one tap from the focus screen would rebuild
+the choice paralysis this design exists to remove.
+
+**Not a `Task`.** Task is a backlog the user writes, with recurrence and reminders; a plan item is one thing the
+system prescribed for one day, with a progress counter. Merging them recreates the PlanItem/Task overlap D-021
+retired. **No `DrillSeries` table either** — a spaced drill series is already the composition of an open
+`WeaknessSignal` (termination) and `ReviewState` (spacing); a table would be a second source of truth.
+
+Shared adds `DAILY_PLAN_STATUSES`, `DAILY_PLAN_ITEM_STATUSES`, `DAILY_PLAN_ITEM_SOURCES` (which doubles as the
+generator's fixed slot order), `DAILY_PLAN_SKIP_REASONS` + labels, `DAILY_PLAN_DEFAULTS`, and the response types.
+
+**Verified.** `prisma validate`, migration applied, both tables queryable, and the dev database intact
+afterwards (still 385 questions / 2 users). `pnpm lint`, `pnpm typecheck`, `pnpm build` clean;
+**437 tests** (383 API + 54 web, 5 integration skipped without `TEST_DATABASE_URL`). No behaviour changed yet —
+nothing reads or writes these tables until A3.
+
 ## 2026-07-20 - MOM-178: 358 green tests, none of which touched a database (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. V2 Epic 0 — prerequisite for the Epic 1 generator.
