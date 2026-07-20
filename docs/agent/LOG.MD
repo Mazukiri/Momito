@@ -1,5 +1,38 @@
 # LOG
 
+## 2026-07-20 - MOM-173: main was 73 commits behind the code we deploy (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0` → `main`. No migration. V2 Epic 0 (release hardening).
+
+`main` sat **73 commits behind** `feat/careeros-phase-0`, and neither `render.yaml` nor `apps/web/vercel.json`
+pins a branch — Render Blueprint takes the repo default branch, `origin/HEAD → origin/main`. Connecting the
+Blueprint would therefore have deployed the pre-CareerOS tree: no interview rounds, debriefs, weakness signals,
+contacts, offers or resume versions. Nothing was deployed yet (`NEXT.MD:346`, MOM-021 still open), so this cost
+nothing to fix now and would have cost a confusing afternoon later.
+
+Cleaned the working tree first, because a fresh clone did not build: `apps/api/src/common/date-key.ts` was
+untracked while `dashboard.service.ts:5` imported it, and `package.json` ×2 + `pnpm-lock.yaml` were modified but
+uncommitted, so CI's `--frozen-lockfile` was resolving a different dependency set than local. Kept the local dev
+changes that turned out to be load-bearing (`dotenv` — `seed.ts` already used it via Prisma's transitive copy, and
+this app reads `process.env` directly rather than through `@nestjs/config`; `next dev -p 3000` — Next
+auto-increments off a busy port and would land on 3001, where the API listens). Dropped `debug_conn.ts`, a
+throwaway probe that logged `DATABASE_URL` with credentials.
+
+Five commits total: the cleanup, then MOM-172 / MOM-176 / MOM-174 separately.
+
+**Note — concurrent merge.** While this was in progress the branch was also merged into `main` on GitHub as
+PR #2, so the first `git push origin main` was correctly rejected as non-fast-forward. Resolved by fetching and
+`git merge origin/main` — a merge commit, no rebase, so nothing already pushed was rewritten. The resulting tree
+is byte-identical to the verified feature-branch tip (`git diff --stat feat/careeros-phase-0 main` empty).
+Both branches now sit at `1e9041c`.
+
+**Verified.** Full CI gate on the exact tree that was pushed: `pnpm db:generate`, `pnpm lint`, `pnpm typecheck`,
+**422 tests** (380 API across 42 files + 42 web across 10), and `pnpm build` — all green.
+
+**Still open.** `render.yaml`/`vercel.json` remain unpinned. That is now correct-by-default since `main` is the
+truth, but it is worth stating in `docs/adr/0016` (MOM-179) that main is the deploy branch, so nobody
+re-introduces the drift.
+
 ## 2026-07-20 - MOM-174: refuse to seed a real database with the public demo login (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. V2 Epic 0 (release hardening).
