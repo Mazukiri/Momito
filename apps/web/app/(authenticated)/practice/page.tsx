@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { sessionsApi, weaknessesApi } from '../../lib/api-client';
+import { questionsApi, sessionsApi, weaknessesApi } from '../../lib/api-client';
 import type { InterviewSessionResponse, WeaknessSummaryResponse } from '@momito/shared';
-import { Card, Spinner, Badge } from '../../components/ui';
+import { Card, Spinner, Badge, EmptyState } from '../../components/ui';
 
 // MOM-041: practice hub — the landing page for the "Practice" primary nav tab.
 // Surfaces an in-progress session (if any), the user's current weak spots
@@ -18,16 +18,25 @@ export default function PracticeHubPage() {
   const [loading, setLoading] = useState(true);
   const [startingRepair, setStartingRepair] = useState(false);
   const [repairError, setRepairError] = useState('');
+  // MOM-175: null while unknown, so a failed count never flashes the empty
+  // state at someone whose bank is actually fine.
+  const [hasQuestions, setHasQuestions] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [sessions, weaknessSummary] = await Promise.all([
+      const [sessions, weaknessSummary, questionPage] = await Promise.all([
         sessionsApi.list({ status: 'active', limit: 3 }),
         weaknessesApi.summary().catch(() => null),
+        // Every tile below leads somewhere that needs questions to exist. On a
+        // fresh deployment the bank is empty until the seed is run by hand, and
+        // the tiles used to render regardless — so each one dead-ended on
+        // "No questions match the selected filters".
+        questionsApi.list({ limit: 1 }).catch(() => null),
       ]);
       setActiveSessions(sessions.data);
       setWeaknesses(weaknessSummary);
+      setHasQuestions(questionPage ? questionPage.data.length > 0 : null);
     } catch {
       // Non-critical for the hub — the "start new session" path still works.
       setActiveSessions([]);
@@ -142,6 +151,28 @@ export default function PracticeHubPage() {
         </div>
       )}
 
+      {hasQuestions === false ? (
+        <Card>
+          <EmptyState
+            icon="🌱"
+            title="No questions yet"
+            description="Every practice mode below draws from the question bank, and it's empty — so starting a session would fail. Seed the starter bank, or write your own first question."
+            action={
+              <div className="flex flex-col items-center gap-3 sm:flex-row">
+                <Link
+                  href="/questions/new"
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                >
+                  Write a question →
+                </Link>
+                <code className="rounded bg-zinc-100 px-2 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                  pnpm db:seed
+                </code>
+              </div>
+            }
+          />
+        </Card>
+      ) : (
       <div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
           Start Practicing
@@ -185,6 +216,7 @@ export default function PracticeHubPage() {
           </Link>
         </div>
       </div>
+      )}
 
       <div>
         <Link href="/attempts" className="text-sm font-medium text-indigo-600 hover:text-indigo-500">

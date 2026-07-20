@@ -1,5 +1,35 @@
 # LOG
 
+## 2026-07-20 - MOM-175: day one led straight into a dead end (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. V2 Epic 0 (release hardening).
+
+A fresh deployment has an empty question bank until someone runs `pnpm db:seed` by hand from a laptop — it is a
+README step, not part of the Render start command. Meanwhile `career.service.ts:158-160` falls back to the
+`big-tech-swe` track when the user has no goals, so `listActiveReadiness` still returns gaps, and
+`recommendations.service.ts` turned each one into a `type: 'practice'` card pointing at
+`/practice/new?...&mode=role_drill`. Every one of those 400s on `sessions.service.ts:55`
+(`No questions match the selected filters`). `/practice` had the same problem from the other side: its four tiles
+rendered unconditionally and each led somewhere that needs questions to exist.
+
+So the first thing a new user saw was a Today screen full of confident advice, all of which failed on tap. For a
+product whose entire thesis is that you should trust its prescriptions, that is the worst possible first minute.
+
+**API.** `recommendations.list()` now takes one `question.findFirst({ select: { id: true } })` alongside its
+existing parallel fetch and drops `type: 'practice'` cards when the bank is empty. `findFirst`, not `count`:
+presence is the question. Filtered once at the end rather than guarded at each `push` so there is a single place
+to reason about, and the cards reappear the moment content arrives. Only practice cards are affected — job, task,
+reading and resume cards all target routes that work on an empty database, so Today does not go blank.
+
+**Web.** `/practice` fetches `questionsApi.list({ limit: 1 })` and swaps the four tiles for an `EmptyState` that
+names the cause and offers both exits (`/questions/new`, or the `pnpm db:seed` command). State is
+`boolean | null`: a *failed* lookup means unknown, not empty, so a dropped request never tells someone with a
+full bank that they have nothing.
+
+**Verified.** 3 new API cases (suppressed when empty, present when not — same fixtures, only the bank differs —
+and non-practice work still surfacing) and 3 new web cases (tiles replaced not merely annotated, tiles restored
+when seeded, tiles kept when the count itself fails). `/practice` had no test file before this.
+
 ## 2026-07-20 - MOM-173: main was 73 commits behind the code we deploy (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0` → `main`. No migration. V2 Epic 0 (release hardening).

@@ -14,9 +14,17 @@ function buildService(
   },
   jobs: Array<Record<string, unknown>> = [],
   upcomingRounds: Array<Record<string, unknown>> = [],
-  extras: { driftSummaries?: Array<Record<string, unknown>>; savedJobs?: Array<Record<string, unknown>> } = {},
+  extras: {
+    driftSummaries?: Array<Record<string, unknown>>;
+    savedJobs?: Array<Record<string, unknown>>;
+    /** MOM-175: an empty question bank suppresses every practice card. */
+    emptyQuestionBank?: boolean;
+  } = {},
 ) {
   const prisma = {
+    question: {
+      findFirst: vi.fn().mockResolvedValue(extras.emptyQuestionBank ? null : { id: 'question-1' }),
+    },
     task: { findMany: vi.fn().mockResolvedValue([]) },
     jobApplication: {
       // MOM-157: the service issues two job queries — the pipeline scan and a `status:'saved'`
@@ -316,5 +324,49 @@ describe('RecommendationsService — résumé drift (MOM-157)', () => {
     const service = buildService({}, [], [], { driftSummaries: [] });
     const cards = (await service.list('user-1')).filter((item) => item.id.startsWith('resume-drift:'));
     expect(cards).toHaveLength(0);
+  });
+});
+
+// MOM-175: the first-run dead end. A fresh deployment has no questions until
+// the seed is run by hand, but career.listActiveReadiness still falls back to
+// 'big-tech-swe' with no goals — so Today filled with practice cards that all
+// 400 on /practice/new. Advice you cannot act on is worse than silence.
+describe('RecommendationsService — empty question bank', () => {
+  const weakness = {
+    patterns: [
+      { key: 'sliding_window', label: 'Sliding window', struggles: 4, attempts: 6, lastAt: '2026-07-19', questionIds: [] },
+    ],
+  };
+
+  it('suppresses practice cards when no question exists', async () => {
+    const service = buildService(weakness, [], [], { emptyQuestionBank: true });
+
+    const cards = await service.list('user-1');
+
+    expect(cards.filter((card) => card.type === 'practice')).toHaveLength(0);
+    expect(cards.every((card) => !card.targetHref.startsWith('/practice/new'))).toBe(true);
+  });
+
+  it('emits those same practice cards once the bank has content', async () => {
+    // Same inputs, only the bank differs — pins that the suppression is the
+    // cause, not an unrelated empty fixture.
+    const service = buildService(weakness, [], [], { emptyQuestionBank: false });
+
+    const cards = await service.list('user-1');
+
+    expect(cards.filter((card) => card.type === 'practice').length).toBeGreaterThan(0);
+  });
+
+  it('still surfaces non-practice work an empty bank can serve', async () => {
+    // Reading an inbox, chasing a job and fixing a resume all work on an empty
+    // database, so an empty bank must not blank Today entirely.
+    const service = buildService(weakness, [], [], {
+      emptyQuestionBank: true,
+      driftSummaries: [{ id: 'rv-1', label: 'Backend resume', driftScore: 5, jobId: null }],
+    });
+
+    const cards = await service.list('user-1');
+
+    expect(cards.some((card) => card.id.startsWith('resume-drift:'))).toBe(true);
   });
 });

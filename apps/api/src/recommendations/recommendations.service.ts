@@ -105,8 +105,17 @@ export class RecommendationsService {
   async list(userId: string): Promise<PracticeRecommendationResponse[]> {
     const now = new Date();
     const countdownHorizon = new Date(now.getTime() + INTERVIEW_COUNTDOWN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-    const [readiness, overdueTasks, jobs, inboxCount, weaknessSummary, upcomingRounds, driftSummaries, savedJobs] =
+    const [anyQuestion, readiness, overdueTasks, jobs, inboxCount, weaknessSummary, upcomingRounds, driftSummaries, savedJobs] =
       await Promise.all([
+        // MOM-175: every `type: 'practice'` card below deep-links into
+        // /practice/new, which posts a session and dies on
+        // sessions.service.ts's "No questions match the selected filters".
+        // On a fresh deployment the question bank is empty until someone runs
+        // the seed by hand, while career.listActiveReadiness still falls back
+        // to the 'big-tech-swe' track with no goals — so Today filled up with
+        // cards that all 400 on tap. findFirst, not count: presence is the
+        // question, and the bank is only ever empty once.
+        this.prisma.question.findFirst({ select: { id: true } }),
         this.career.listActiveReadiness(userId),
         this.prisma.task.findMany({
           where: { userId, status: { not: 'done' }, dueDate: { lt: new Date() } },
@@ -350,6 +359,16 @@ export class RecommendationsService {
         priority: 50,
       });
     }
-    return recommendations.sort((left, right) => right.priority - left.priority).slice(0, 8);
+    // MOM-175: a recommendation the user cannot act on is worse than no
+    // recommendation — it teaches them the system's advice does not work.
+    // Dropped at the end rather than guarded at each push so there is one
+    // place to reason about, and so the cards still exist the moment content
+    // arrives. Only practice cards are affected: job, task, reading and
+    // resume cards all target routes that work on an empty database.
+    const actionable = anyQuestion
+      ? recommendations
+      : recommendations.filter((recommendation) => recommendation.type !== 'practice');
+
+    return actionable.sort((left, right) => right.priority - left.priority).slice(0, 8);
   }
 }
