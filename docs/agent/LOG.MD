@@ -1,5 +1,39 @@
 # LOG
 
+## 2026-07-20 - MOM-178: 358 green tests, none of which touched a database (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. V2 Epic 0 — prerequisite for the Epic 1 generator.
+
+`apps/api` had **no `vitest.config.ts` at all**, and all 40 spec files were unit tests with hand-written Prisma
+mocks (`new SomeService(prisma as never, …)`). Grepping the suite for `PrismaClient` or `Test.createTestingModule`
+returns two hits, both constructing `PrismaClientKnownRequestError` to fake an error code. Meanwhile `ci.yml`
+stands up Postgres 16, runs `migrate deploy` and seeds it — and **no test ever read from it**. The `Test` step
+would have passed identically against an absent database.
+
+That is tolerable for branching logic and disqualifying for what comes next. The V2 daily-plan generator's three
+load-bearing invariants all live in the query layer: idempotency is a `@@unique([userId, planDate])` constraint,
+the FSRS cut is an `ORDER BY … take`, and the capacity budget is computed over rows a real query returns. **A
+mock has no constraints**, so the first of those cannot be tested against one even in principle — while §5 of the
+V2 plan names "generator prescribes badly → trust gone in 3 days" as risk number one. Building that on this
+harness would have been building the highest-risk component on the one thing that cannot verify it.
+
+**Two tiers, sharing one config.** `*.spec.ts` stays exactly as it is — all 383 unit tests untouched.
+`*.int.spec.ts` runs against real Postgres. New `vitest.config.ts` also fixes a latent problem: on bare defaults
+`test/helpers/*.ts` would have been collected as suites the moment helpers existed.
+
+**Safety is the design, not a footnote.** These helpers `TRUNCATE` every table, so they key off
+**`TEST_DATABASE_URL` and never `DATABASE_URL`** — on this machine `DATABASE_URL` points at a live local Postgres
+holding 385 questions and real practice history. A fallback to `DATABASE_URL` would have deleted it, and the way
+you would find out is by losing the data. A second guard refuses when the two URLs are equal. With the variable
+unset the tier self-skips, so `pnpm test` stays green with no Postgres running.
+
+**Verified end to end, both paths.** Without `TEST_DATABASE_URL`: 383 passed, 5 skipped. With it pointed at a
+scratch `momito_test`: **388 passed, nothing skipped** — real round trips, ~400ms each. Then confirmed the dev
+database was untouched: still 385 questions / 12 topics / 2 users / 20 companies. The 5 new cases are ones a mock
+cannot express — repeat signals accruing onto one row rather than duplicating, a resolved signal opening a fresh
+row instead of reviving, cross-user isolation, the two-positive repair closing the loop, and severity ordering
+over real rows. `ci.yml` creates and migrates the second database; `.env.example` documents the opt-in.
+
 ## 2026-07-20 - MOM-177: the first request of the morning was a silent 60-second spinner (CLAUDE, no schema)
 
 **Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. V2 Epic 0 (release hardening).

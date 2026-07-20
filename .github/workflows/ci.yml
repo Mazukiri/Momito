@@ -36,6 +36,13 @@ jobs:
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/momito?schema=public
       JWT_SECRET: ci-only-secret-with-at-least-32-characters
       NODE_ENV: test
+      # MOM-178: the *.int.spec.ts tier runs against a real database and
+      # TRUNCATEs between tests, so it keys off its own variable and never
+      # DATABASE_URL — on a developer machine that is their actual practice
+      # history. A separate database here also keeps the guard in
+      # test/helpers/db.ts meaningful (it refuses when the two URLs match).
+      # Unset elsewhere, the tier self-skips.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/momito_test?schema=public
 
     steps:
       - name: Check out repository
@@ -63,6 +70,16 @@ jobs:
 
       - name: Seed database
         run: pnpm db:seed
+
+      # MOM-178: a second, empty database for the integration tier. Separate
+      # from the seeded one because those tests TRUNCATE, and because the guard
+      # in test/helpers/db.ts refuses to run when TEST_DATABASE_URL and
+      # DATABASE_URL are the same database.
+      - name: Prepare integration test database
+        run: |
+          PGPASSWORD=postgres createdb -h localhost -U postgres momito_test
+          DATABASE_URL="$TEST_DATABASE_URL" DIRECT_URL="$TEST_DATABASE_URL" \
+            pnpm --filter @momito/api exec prisma migrate deploy
 
       - name: Lint
         run: pnpm lint
