@@ -19,6 +19,9 @@
 
 | Task | Owner | Files / globs | Released (UTC) |
 |------|-------|---------------|----------------|
+| MOM-174 | CLAUDE | `apps/api/prisma/seed-guard.ts` (new), `apps/api/prisma/seed.ts`, `apps/api/test/seed-guard.spec.ts` (new), `docs/agent/*.MD` | 2026-07-20 |
+| MOM-176 | CLAUDE | `apps/api/src/common/schedule.ts` (new), `apps/api/src/{follow-up/follow-up,interview-rounds/interview-prep,push/reminder-push}.scheduler.ts`, `apps/api/src/push/push.service.ts`, `apps/api/test/{schedule,reminder-push.scheduler}.spec.ts`, `docs/agent/*.MD` | 2026-07-20 |
+| MOM-172 | CLAUDE | `apps/api/src/common/date-key.ts` (new), `apps/api/src/dashboard/dashboard.service.ts`, `apps/api/test/date-key.spec.ts` (new), `docs/agent/*.MD` | 2026-07-19 |
 | MOM-171 | CLAUDE | `apps/web/app/(authenticated)/profile/resumes/__tests__/page.test.tsx`, `apps/web/app/(authenticated)/jobs/__tests__/**` (new), `apps/web/app/components/__tests__/**` (new), `docs/agent/*.MD` | 2026-07-12 |
 | MOM-170 | CLAUDE | `apps/api/src/profile-scores/profile-scores.service.ts`, `apps/api/test/profile-scores.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |
 | MOM-169 | CLAUDE | `apps/api/src/career/career.service.ts`, `apps/api/test/career.service.spec.ts`, `docs/agent/*.MD` | 2026-07-12 |

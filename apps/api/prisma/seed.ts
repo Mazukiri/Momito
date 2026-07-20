@@ -3,6 +3,11 @@ dotenv.config({ override: true });
 
 import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import {
+  DEFAULT_SEED_EMAIL,
+  DEFAULT_SEED_PASSWORD,
+  assertSeedCredentialsSafe,
+} from './seed-guard';
 import { companies, inferQuestionMetadata, questions, topics } from './seed-data';
 
 const prisma = new PrismaClient();
@@ -15,8 +20,12 @@ const DEMO_USER_ID = '00000000-0000-4000-8000-000000000001';
 // so a public single-user deployment would otherwise get seeded with a
 // well-known, source-committed password. Defaults preserve the existing local
 // dev experience unchanged; the password itself is never logged.
-const SEED_USER_EMAIL = process.env.SEED_USER_EMAIL?.trim() || 'demo@momito.local';
-const SEED_USER_PASSWORD = process.env.SEED_USER_PASSWORD?.trim() || 'MomitoDemo123!';
+//
+// MOM-174: the defaults are now refused outright against a non-local database —
+// documenting the risk in a comment did not stop it reaching production, since
+// the runbook step that sets these is easy to skip. See seed-guard.ts.
+const SEED_USER_EMAIL = process.env.SEED_USER_EMAIL?.trim() || DEFAULT_SEED_EMAIL;
+const SEED_USER_PASSWORD = process.env.SEED_USER_PASSWORD?.trim() || DEFAULT_SEED_PASSWORD;
 
 async function upsertDemoUser() {
   const passwordHash = await bcrypt.hash(SEED_USER_PASSWORD, 12);
@@ -81,6 +90,15 @@ async function upsertQuestions() {
 }
 
 async function main() {
+  // Before any write: refuse to put the source-committed demo login on a
+  // database that isn't local. Throwing here leaves the target untouched.
+  assertSeedCredentialsSafe({
+    email: SEED_USER_EMAIL,
+    password: SEED_USER_PASSWORD,
+    databaseUrl: process.env.DATABASE_URL,
+    nodeEnv: process.env.NODE_ENV,
+  });
+
   await upsertDemoUser();
   await upsertTopics();
   await upsertCompanies();

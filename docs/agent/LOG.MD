@@ -1,5 +1,97 @@
 # LOG
 
+## 2026-07-20 - MOM-174: refuse to seed a real database with the public demo login (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. V2 Epic 0 (release hardening).
+
+Three existing behaviours combine into a way to lock yourself out of your own deployment:
+`render.yaml` sets `ALLOW_MULTI_USER_REGISTRATION=false`, so `auth.service.ts:17-22` closes registration once one
+user exists; `auth.controller.ts` exposes only register/login/logout/me, so **there is no password reset and no
+recovery path**; and the deploy runbook seeds production by hand from a laptop. Skip the runbook step that sets
+`SEED_USER_EMAIL`/`SEED_USER_PASSWORD` and the instance's only account is `demo@momito.local` with a password
+committed to a public repository — an account the owner cannot change and a stranger can sign into.
+
+B2 already knew about this (the comment at `seed.ts:12-17` says so) and mitigated it with env overrides that keep
+the defaults. A comment did not stop it, because the failure is a skipped step, so the defaults are now refused
+outright rather than documented.
+
+New `prisma/seed-guard.ts` throws before any write when the built-in credentials would reach a non-local database.
+**`NODE_ENV` is deliberately not the primary signal**: the seed runs from a developer machine where `NODE_ENV` is
+unset, pointed at a remote `DATABASE_URL`, so "is the target local" is the question that actually matters —
+`NODE_ENV === 'production'` is only a second trigger. Unparseable or absent URLs count as remote (fails closed).
+The error names the reason and the exact command to re-run, and never prints the default password.
+
+Verified this does not disturb existing workflows: the user's `apps/api/.env` points at `127.0.0.1` and CI's
+`DATABASE_URL` is `localhost`, so both stay on the allowed path — while neither sets `SEED_USER_*`, which is
+precisely the condition that would have bitten on the first production seed.
+
+**Verified.** `pnpm lint` + `pnpm typecheck` clean at root. **380 API tests across 42 files** (was 369/41).
+11 new `seed-guard.spec.ts` cases: local host recognition (incl. docker-compose service names), managed hosts as
+remote, fail-closed on absent/unparseable URLs, refusal against a Neon-shaped URL, refusal under
+`NODE_ENV=production` even on localhost, refusal when *either* field is left at its default, real credentials
+allowed anywhere, guidance present in the message, and the default password absent from it.
+
+## 2026-07-20 - MOM-176: daily crons ran 7 hours late; push marked failures as delivered (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. V2 Epic 0 (release hardening).
+
+Two production bugs, both invisible from inside `src/`.
+
+**1. Every daily cron fired 7 hours off.** `render.yaml` sets `TZ: UTC`, and `@Cron` with a bare expression is
+interpreted in the server zone. None of the three schedulers passed a `timeZone`. So
+`CronExpression.EVERY_DAY_AT_6AM` (interview prep) actually fired at **13:00 ICT** and `EVERY_DAY_AT_7AM`
+(follow-up sweep) at **14:00 ICT** — jobs written as a morning routine running mid-afternoon.
+
+The tempting fix — schedule them at 06:00 local — is worse, and that is the part worth recording.
+`.github/workflows/keepwarm.yml` pings `/health` on `*/10 0-17 * * *` UTC, i.e. 07:00 ICT → 00:59 ICT. Render's
+free tier sleeps the instance outside that window and an in-process cron cannot fire while asleep, so a 06:00 ICT
+job (23:00 UTC) would never run at all. The old wrong-hour schedules at least landed inside the window, which is
+why they worked. New `apps/api/src/common/schedule.ts` owns the times, states the coupling, and starts the daily
+jobs just after 07:00 local: prep 07:02 → follow-up 07:05 → daily plan 07:10 (reserved for Epic 1 A4), ordered so
+the plan snapshots inputs the earlier jobs have already produced.
+
+**2. A failed push was permanently marked as delivered.** `reminder-push.scheduler.ts` stamped
+`lastTriggeredAt` unconditionally after calling `sendToUser`, which returned `void` and swallowed every error —
+so the caller could not distinguish delivery from total failure, and an undelivered reminder was never retried.
+The loop also had no `try/catch`, so one bad row aborted the tick and silently starved every reminder behind it.
+`PushService.sendToUser` now returns `{ subscriptions, delivered, failed }` and still never throws; the scheduler
+settles a reminder only when at least one device accepted it, or when the user has no devices at all (nothing to
+retry — otherwise that row re-scans every 5 minutes and crowds the `take: 100` window). 404/410 counts as
+resolved, since the subscription is pruned rather than failing transiently.
+
+**Verified.** `pnpm lint` + `pnpm typecheck` clean at root. **369 API tests pass across 41 files** (was 358/40).
+New `test/schedule.spec.ts` (7) asserts the local hour maps to the expected UTC hour, that every daily job lands
+inside the keep-warm window — **parsed out of `keepwarm.yml` itself, so narrowing that workflow fails this test
+instead of silently killing a job** — that a 06:00 local schedule would fall outside it, job ordering, and that
+reminder push never shares a minute with a daily job. `reminder-push.scheduler.spec.ts` grew 3 → 7: all-devices-
+rejected leaves `lastTriggeredAt` null, no-devices settles, partial success settles, and one throwing reminder no
+longer aborts the rest. `push.service.spec.ts` passes unchanged, confirming the widened return type is compatible.
+
+**Risk.** The three daily jobs now run at a different wall-clock time than they did in production. That is the
+point, but it means the first run after deploy shifts. `docs/adr/0016` (MOM-179) still needs to record the
+cron ↔ keepwarm pairing as a standing constraint.
+
+## 2026-07-19 - MOM-172: one shared local-day helper (V2 Epic 1 prerequisite) (CLAUDE, no schema)
+
+**Actor:** CLAUDE. Branch `feat/careeros-phase-0`. No migration. First task of the V2 "Prescriptive OS" roadmap.
+
+Pure extraction, no behavior change. `DashboardService` owned the only definition of "what day is it" —
+`computeStreak` / `shiftDateKey`, two private methods formatting `Asia/Ho_Chi_Minh` calendar-day keys. V2's
+`DailyPlan` keys on the same notion (`planDate` is a `@db.Date`, one row per user per local day, and its
+`@@unique([userId, planDate])` is the generator's idempotency key), so the two must resolve "today" identically.
+Left split, a plan created between 00:00 and 07:00 local would file under the previous UTC day — silently
+double-counting one day and skipping another, with the streak disagreeing with the plan it is supposed to measure.
+
+New `apps/api/src/common/date-key.ts` exports `DEFAULT_TIME_ZONE`, `dayKey`, `shiftDayKey`, `dayKeyToDate`
+(UTC midnight, the form Postgres `date` round-trips without drift), and `consecutiveDayStreak` (the streak walk
+verbatim, plus an injectable `now` the daily-plan generator will need for deterministic tests).
+`DashboardService.computeStreak` is now a one-line delegate keeping its existing signature and tz default.
+
+**Verified.** `pnpm lint` + `pnpm typecheck` clean at root. 358 API tests pass across 40 files, including the
+4 pre-existing `dashboard.service.spec.ts` cases unchanged (behavior preservation) and 15 new `date-key.spec.ts`
+cases: the UTC+7 boundary both sides of 17:00Z, month/year/leap-day shifts, `@db.Date` round-trip, streak grace
+when today is empty, gap termination, dedupe within a day, and late-evening local activity crediting the local day.
+
 ## 2026-07-12 - MOM-171: web test hardening (Momito 1.1 PR 6) (CLAUDE, no schema)
 
 **Actor:** CLAUDE → Grok resume. Branch `feat/careeros-phase-0`. No migration. Final PR of Momito 1.1.
