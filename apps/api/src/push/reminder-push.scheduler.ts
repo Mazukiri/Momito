@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { CRON_OPTIONS, CRON_REMINDER_PUSH } from '../common/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from './push.service';
 
@@ -17,7 +18,7 @@ export class ReminderPushScheduler {
     private readonly push: PushService,
   ) {}
 
-  @Cron('3,8,13,18,23,28,33,38,43,48,53,58 * * * *')
+  @Cron(CRON_REMINDER_PUSH, CRON_OPTIONS)
   async tick(): Promise<void> {
     if (!this.push.isAvailable()) return;
 
@@ -31,20 +32,48 @@ export class ReminderPushScheduler {
       take: 100,
     });
 
+    let triggered = 0;
+    let retrying = 0;
+
     for (const reminder of due) {
-      await this.push.sendToUser(reminder.userId, {
-        title: reminder.title,
-        body: 'Tap to review on your calendar.',
-        url: '/calendar',
-      });
-      await this.prisma.reminder.update({
-        where: { id: reminder.id },
-        data: { lastTriggeredAt: new Date() },
-      });
+      // MOM-176: each reminder is isolated. Previously one throw aborted the
+      // whole tick, so a single bad row silently starved every reminder behind
+      // it — and because ticks are 5 minutes apart with no catch-up, those
+      // notifications were simply never sent.
+      try {
+        const result = await this.push.sendToUser(reminder.userId, {
+          title: reminder.title,
+          body: 'Tap to review on your calendar.',
+          url: '/calendar',
+        });
+
+        // Only settle the reminder once it is actually resolved. Delivering to
+        // at least one device counts; so does having no devices at all, since
+        // there is nothing to retry. Having devices that all rejected the send
+        // is transient — leave lastTriggeredAt null and try again next tick.
+        if (result.delivered > 0 || result.subscriptions === 0) {
+          await this.prisma.reminder.update({
+            where: { id: reminder.id },
+            data: { lastTriggeredAt: new Date() },
+          });
+          triggered += 1;
+        } else {
+          retrying += 1;
+        }
+      } catch (error) {
+        retrying += 1;
+        this.logger.error(
+          `Push failed for reminder ${reminder.id}; will retry next tick.`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
     }
 
-    if (due.length) {
-      this.logger.log(`Sent push notifications for ${due.length} due reminder(s).`);
+    if (triggered > 0) {
+      this.logger.log(`Sent push notifications for ${triggered} due reminder(s).`);
+    }
+    if (retrying > 0) {
+      this.logger.warn(`${retrying} reminder(s) undelivered; left pending for the next tick.`);
     }
   }
 }

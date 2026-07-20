@@ -9,6 +9,15 @@ export interface PushPayload {
   url?: string;
 }
 
+// What a send attempt actually achieved. `subscriptions === 0` means the user
+// has no devices registered, which is a settled state rather than a failure —
+// distinct from `delivered === 0 && failed > 0`, which is worth retrying.
+export interface PushDeliveryResult {
+  subscriptions: number;
+  delivered: number;
+  failed: number;
+}
+
 // Web Push: absence of a VAPID keypair means every call here is a silent
 // no-op rather than an error — same dormant-until-configured pattern as AI
 // grading (docs/adr/0008-web-push-notifications.md).
@@ -74,28 +83,42 @@ export class PushService {
 
   // Sends to every device the user has subscribed on; prunes any subscription
   // the push service reports as gone (404/410) instead of surfacing an error.
-  async sendToUser(userId: string, payload: PushPayload): Promise<void> {
-    if (!this.isAvailable()) return;
+  //
+  // MOM-176: now reports what actually happened. This used to return void and
+  // swallow every failure, which meant ReminderPushScheduler had no way to tell
+  // "delivered" from "every device rejected it" — and it marked the reminder as
+  // triggered either way, losing the notification permanently. Errors are still
+  // never thrown; the caller decides what a failure means.
+  async sendToUser(userId: string, payload: PushPayload): Promise<PushDeliveryResult> {
+    if (!this.isAvailable()) return { subscriptions: 0, delivered: 0, failed: 0 };
 
     const subscriptions = await this.prisma.pushSubscription.findMany({ where: { userId } });
     const body = JSON.stringify(payload);
 
-    await Promise.all(
+    const outcomes = await Promise.all(
       subscriptions.map(async (sub) => {
         try {
           await this.sendRaw(
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
             body,
           );
+          return true;
         } catch (error) {
           const statusCode = (error as { statusCode?: number }).statusCode;
           if (statusCode === 404 || statusCode === 410) {
+            // The device is gone for good, not failing transiently — pruning it
+            // counts as resolved, so a stale subscription can't wedge a reminder
+            // in permanent retry.
             await this.prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => undefined);
-          } else {
-            this.logger.warn(`Push send failed for subscription ${sub.id}: ${String(error)}`);
+            return true;
           }
+          this.logger.warn(`Push send failed for subscription ${sub.id}: ${String(error)}`);
+          return false;
         }
       }),
     );
+
+    const delivered = outcomes.filter(Boolean).length;
+    return { subscriptions: subscriptions.length, delivered, failed: outcomes.length - delivered };
   }
 }
